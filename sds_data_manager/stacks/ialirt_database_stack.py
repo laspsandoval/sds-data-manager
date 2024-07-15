@@ -51,29 +51,30 @@ class IAlirtDatabaseStack(Stack):
             stream=ddb.StreamViewType.NEW_IMAGE,
         )
 
-        # GSI partitioned by unexpected length and
-        # sorted by sct_vtcw_reset#sct_vtcw
         self.packet_data_table.add_global_secondary_index(
             index_name="IrregularIndex",
             partition_key=ddb.Attribute(
-                name="unexpected_length", type=ddb.AttributeType.STRING
-            ),
-            sort_key=ddb.Attribute(
-                name="sct_vtcw_reset#sct_vtcw", type=ddb.AttributeType.STRING
-            ),
-            # Specifies what keys to include.
-            projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=["packet_filename", "packet_length"],
-        )
-
-        # Add a GSI with packet_filename as the sort key to support begins_with queries
-        self.packet_data_table.add_global_secondary_index(
-            index_name="FilenameIndex",
-            partition_key=ddb.Attribute(
-                name="unexpected_length", type=ddb.AttributeType.STRING
+                name="irregular_packet", type=ddb.AttributeType.STRING
             ),
             sort_key=ddb.Attribute(
                 name="packet_filename", type=ddb.AttributeType.STRING
             ),
-            projection_type=ddb.ProjectionType.ALL,
+            # Specifies what keys to include.
+            projection_type=ddb.ProjectionType.INCLUDE,
+            non_key_attributes=["packet_length",
+                                "packet_blob",
+                                "sct_vtcw_reset#sct_vtcw"],
+        )
+
+        self.packet_data_table.add_global_secondary_index(
+            index_name="FilenameIndex",
+            partition_key=ddb.Attribute(
+                name="ground_station", type=ddb.AttributeType.STRING
+            ),
+            sort_key=ddb.Attribute(
+                name="date", type=ddb.AttributeType.STRING
+            ),
+            projection_type=ddb.ProjectionType.INCLUDE,
+            non_key_attributes=["packet_blob", "packet_length",
+                                "sct_vtcw_reset#sct_vtcw"],
         )

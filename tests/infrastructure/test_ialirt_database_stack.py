@@ -20,21 +20,20 @@ def dynamodb():
             AttributeDefinitions=[
                 {"AttributeName": "packet_filename", "AttributeType": "S"},
                 {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
-                {"AttributeName": "unexpected_length", "AttributeType": "S"},
+                {"AttributeName": "irregular_packet", "AttributeType": "S"},
+                {"AttributeName": "ground_station", "AttributeType": "S"},
+                {"AttributeName": "date", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
                     "IndexName": "IrregularIndex",
                     "KeySchema": [
-                        {"AttributeName": "unexpected_length", "KeyType": "HASH"},
-                        {
-                            "AttributeName": "sct_vtcw_reset#sct_vtcw",
-                            "KeyType": "RANGE",
-                        },
+                        {"AttributeName": "irregular_packet", "KeyType": "HASH"},
+                        {"AttributeName": "packet_filename", "KeyType": "RANGE"},
                     ],
                     "Projection": {
                         "ProjectionType": "INCLUDE",
-                        "NonKeyAttributes": ["packet_filename", "packet_length"],
+                        "NonKeyAttributes": ["packet_length", "packet_blob", "sct_vtcw_reset#sct_vtcw"],
                     },
                     "ProvisionedThroughput": {
                         "ReadCapacityUnits": 5,
@@ -44,10 +43,13 @@ def dynamodb():
                 {
                     "IndexName": "FilenameIndex",
                     "KeySchema": [
-                        {"AttributeName": "unexpected_length", "KeyType": "HASH"},
-                        {"AttributeName": "packet_filename", "KeyType": "RANGE"},
+                        {"AttributeName": "ground_station", "KeyType": "HASH"},
+                        {"AttributeName": "date", "KeyType": "RANGE"},
                     ],
-                    "Projection": {"ProjectionType": "ALL"},
+                    "Projection": {
+                        "ProjectionType": "INCLUDE",
+                        "NonKeyAttributes": ["packet_blob", "packet_length", "sct_vtcw_reset#sct_vtcw"],
+                    },
                     "ProvisionedThroughput": {
                         "ReadCapacityUnits": 5,
                         "WriteCapacityUnits": 5,
@@ -70,7 +72,9 @@ def populate_table(dynamodb):
             "packet_length": 1464,
             "packet_blob": b"binary_data_string",
             "src_seq_ctr": 1,
-            "unexpected_length": "False",
+            "irregular_packet": "False",
+            "ground_station": "GS001",
+            "date": "2025_200_123456_001",
         },
         {
             "packet_filename": "GS002_2025_201_123457_001.pkts",
@@ -78,7 +82,9 @@ def populate_table(dynamodb):
             "packet_length": 1500,
             "packet_blob": b"binary_data_string",
             "src_seq_ctr": 2,
-            "unexpected_length": "True",
+            "irregular_packet": "True",
+            "ground_station": "GS002",
+            "date": "2025_201_123457_001",
         },
     ]
     for item in items:
@@ -91,7 +97,7 @@ def test_query_by_irregular_packet_lengths(dynamodb, populate_table):
     # Querying the IrregularIndex GSI for irregular packets
     response = table.query(
         IndexName="IrregularIndex",
-        KeyConditionExpression=Key("unexpected_length").eq("True"),
+        KeyConditionExpression=Key("irregular_packet").eq("True"),
     )
 
     items = response["Items"]
@@ -104,8 +110,8 @@ def test_query_by_ground_station_and_date(dynamodb, populate_table):
     table = dynamodb.Table(TABLE_NAME)
     response = table.query(
         IndexName="FilenameIndex",
-        KeyConditionExpression=Key('unexpected_length').eq('False') &
-                               Key("packet_filename").begins_with("GS001_2025_200"),
+        KeyConditionExpression=Key('ground_station').eq('GS001') &
+                               Key("date").begins_with("2025_200"),
     )
     items = response["Items"]
     assert items[0]["packet_filename"] == "GS001_2025_200_123456_001.pkts"
@@ -116,9 +122,9 @@ def test_query_by_sct_vtcw_range(dynamodb, populate_table):
 
     response = table.query(
         IndexName="IrregularIndex",
-        KeyConditionExpression=Key("unexpected_length").eq("True")
-        & Key("sct_vtcw_reset#sct_vtcw").between(
-            "0#2025-07-11T00:00:00Z", "0#2025-07-13T23:59:59Z"
+        KeyConditionExpression=Key("irregular_packet").eq("True")
+        & Key("packet_filename").between(
+            "GS002_2025_200", "GS002_2025_202"
         ),
     )
 
