@@ -18,6 +18,7 @@ from sds_data_manager.stacks import (
     ecr_stack,
     efs_stack,
     ialirt_bucket_stack,
+    ialirt_database_stack,
     ialirt_processing_stack,
     indexer_lambda_stack,
     instrument_lambdas,
@@ -219,6 +220,11 @@ def build_sds(
     # I-ALiRT IOIS S3 bucket
     ialirt_bucket = ialirt_bucket_stack.IAlirtBucketStack(
         scope=scope, construct_id="IAlirtBucket", env=env
+    )
+
+    # I-ALiRT IOIS database
+    ddb_stack = ialirt_database_stack.IAlirtDatabaseStack(
+        scope, construct_id="DynamoDbPacketData", env=env
     )
 
     # All traffic to I-ALiRT is directed to listed container ports
