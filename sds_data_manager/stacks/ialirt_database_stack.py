@@ -24,6 +24,10 @@ class IAlirtDatabaseStack(Stack):
             The ID (name) of the stack
         **kwargs
             Additional keyword arguments.
+
+        Note:
+        DynamoDB's table defines the key schema and any secondary indexes.
+        The non-key attributes are included items are added to the table.
         """
         super().__init__(scope, construct_id, **kwargs)
 
@@ -49,17 +53,17 @@ class IAlirtDatabaseStack(Stack):
             stream=ddb.StreamViewType.NEW_IMAGE,
         )
 
-        # GSI partitioned by packet length and
+        # GSI partitioned by unexpected length and
         # sorted by sct_vtcw_reset#sct_vtcw
         self.packet_data_table.add_global_secondary_index(
-            index_name="PacketLengthIndex",
+            index_name="IrregularIndex",
             partition_key=ddb.Attribute(
-                name="packet_length", type=ddb.AttributeType.NUMBER
+                name="unexpected_length", type=ddb.AttributeType.STRING
             ),
             sort_key=ddb.Attribute(
                 name="sct_vtcw_reset#sct_vtcw", type=ddb.AttributeType.STRING
             ),
             # Specifies what keys to include.
             projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=["packet_filename"],
+            non_key_attributes=["packet_filename", "packet_length"],
         )
