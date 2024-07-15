@@ -70,7 +70,7 @@ class IAlirtDatabaseStack(Stack):
         self.packet_data_table.add_global_secondary_index(
             index_name="FilenameIndex",
             partition_key=ddb.Attribute(
-                name="sct_vtcw_reset#sct_vtcw", type=ddb.AttributeType.STRING
+                name="unexpected_length", type=ddb.AttributeType.STRING
             ),
             sort_key=ddb.Attribute(
                 name="packet_filename", type=ddb.AttributeType.STRING

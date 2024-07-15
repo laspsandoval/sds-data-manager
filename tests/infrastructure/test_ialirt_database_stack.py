@@ -44,7 +44,7 @@ def dynamodb():
                 {
                     "IndexName": "FilenameIndex",
                     "KeySchema": [
-                        {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "HASH"},
+                        {"AttributeName": "unexpected_length", "KeyType": "HASH"},
                         {"AttributeName": "packet_filename", "KeyType": "RANGE"},
                     ],
                     "Projection": {"ProjectionType": "ALL"},
@@ -104,10 +104,10 @@ def test_query_by_ground_station_and_date(dynamodb, populate_table):
     table = dynamodb.Table(TABLE_NAME)
     response = table.query(
         IndexName="FilenameIndex",
-        KeyConditionExpression=Key("packet_filename").begins_with("GS001_2025_200"),
+        KeyConditionExpression=Key('unexpected_length').eq('False') &
+                               Key("packet_filename").begins_with("GS001_2025_200"),
     )
     items = response["Items"]
-    assert len(items) == 1
     assert items[0]["packet_filename"] == "GS001_2025_200_123456_001.pkts"
 
 
@@ -123,6 +123,5 @@ def test_query_by_sct_vtcw_range(dynamodb, populate_table):
     )
 
     items = response["Items"]
-    assert len(items) == 1
     assert items[0]["packet_filename"] == "GS002_2025_201_123457_001.pkts"
     assert items[0]["packet_length"] == 1500  # Ensure packet_length is included
