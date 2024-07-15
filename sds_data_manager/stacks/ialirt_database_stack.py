@@ -1,5 +1,3 @@
-"""Configure the IAlirt database stack."""
-
 from aws_cdk import (
     RemovalPolicy,
     Stack,
@@ -66,4 +64,16 @@ class IAlirtDatabaseStack(Stack):
             # Specifies what keys to include.
             projection_type=ddb.ProjectionType.INCLUDE,
             non_key_attributes=["packet_filename", "packet_length"],
+        )
+
+        # Add a GSI with packet_filename as the sort key to support begins_with queries
+        self.packet_data_table.add_global_secondary_index(
+            index_name="FilenameIndex",
+            partition_key=ddb.Attribute(
+                name="sct_vtcw_reset#sct_vtcw", type=ddb.AttributeType.STRING
+            ),
+            sort_key=ddb.Attribute(
+                name="packet_filename", type=ddb.AttributeType.STRING
+            ),
+            projection_type=ddb.ProjectionType.ALL,
         )
