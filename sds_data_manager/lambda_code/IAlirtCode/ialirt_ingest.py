@@ -1,10 +1,14 @@
+"""IALiRT ingest lambda."""
+
+import json
 import logging
 import os
+
 import boto3
-import json
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 def lambda_handler(event, context):
     """Create metadata and add it to the database.
@@ -26,21 +30,17 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
 
     try:
-        #table_name = os.environ.get('TABLE_NAME')
-        dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table('test_table')
+        table_name = os.environ.get("TABLE_NAME")
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.Table(table_name)
 
-        table_status = table.table_status
-        logger.info("Table status: %s", table_status)
-
-        # Retrieve the Object name from the event
         s3_filepath = event["detail"]["object"]["key"]
         filename = os.path.basename(s3_filepath)
         logger.info("Retrieved filename: %s", filename)
 
-        # TODO: item is temporary and will be replaced with actual metadata.
+        # TODO: item is temporary and will be replaced with actual packet data.
         item = {
-            'packet_filename': filename,
+            "packet_filename": filename,
             "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
             "packet_length": 1464,
             "packet_blob": b"binary_data_string",
