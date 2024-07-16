@@ -3,12 +3,8 @@ import os
 import boto3
 import json
 
-dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table(os.environ['TABLE_NAME'])
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
 
 def lambda_handler(event, context):
     """Create metadata and add it to the database.
@@ -30,14 +26,25 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
 
     try:
+        table_name = os.environ.get('TABLE_NAME')
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(table_name)
+
         # Retrieve the Object name from the event
         s3_filepath = event["detail"]["object"]["key"]
         filename = os.path.basename(s3_filepath)
         logger.info("Retrieved filename: %s", filename)
 
+        # TODO: item is temporary and will be replaced with actual metadata.
         item = {
             'packet_filename': filename,
-            'sct_vtcw_reset#sct_vtcw': 'example_sort_key',
+            "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
+            "packet_length": 1464,
+            "packet_blob": b"binary_data_string",
+            "src_seq_ctr": 1,
+            "irregular_packet": "False",
+            "ground_station": "GS001",
+            "date": "2025_200_123456_001",
         }
 
         table.put_item(Item=item)

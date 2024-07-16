@@ -1,4 +1,4 @@
-"""Configure the indexer lambda stack."""
+"""Configure the ialirt ingest lambda stack."""
 
 import pathlib
 
@@ -9,22 +9,24 @@ from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_lambda_python_alpha as lambda_alpha_
+from aws_cdk import aws_dynamodb
+from aws_cdk import aws_s3
 from constructs import Construct
 
 
 class IalirtIngestLambda(Stack):
-    """Stack for indexer lambda."""
+    """Stack for ialirt ingest lambda."""
 
     def __init__(
         self,
         scope: Construct,
         construct_id: str,
         env: cdk.Environment,
-        packet_data_table,
-        ialirt_bucket,
+        packet_data_table: aws_dynamodb.Table,
+        ialirt_bucket: aws_s3.Bucket,
         **kwargs,
     ) -> None:
-        """IndexerLambda Stack.
+        """IalirtIngestLambda Stack.
 
         Parameters
         ----------
@@ -33,13 +35,13 @@ class IalirtIngestLambda(Stack):
         construct_id : str
             A unique string identifier for this construct.
         env : obj
-            The environment
-        packet_data_table : TODO
-            The DB secret name
-        ialirt_bucket : obj
-            The data bucket
+            The environment.
+        packet_data_table : aws_dynamodb.Table
+            Database table.
+        ialirt_bucket : aws_s3.Bucket
+            The data bucket.
         kwargs : dict
-            Keyword arguments
+            Keyword arguments.
 
         """
         super().__init__(scope, construct_id, env=env, **kwargs)
@@ -69,7 +71,7 @@ class IalirtIngestLambda(Stack):
             entry=str(
                 pathlib.Path(__file__).parent.joinpath("..", "lambda_code").resolve()
             ),
-            index="IAlirtCode/ingest.py",
+            index="IAlirtCode/ialirt_ingest.py",
             handler="lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_9,
             timeout=cdk.Duration.minutes(1),

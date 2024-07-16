@@ -19,6 +19,7 @@ from sds_data_manager.stacks import (
     efs_stack,
     ialirt_bucket_stack,
     ialirt_database_stack,
+    ialirt_ingest_lambda_stack,
     ialirt_processing_stack,
     indexer_lambda_stack,
     instrument_lambdas,
@@ -243,6 +244,15 @@ def build_sds(
             container_port=container_ports[primary_or_secondary],
             ialirt_bucket=ialirt_bucket.ialirt_bucket,
         )
+
+    # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)
+    ialirt_ingest_lambda_stack.IalirtIngestLambda(
+        scope=scope,
+        construct_id="IalirtIngestLambda",
+        env=env,
+        packet_data_table=ddb_stack.packet_data_table,
+        ialirt_bucket=ialirt_bucket.ialirt_bucket,
+    )
 
 
 def build_backup(scope: App, env: Environment, source_account: str):
