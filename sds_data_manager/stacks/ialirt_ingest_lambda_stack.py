@@ -3,14 +3,12 @@
 import pathlib
 
 import aws_cdk as cdk
-from aws_cdk import Stack
+from aws_cdk import Stack, aws_dynamodb, aws_s3
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_lambda_python_alpha as lambda_alpha_
-from aws_cdk import aws_dynamodb
-from aws_cdk import aws_s3
 from constructs import Construct
 
 
@@ -35,7 +33,7 @@ class IalirtIngestLambda(Stack):
         construct_id : str
             A unique string identifier for this construct.
         env : obj
-            The environment.
+            Environment.
         packet_data_table : aws_dynamodb.Table
             Database table.
         ialirt_bucket : aws_s3.Bucket
@@ -47,11 +45,14 @@ class IalirtIngestLambda(Stack):
         super().__init__(scope, construct_id, env=env, **kwargs)
 
         lambda_role = iam.Role(
-            self, "IalirtIngestLambdaRole",
+            self,
+            "IalirtIngestLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ]
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                )
+            ],
         )
 
         lambda_role.add_to_policy(
@@ -70,7 +71,10 @@ class IalirtIngestLambda(Stack):
                     "dynamodb:DeleteItem",
                     "s3:GetObject",
                 ],
-                resources=[packet_data_table.table_arn, f"{ialirt_bucket.bucket_arn}/*"]
+                resources=[
+                    packet_data_table.table_arn,
+                    f"{ialirt_bucket.bucket_arn}/*",
+                ],
             )
         )
 
@@ -115,4 +119,6 @@ class IalirtIngestLambda(Stack):
         )
 
         # Add the Lambda function as the target for the rules
-        ialirt_data_arrival_rule.add_target(targets.LambdaFunction(ialirt_ingest_lambda))
+        ialirt_data_arrival_rule.add_target(
+            targets.LambdaFunction(ialirt_ingest_lambda)
+        )
