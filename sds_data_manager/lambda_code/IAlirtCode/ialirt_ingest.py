@@ -26,9 +26,12 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
 
     try:
-        table_name = os.environ.get('TABLE_NAME')
+        #table_name = os.environ.get('TABLE_NAME')
         dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table(table_name)
+        table = dynamodb.Table('test_table')
+
+        table_status = table.table_status
+        logger.info("Table status: %s", table_status)
 
         # Retrieve the Object name from the event
         s3_filepath = event["detail"]["object"]["key"]
