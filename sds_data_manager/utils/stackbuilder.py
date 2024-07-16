@@ -200,7 +200,7 @@ def build_sds(
     )
     create_schema.add_dependency(db_lambda_layer)
 
-    # create lambda that mounts EFS and writes data to EFS
+    # Create lambda that mounts EFS and writes data to EFS.
     efs_stack.EFSWriteLambda(
         scope=scope,
         construct_id="EFSWriteLambda",

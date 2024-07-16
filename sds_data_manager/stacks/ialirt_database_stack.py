@@ -1,3 +1,5 @@
+"""Stack for creating the IALIRT database."""
+
 from aws_cdk import (
     RemovalPolicy,
     Stack,
@@ -49,6 +51,9 @@ class IAlirtDatabaseStack(Stack):
             ),
             # Enable DynamoDB streams for real-time processing
             stream=ddb.StreamViewType.NEW_IMAGE,
+            # Define the read and write capacity units.
+            # TODO: change to provisioned capacity mode in production.
+            billing_mode=ddb.BillingMode.PAY_PER_REQUEST,  # On-Demand capacity mode.
         )
 
         self.packet_data_table.add_global_secondary_index(
@@ -61,9 +66,11 @@ class IAlirtDatabaseStack(Stack):
             ),
             # Specifies what keys to include.
             projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=["packet_length",
-                                "packet_blob",
-                                "sct_vtcw_reset#sct_vtcw"],
+            non_key_attributes=[
+                "packet_length",
+                "packet_blob",
+                "sct_vtcw_reset#sct_vtcw",
+            ],
         )
 
         self.packet_data_table.add_global_secondary_index(
@@ -71,10 +78,12 @@ class IAlirtDatabaseStack(Stack):
             partition_key=ddb.Attribute(
                 name="ground_station", type=ddb.AttributeType.STRING
             ),
-            sort_key=ddb.Attribute(
-                name="date", type=ddb.AttributeType.STRING
-            ),
+            sort_key=ddb.Attribute(name="date", type=ddb.AttributeType.STRING),
+            # Specifies what keys to include.
             projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=["packet_blob", "packet_length",
-                                "sct_vtcw_reset#sct_vtcw"],
+            non_key_attributes=[
+                "packet_blob",
+                "packet_length",
+                "sct_vtcw_reset#sct_vtcw",
+            ],
         )
