@@ -58,6 +58,16 @@ class IalirtIngestLambda(Stack):
             iam.PolicyStatement(
                 actions=[
                     "dynamodb:PutItem",
+                    "dynamodb:BatchGetItem",
+                    "dynamodb:DescribeStream",
+                    "dynamodb:DescribeTable",
+                    "dynamodb:GetItem",
+                    "dynamodb:ListStreams",
+                    "dynamodb:ListTables",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
                     "s3:GetObject",
                 ],
                 resources=[packet_data_table.table_arn, f"{ialirt_bucket.bucket_arn}/*"]
