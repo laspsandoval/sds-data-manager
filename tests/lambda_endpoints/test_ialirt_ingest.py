@@ -1,73 +1,44 @@
 import os
-import json
 import boto3
 import pytest
 from moto import mock_dynamodb
 
-# Correct import path for the Lambda function
-from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import lambda_handler
+from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest \
+    import lambda_handler
 
 
 @pytest.fixture(scope='function')
-def aws_credentials():
-    """Mocked AWS Credentials for moto."""
-    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
-    os.environ['AWS_SECURITY_TOKEN'] = 'testing'
-    os.environ['AWS_SESSION_TOKEN'] = 'testing'
+def dynamodb_table():
+    """Create a DynamoDB table for testing."""
+
     os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
-
-
-@pytest.fixture(scope='function')
-def dynamodb_client(aws_credentials):
     with mock_dynamodb():
-        yield boto3.client('dynamodb', region_name='us-west-2')
+
+        # Create the DynamoDB resource
+        dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
+
+        # Create the DynamoDB table
+        table_name = 'test_table'
+        dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[
+                {
+                    'AttributeName': 'packet_filename',
+                    'KeyType': 'HASH'
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'packet_filename',
+                    'AttributeType': 'S'
+                }
+            ],
+            BillingMode='PAY_PER_REQUEST'
+        )
 
 
-@pytest.fixture(scope='function')
-def dynamodb_table(dynamodb_client):
-    dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
-    table_name = 'test_table'
-    table = dynamodb.create_table(
-        TableName=table_name,
-        KeySchema=[
-            {
-                'AttributeName': 'packet_filename',
-                'KeyType': 'HASH'
-            }
-        ],
-        AttributeDefinitions=[
-            {
-                'AttributeName': 'packet_filename',
-                'AttributeType': 'S'
-            }
-        ],
-        ProvisionedThroughput={
-            'ReadCapacityUnits': 1,
-            'WriteCapacityUnits': 1
-        }
-    )
-
-    # Wait for the table to exist
-    table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
-    print(f"Table {table_name} created and active.")
-
-    yield table
-
-    # Clean up
-    table.delete()
-    dynamodb.meta.client.get_waiter('table_not_exists').wait(TableName=table_name)
-    print(f"Table {table_name} deleted.")
-
-
-@pytest.fixture(scope='function')
-def set_env_vars():
-    os.environ['TABLE_NAME'] = 'test_table'
-    yield
-    del os.environ['TABLE_NAME']
-
-
-def test_lambda_handler(dynamodb_table, set_env_vars):
+def test_lambda_handler(dynamodb_table):
+    """Test the lambda_handler function."""
     # Mock event data
     event = {
         "detail": {
@@ -76,22 +47,13 @@ def test_lambda_handler(dynamodb_table, set_env_vars):
             }
         }
     }
-    context = {}
 
-    # Check that the table exists in the mock environment
     dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
-    table_name = os.environ['TABLE_NAME']
-    table = dynamodb.Table(table_name)
-
-    try:
-        table.load()
-        print(f"Table {table_name} exists and is active.")
-    except Exception as e:
-        print(f"Error loading table {table_name}: {e}")
-        assert False, f"Table {table_name} should exist but was not found."
+    os.environ['TABLE_NAME'] = 'test_table'
+    table = dynamodb.Table(os.environ['TABLE_NAME'])
 
     # Call the lambda handler
-    lambda_handler(event, context)
+    lambda_handler(event, {})
 
     # Check if the item was added to the DynamoDB table
     response = table.get_item(Key={'packet_filename': 'file.txt'})
