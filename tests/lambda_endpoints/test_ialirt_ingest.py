@@ -1,33 +1,37 @@
+"""Test the IAlirt ingest lambda function."""
+
 import os
+
 import boto3
 import pytest
 from moto import mock_dynamodb
+
 from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import lambda_handler
 
 
-@pytest.fixture
+@pytest.fixture()
 def dynamodb_table():
     """Create a DynamoDB table for testing."""
-    os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
-    os.environ['TABLE_NAME'] = 'test_table'
+    os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
+    os.environ["TABLE_NAME"] = "test_table"
 
     with mock_dynamodb():
         # Create the DynamoDB resource
-        dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
+        dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
 
         # Create the DynamoDB table
-        table_name = os.environ['TABLE_NAME']
+        table_name = os.environ["TABLE_NAME"]
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
                 {"AttributeName": "packet_filename", "KeyType": "HASH"},
-                #{"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "RANGE"},
+                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "RANGE"},
             ],
             AttributeDefinitions=[
                 {"AttributeName": "packet_filename", "AttributeType": "S"},
-                #{"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
+                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
             ],
-            BillingMode='PAY_PER_REQUEST'
+            BillingMode="PAY_PER_REQUEST",
         )
 
         yield table
@@ -36,26 +40,25 @@ def dynamodb_table():
 def test_lambda_handler(dynamodb_table):
     """Test the lambda_handler function."""
     # Mock event data
-    event = {
-        "detail": {
-            "object": {
-                "key": "path/to/s3/object/file.txt"
-            }
-        }
-    }
+    event = {"detail": {"object": {"key": "path/to/s3/object/file.txt"}}}
 
     lambda_handler(event, {})
 
     table = dynamodb_table
-    response = table.get_item(Key={'packet_filename': 'file.txt'})
-    item = response.get('Item')
+    response = table.get_item(
+        Key={
+            "packet_filename": "file.txt",
+            "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
+        }
+    )
+    item = response.get("Item")
 
     assert item is not None
-    assert item['packet_filename'] == 'file.txt'
-    assert item['sct_vtcw_reset#sct_vtcw'] == '0#2025-07-11T12:34:56Z'
-    assert item['packet_length'] == 1464
-    assert item['packet_blob'] == b'binary_data_string'
-    assert item['src_seq_ctr'] == 1
-    assert item['irregular_packet'] == 'False'
-    assert item['ground_station'] == 'GS001'
-    assert item['date'] == '2025_200_123456_001'
+    assert item["packet_filename"] == "file.txt"
+    assert item["sct_vtcw_reset#sct_vtcw"] == "0#2025-07-11T12:34:56Z"
+    assert item["packet_length"] == 1464
+    assert item["packet_blob"] == b"binary_data_string"
+    assert item["src_seq_ctr"] == 1
+    assert item["irregular_packet"] == "False"
+    assert item["ground_station"] == "GS001"
+    assert item["date"] == "2025_200_123456_001"
