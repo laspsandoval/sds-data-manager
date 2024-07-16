@@ -73,7 +73,7 @@ def dynamodb():
 
 
 @pytest.fixture()
-def _populate_table(dynamodb):
+def populate_table(dynamodb):
     """Populate DynamoDB table."""
     table = dynamodb.Table(TABLE_NAME)
     items = [
@@ -100,6 +100,8 @@ def _populate_table(dynamodb):
     ]
     for item in items:
         table.put_item(Item=item)
+
+    return item
 
 
 def test_query_by_irregular_packet_lengths(dynamodb, populate_table):
