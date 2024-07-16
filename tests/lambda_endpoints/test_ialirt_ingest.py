@@ -2,39 +2,35 @@ import os
 import boto3
 import pytest
 from moto import mock_dynamodb
-
-from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest \
-    import lambda_handler
+from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import lambda_handler
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def dynamodb_table():
     """Create a DynamoDB table for testing."""
-
     os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
-    with mock_dynamodb():
+    os.environ['TABLE_NAME'] = 'test_table'
 
+    with mock_dynamodb():
         # Create the DynamoDB resource
         dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
 
         # Create the DynamoDB table
-        table_name = 'test_table'
-        dynamodb.create_table(
+        table_name = os.environ['TABLE_NAME']
+        table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
-                {
-                    'AttributeName': 'packet_filename',
-                    'KeyType': 'HASH'
-                }
+                {"AttributeName": "packet_filename", "KeyType": "HASH"},
+                #{"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "RANGE"},
             ],
             AttributeDefinitions=[
-                {
-                    'AttributeName': 'packet_filename',
-                    'AttributeType': 'S'
-                }
+                {"AttributeName": "packet_filename", "AttributeType": "S"},
+                #{"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
             ],
             BillingMode='PAY_PER_REQUEST'
         )
+
+        yield table
 
 
 def test_lambda_handler(dynamodb_table):
@@ -48,14 +44,9 @@ def test_lambda_handler(dynamodb_table):
         }
     }
 
-    dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
-    os.environ['TABLE_NAME'] = 'test_table'
-    table = dynamodb.Table(os.environ['TABLE_NAME'])
-
-    # Call the lambda handler
     lambda_handler(event, {})
 
-    # Check if the item was added to the DynamoDB table
+    table = dynamodb_table
     response = table.get_item(Key={'packet_filename': 'file.txt'})
     item = response.get('Item')
 
