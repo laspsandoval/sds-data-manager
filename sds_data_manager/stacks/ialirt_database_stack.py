@@ -39,13 +39,8 @@ class IAlirtDatabaseStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             # Restore data to any point in time within the last 35 days.
             point_in_time_recovery=False,
-            # Partition key (PK) = filename.
+            # Partition key (PK) = spacecraft time ugps.
             partition_key=ddb.Attribute(
-                name="packet_filename",
-                type=ddb.AttributeType.STRING,
-            ),
-            # Sort key (PK) = reset # + spacecraft time ugps.
-            sort_key=ddb.Attribute(
                 name="sct_vtcw_reset#sct_vtcw",
                 type=ddb.AttributeType.STRING,
             ),
@@ -54,36 +49,4 @@ class IAlirtDatabaseStack(Stack):
             # Define the read and write capacity units.
             # TODO: change to provisioned capacity mode in production.
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,  # On-Demand capacity mode.
-        )
-
-        self.packet_data_table.add_global_secondary_index(
-            index_name="IrregularIndex",
-            partition_key=ddb.Attribute(
-                name="irregular_packet", type=ddb.AttributeType.STRING
-            ),
-            sort_key=ddb.Attribute(
-                name="packet_filename", type=ddb.AttributeType.STRING
-            ),
-            # Specifies what keys to include.
-            projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=[
-                "packet_length",
-                "packet_blob",
-                "sct_vtcw_reset#sct_vtcw",
-            ],
-        )
-
-        self.packet_data_table.add_global_secondary_index(
-            index_name="FilenameIndex",
-            partition_key=ddb.Attribute(
-                name="ground_station", type=ddb.AttributeType.STRING
-            ),
-            sort_key=ddb.Attribute(name="date", type=ddb.AttributeType.STRING),
-            # Specifies what keys to include.
-            projection_type=ddb.ProjectionType.INCLUDE,
-            non_key_attributes=[
-                "packet_blob",
-                "packet_length",
-                "sct_vtcw_reset#sct_vtcw",
-            ],
         )

@@ -24,11 +24,9 @@ def dynamodb_table():
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
-                {"AttributeName": "packet_filename", "KeyType": "HASH"},
-                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "RANGE"},
+                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "HASH"},
             ],
             AttributeDefinitions=[
-                {"AttributeName": "packet_filename", "AttributeType": "S"},
                 {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
             ],
             BillingMode="PAY_PER_REQUEST",
@@ -47,18 +45,11 @@ def test_lambda_handler(dynamodb_table):
     table = dynamodb_table
     response = table.get_item(
         Key={
-            "packet_filename": "file.txt",
             "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
         }
     )
     item = response.get("Item")
 
     assert item is not None
-    assert item["packet_filename"] == "file.txt"
     assert item["sct_vtcw_reset#sct_vtcw"] == "0#2025-07-11T12:34:56Z"
-    assert item["packet_length"] == 1464
     assert item["packet_blob"] == b"binary_data_string"
-    assert item["src_seq_ctr"] == 1
-    assert item["irregular_packet"] == "False"
-    assert item["ground_station"] == "GS001"
-    assert item["date"] == "2025_200_123456_001"

@@ -40,14 +40,8 @@ def lambda_handler(event, context):
 
         # TODO: item is temporary and will be replaced with actual packet data.
         item = {
-            "packet_filename": filename,
             "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
-            "packet_length": 1464,
             "packet_blob": b"binary_data_string",
-            "src_seq_ctr": 1,
-            "irregular_packet": "False",
-            "ground_station": "GS001",
-            "date": "2025_200_123456_001",
         }
 
         table.put_item(Item=item)
