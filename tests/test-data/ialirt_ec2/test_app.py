@@ -27,13 +27,13 @@ def hello():
 @app.route("/list")
 def list_files():
     """List files in the mounted S3 bucket."""
-    files = os.listdir("/mnt/s3")
+    files = os.listdir("/mnt/s3/packets")
     return "<br>".join(files)
 
 
 def create_and_save_file():
     """Create and save file to S3 bucket."""
-    s3_mount_dir = "/mnt/s3"
+    s3_mount_dir = "/mnt/s3/packets"
 
     if not os.path.exists(s3_mount_dir):
         os.makedirs(s3_mount_dir)
