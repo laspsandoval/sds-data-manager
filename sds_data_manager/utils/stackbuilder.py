@@ -18,7 +18,6 @@ from sds_data_manager.stacks import (
     ecr_stack,
     efs_stack,
     ialirt_bucket_stack,
-    ialirt_database_stack,
     ialirt_ingest_lambda_stack,
     ialirt_processing_stack,
     indexer_lambda_stack,
@@ -223,11 +222,6 @@ def build_sds(
         scope=scope, construct_id="IAlirtBucket", env=env
     )
 
-    # I-ALiRT IOIS database
-    ddb_stack = ialirt_database_stack.IAlirtDatabaseStack(
-        scope, construct_id="DynamoDbPacketData", env=env
-    )
-
     # All traffic to I-ALiRT is directed to listed container ports
     ialirt_ports = {"Primary": [8080, 8081], "Secondary": [80]}
     container_ports = {"Primary": 8080, "Secondary": 80}
@@ -250,7 +244,6 @@ def build_sds(
         scope=scope,
         construct_id="IalirtIngestLambda",
         env=env,
-        packet_data_table=ddb_stack.packet_data_table,
         ialirt_bucket=ialirt_bucket.ialirt_bucket,
     )
 

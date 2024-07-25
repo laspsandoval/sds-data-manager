@@ -56,10 +56,10 @@ def table():
             TableName="imap-data-table",
             KeySchema=[
                 # Partition key
-                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "HASH"},
+                {"AttributeName": "reset_number#met", "KeyType": "HASH"},
             ],
             AttributeDefinitions=[
-                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
+                {"AttributeName": "reset_number#met", "AttributeType": "S"},
             ],
             BillingMode="PAY_PER_REQUEST",
         )

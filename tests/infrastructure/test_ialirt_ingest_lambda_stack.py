@@ -9,11 +9,11 @@ def populate_table(table):
     """Populate DynamoDB table."""
     items = [
         {
-            "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
+            "reset_number#met": "0#2025-07-11T12:34:56Z",
             "packet_blob": b"binary_data_string",
         },
         {
-            "sct_vtcw_reset#sct_vtcw": "0#2025-07-12T12:34:57Z",
+            "reset_number#met": "0#2025-07-12T12:34:57Z",
             "packet_blob": b"binary_data_string",
         },
     ]
@@ -26,10 +26,8 @@ def populate_table(table):
 def test_query_by_sct_vtcw(table, populate_table):
     """Test to query irregular packet length."""
     response = table.query(
-        KeyConditionExpression=Key("sct_vtcw_reset#sct_vtcw").eq(
-            "0#2025-07-12T12:34:57Z"
-        )
+        KeyConditionExpression=Key("reset_number#met").eq("0#2025-07-12T12:34:57Z")
     )
 
     items = response["Items"]
-    assert items[0]["sct_vtcw_reset#sct_vtcw"] == "0#2025-07-12T12:34:57Z"
+    assert items[0]["reset_number#met"] == "0#2025-07-12T12:34:57Z"

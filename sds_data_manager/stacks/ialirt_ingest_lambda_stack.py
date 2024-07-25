@@ -3,7 +3,8 @@
 import pathlib
 
 import aws_cdk as cdk
-from aws_cdk import Stack, aws_dynamodb, aws_s3
+from aws_cdk import RemovalPolicy, Stack, aws_dynamodb, aws_s3
+from aws_cdk import aws_dynamodb as ddb
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
@@ -20,7 +21,6 @@ class IalirtIngestLambda(Stack):
         scope: Construct,
         construct_id: str,
         env: cdk.Environment,
-        packet_data_table: aws_dynamodb.Table,
         ialirt_bucket: aws_s3.Bucket,
         **kwargs,
     ) -> None:
@@ -34,8 +34,6 @@ class IalirtIngestLambda(Stack):
             A unique string identifier for this construct.
         env : obj
             Environment.
-        packet_data_table : aws_dynamodb.Table
-            Database table.
         ialirt_bucket : aws_s3.Bucket
             The data bucket.
         kwargs : dict
@@ -44,6 +42,46 @@ class IalirtIngestLambda(Stack):
         """
         super().__init__(scope, construct_id, env=env, **kwargs)
 
+        # Create DynamoDB Table
+        self.packet_data_table = self.create_dynamodb_table()
+
+        # Create Lambda Function
+        self.ialirt_ingest_lambda = self.create_lambda_function(
+            ialirt_bucket, self.packet_data_table
+        )
+
+        # Create Event Rule
+        self.create_event_rule(ialirt_bucket, self.ialirt_ingest_lambda)
+
+    def create_dynamodb_table(self) -> aws_dynamodb.Table:
+        """Create and return the DynamoDB table."""
+        table = ddb.Table(
+            self,
+            "PacketDataTable",
+            table_name="imap-packetdata-table",
+            # Change to RemovalPolicy.RETAIN to keep the table after stack deletion.
+            # TODO: change to RETAIN in production.
+            removal_policy=RemovalPolicy.DESTROY,
+            # Restore data to any point in time within the last 35 days.
+            # TODO: change to True in production.
+            point_in_time_recovery=False,
+            # Partition key (PK) = spacecraft time ugps.
+            partition_key=ddb.Attribute(
+                name="reset_number#met",
+                type=ddb.AttributeType.STRING,
+            ),
+            # Enable DynamoDB streams for real-time processing
+            stream=ddb.StreamViewType.NEW_IMAGE,
+            # Define the read and write capacity units.
+            # TODO: change to provisioned capacity mode in production.
+            billing_mode=ddb.BillingMode.PAY_PER_REQUEST,  # On-Demand capacity mode.
+        )
+        return table
+
+    def create_lambda_function(
+        self, ialirt_bucket: aws_s3.Bucket, packet_data_table: aws_dynamodb.Table
+    ) -> lambda_alpha_.PythonFunction:
+        """Create and return the Lambda function."""
         lambda_role = iam.Role(
             self,
             "IalirtIngestLambdaRole",
@@ -95,8 +133,14 @@ class IalirtIngestLambda(Stack):
         # The resource is deleted when the stack is deleted.
         ialirt_ingest_lambda.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
-        # Event that triggers Lambda:
-        # Arrival of packets in s3 bucket.
+        return ialirt_ingest_lambda
+
+    def create_event_rule(
+        self,
+        ialirt_bucket: aws_s3.Bucket,
+        ialirt_ingest_lambda: lambda_alpha_.PythonFunction,
+    ) -> None:
+        """Create the event rule to trigger Lambda on S3 object creation."""
         ialirt_data_arrival_rule = events.Rule(
             self,
             "IalirtDataArrival",

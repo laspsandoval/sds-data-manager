@@ -4,11 +4,10 @@ import os
 
 import boto3
 import pytest
+from boto3.dynamodb.conditions import Key
 from moto import mock_dynamodb
 
-from sds_data_manager.lambda_code.ialirt_ingest_lambda.ialirt_ingest import (
-    lambda_handler,
-)
+from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import lambda_handler
 
 
 @pytest.fixture()
@@ -26,15 +25,34 @@ def dynamodb_table():
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
-                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "HASH"},
+                {"AttributeName": "reset_number#met", "KeyType": "HASH"},
             ],
             AttributeDefinitions=[
-                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
+                {"AttributeName": "reset_number#met", "AttributeType": "S"},
             ],
             BillingMode="PAY_PER_REQUEST",
         )
 
         yield table
+
+
+@pytest.fixture()
+def populate_table(table):
+    """Populate DynamoDB table."""
+    items = [
+        {
+            "reset_number#met": "0#2025-07-11T12:34:56Z",
+            "packet_blob": b"binary_data_string",
+        },
+        {
+            "reset_number#met": "0#2025-07-12T12:34:57Z",
+            "packet_blob": b"binary_data_string",
+        },
+    ]
+    for item in items:
+        table.put_item(Item=item)
+
+    return item
 
 
 def test_lambda_handler(dynamodb_table):
@@ -47,11 +65,21 @@ def test_lambda_handler(dynamodb_table):
     table = dynamodb_table
     response = table.get_item(
         Key={
-            "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
+            "reset_number#met": "0#2025-07-11T12:34:56Z",
         }
     )
     item = response.get("Item")
 
     assert item is not None
-    assert item["sct_vtcw_reset#sct_vtcw"] == "0#2025-07-11T12:34:56Z"
+    assert item["reset_number#met"] == "0#2025-07-11T12:34:56Z"
     assert item["packet_blob"] == b"binary_data_string"
+
+
+def test_query_by_met(table, populate_table):
+    """Test to query irregular packet length."""
+    response = table.query(
+        KeyConditionExpression=Key("reset_number#met").eq("0#2025-07-12T12:34:57Z")
+    )
+
+    items = response["Items"]
+    assert items[0]["reset_number#met"] == "0#2025-07-12T12:34:57Z"
