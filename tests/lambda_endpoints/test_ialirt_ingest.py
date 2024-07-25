@@ -6,7 +6,9 @@ import boto3
 import pytest
 from moto import mock_dynamodb
 
-from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import lambda_handler
+from sds_data_manager.lambda_code.ialirt_ingest_lambda.ialirt_ingest import (
+    lambda_handler,
+)
 
 
 @pytest.fixture()

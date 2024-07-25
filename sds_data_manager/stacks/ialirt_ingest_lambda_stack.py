@@ -55,20 +55,13 @@ class IalirtIngestLambda(Stack):
             ],
         )
 
+        lambda_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess")
+        )
+
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    "dynamodb:PutItem",
-                    "dynamodb:BatchGetItem",
-                    "dynamodb:DescribeStream",
-                    "dynamodb:DescribeTable",
-                    "dynamodb:GetItem",
-                    "dynamodb:ListStreams",
-                    "dynamodb:ListTables",
-                    "dynamodb:Query",
-                    "dynamodb:Scan",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:DeleteItem",
                     "s3:GetObject",
                 ],
                 resources=[
@@ -87,7 +80,7 @@ class IalirtIngestLambda(Stack):
             ),
             index="IAlirtCode/ialirt_ingest.py",
             handler="lambda_handler",
-            runtime=lambda_.Runtime.PYTHON_3_9,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             timeout=cdk.Duration.minutes(1),
             memory_size=1000,
             role=lambda_role,

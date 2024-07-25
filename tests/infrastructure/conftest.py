@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+import boto3
 import pytest
 from aws_cdk import App, Environment
+from moto import mock_dynamodb
 
 from sds_data_manager.stacks.lambda_layer_stack import LambdaLayerStack
 
@@ -43,3 +45,23 @@ def lambda_layer_stack(app, env):
         scope=app, id=db_layer_name, layer_dependencies_dir=str(lambda_code_directory)
     )
     return db_layer_name
+
+
+@pytest.fixture()
+def table():
+    """Initialize DynamoDB resource and create table."""
+    with mock_dynamodb():
+        dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
+        table = dynamodb.create_table(
+            TableName="imap-data-table",
+            KeySchema=[
+                # Partition key
+                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "KeyType": "HASH"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "sct_vtcw_reset#sct_vtcw", "AttributeType": "S"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield table
+        table.delete()

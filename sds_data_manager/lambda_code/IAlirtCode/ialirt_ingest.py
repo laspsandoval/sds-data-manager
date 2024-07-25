@@ -29,24 +29,19 @@ def lambda_handler(event, context):
     """
     logger.info("Received event: %s", json.dumps(event))
 
-    try:
-        table_name = os.environ.get("TABLE_NAME")
-        dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.Table(table_name)
+    table_name = os.environ.get("TABLE_NAME")
+    dynamodb = boto3.resource("dynamodb")
+    table = dynamodb.Table(table_name)
 
-        s3_filepath = event["detail"]["object"]["key"]
-        filename = os.path.basename(s3_filepath)
-        logger.info("Retrieved filename: %s", filename)
+    s3_filepath = event["detail"]["object"]["key"]
+    filename = os.path.basename(s3_filepath)
+    logger.info("Retrieved filename: %s", filename)
 
-        # TODO: item is temporary and will be replaced with actual packet data.
-        item = {
-            "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
-            "packet_blob": b"binary_data_string",
-        }
+    # TODO: item is temporary and will be replaced with actual packet data.
+    item = {
+        "sct_vtcw_reset#sct_vtcw": "0#2025-07-11T12:34:56Z",
+        "packet_blob": b"binary_data_string",
+    }
 
-        table.put_item(Item=item)
-        logger.info("Successfully wrote item to DynamoDB: %s", item)
-
-    except Exception as e:
-        logger.error("Error processing event: %s", str(e))
-        raise
+    table.put_item(Item=item)
+    logger.info("Successfully wrote item to DynamoDB: %s", item)
