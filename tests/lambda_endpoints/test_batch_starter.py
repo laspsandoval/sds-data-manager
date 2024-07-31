@@ -26,7 +26,8 @@ from sds_data_manager.lambda_code.SDSCode.dependency_config import (
     downstream_dependents,
     upstream_dependents,
 )
-from tests.conftest import POSTGRES_AVAILABLE
+
+from .conftest import POSTGRES_AVAILABLE
 
 
 def _populate_dependency_table(session):
