@@ -47,7 +47,8 @@ class IAlirtDatabaseStack(Stack):
                 type=ddb.AttributeType.STRING,
             ),
             # Enable DynamoDB streams for real-time processing
-            stream=ddb.StreamViewType.NEW_IMAGE,
+            # TODO: look into DynamoDB streams
+            # stream=ddb.StreamViewType.NEW_IMAGE,
             # Define the read and write capacity units.
             # TODO: change to provisioned capacity mode in production.
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,  # On-Demand capacity mode.
