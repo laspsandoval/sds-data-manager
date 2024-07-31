@@ -43,7 +43,7 @@ class IAlirtDatabaseStack(Stack):
             point_in_time_recovery=False,
             # Partition key (PK) = spacecraft time ugps.
             partition_key=ddb.Attribute(
-                name="sct_vtcw_reset#sct_vtcw",
+                name="reset_number#met",
                 type=ddb.AttributeType.STRING,
             ),
             # Enable DynamoDB streams for real-time processing

@@ -39,7 +39,7 @@ def lambda_handler(event, context):
 
     # TODO: item is temporary and will be replaced with actual packet data.
     item = {
-        "reset_number#met": "0#2025-07-11T12:34:56Z",
+        "reset_number#met": "0#123",
         "packet_blob": b"binary_data_string",
     }
 

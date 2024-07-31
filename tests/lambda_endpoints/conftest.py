@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from moto import mock_dynamodb, mock_events, mock_s3
+from moto import mock_events, mock_s3
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -121,23 +121,3 @@ def session(connection):
             session.close()
             # Drop tables to ensure clean state for next test
             Base.metadata.drop_all(engine)
-
-
-@pytest.fixture()
-def table():
-    """Initialize DynamoDB resource and create table."""
-    with mock_dynamodb():
-        dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
-        table = dynamodb.create_table(
-            TableName="imap-packetdata-table",
-            KeySchema=[
-                # Partition key
-                {"AttributeName": "reset_number#met", "KeyType": "HASH"},
-            ],
-            AttributeDefinitions=[
-                {"AttributeName": "reset_number#met", "AttributeType": "S"},
-            ],
-            BillingMode="PAY_PER_REQUEST",
-        )
-        yield table
-        table.delete()
