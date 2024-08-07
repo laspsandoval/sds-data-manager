@@ -19,10 +19,13 @@ def table():
             TableName="imap-data-table",
             KeySchema=[
                 # Partition key
-                {"AttributeName": "reset_number#met", "KeyType": "HASH"},
+                {"AttributeName": "met", "KeyType": "HASH"},
+                # Sort key
+                {"AttributeName": "ingest_time", "KeyType": "RANGE"},
             ],
             AttributeDefinitions=[
-                {"AttributeName": "reset_number#met", "AttributeType": "S"},
+                {"AttributeName": "met", "AttributeType": "N"},
+                {"AttributeName": "ingest_time", "AttributeType": "S"},
             ],
             BillingMode="PAY_PER_REQUEST",
         )

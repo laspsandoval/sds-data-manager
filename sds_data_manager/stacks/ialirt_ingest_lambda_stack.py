@@ -57,17 +57,22 @@ class IalirtIngestLambda(Stack):
         """Create and return the DynamoDB table."""
         table = ddb.Table(
             self,
-            "PacketDataTable",
-            table_name="imap-packetdata-table",
+            "IalirtPacketDataTable",
+            table_name="ialirt-packetdata-table",
             # Change to RemovalPolicy.RETAIN to keep the table after stack deletion.
             # TODO: change to RETAIN in production.
             removal_policy=RemovalPolicy.DESTROY,
             # Restore data to any point in time within the last 35 days.
             # TODO: change to True in production.
             point_in_time_recovery=False,
-            # Partition key (PK) = spacecraft time ugps.
+            # Partition key (PK) = Mission Elapsed Time (MET).
             partition_key=ddb.Attribute(
-                name="reset_number#met",
+                name="met",
+                type=ddb.AttributeType.NUMBER,
+            ),
+            # Sort key (SK) = Ingest Time (ISO).
+            sort_key=ddb.Attribute(
+                name="ingest_time",
                 type=ddb.AttributeType.STRING,
             ),
             # Define the read and write capacity units.
