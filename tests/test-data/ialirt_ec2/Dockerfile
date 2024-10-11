@@ -1,9 +1,11 @@
 # This code is used to Dockerize test_app.py. The workflow is as follows:
-# 1. Login to the ECR with `aws ecr get-login-password --region <region> | docker login
-# --username AWS --password-stdin <ecr uri>`
-# 2. Build the image with `docker build -t my-image-<primary or secondary> --rm .`
-# 3. docker tag my-image-<primary or secondary> <ecr uri>:latest-<primary or secondary>
-# 4. docker push <ecr uri>:latest-<primary or secondary>
+# 1. Check that you are not already logged in by running `cat ~/.docker/config.json` and ensuring that neither
+# Nexus registry URL is in the list of logged in registries.
+# 2. Run `docker login docker-registry.pdmz.lasp.colorado.edu` (you will be prompted for your WebIAM username and password).
+# Your `~/.docker/config.json` file should now contain a reference to the registry url.
+# 3. `docker build -t my-image-primary:dev --rm . --no-cache`
+# 4. `docker tag my-image-primary:dev docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-primary:dev`
+# 5. `docker push docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-primary:dev`
 
 # To run and test locally:
 # 1. `docker build -t my-image-<primary or secondary> --rm .`
