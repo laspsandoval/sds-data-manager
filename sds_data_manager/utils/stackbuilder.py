@@ -258,47 +258,40 @@ def build_sds(
         efs_construct=efs_instance,
     )
 
-    # TODO: Add I-ALiRT Stack to the deployment
-    #       We are skipping this deployment for now because it is currently
-    #       dependent on SDC Stack resources and requires a manual intervention
-    #       to deploy. We can add this stack back in to deployments after we
-    #       fix those updates.
-    if False:
-        ialirt_stack = Stack(scope, "IalirtStack", env=env)
-        # I-ALiRT IOIS ECR
-        ialirt_ecr = ecr_construct.EcrConstruct(
+    ialirt_stack = Stack(scope, "IalirtStack", env=env)
+    # # I-ALiRT IOIS ECR
+    # ialirt_ecr = ecr_construct.EcrConstruct(
+    #     scope=ialirt_stack,
+    #     construct_id="IalirtEcr",
+    #     instrument_name="IalirtEcr",
+    # )
+
+    # I-ALiRT IOIS S3 bucket
+    ialirt_bucket = ialirt_bucket_construct.IAlirtBucketConstruct(
+        scope=ialirt_stack, construct_id="IAlirtBucket", env=env
+    )
+
+    # All traffic to I-ALiRT is directed to listed container ports
+    ialirt_ports = {"Primary": [8080, 8081], "Secondary": [80]}
+    container_ports = {"Primary": 8080, "Secondary": 80}
+
+    for primary_or_secondary in ialirt_ports:
+        ialirt_processing_construct.IalirtProcessing(
             scope=ialirt_stack,
-            construct_id="IalirtEcr",
-            instrument_name="IalirtEcr",
-        )
-
-        # I-ALiRT IOIS S3 bucket
-        ialirt_bucket = ialirt_bucket_construct.IAlirtBucketConstruct(
-            scope=ialirt_stack, construct_id="IAlirtBucket", env=env
-        )
-
-        # All traffic to I-ALiRT is directed to listed container ports
-        ialirt_ports = {"Primary": [8080, 8081], "Secondary": [80]}
-        container_ports = {"Primary": 8080, "Secondary": 80}
-
-        for primary_or_secondary in ialirt_ports:
-            ialirt_processing_construct.IalirtProcessing(
-                scope=ialirt_stack,
-                construct_id=f"IalirtProcessing{primary_or_secondary}",
-                vpc=networking.vpc,
-                repo=ialirt_ecr.container_repo,
-                processing_name=primary_or_secondary,
-                ialirt_ports=ialirt_ports[primary_or_secondary],
-                container_port=container_ports[primary_or_secondary],
-                ialirt_bucket=ialirt_bucket.ialirt_bucket,
-            )
-
-        # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)
-        ialirt_ingest_lambda_construct.IalirtIngestLambda(
-            scope=ialirt_stack,
-            construct_id="IalirtIngestLambda",
+            construct_id=f"IalirtProcessing{primary_or_secondary}",
+            vpc=networking.vpc,
+            processing_name=primary_or_secondary,
+            ialirt_ports=ialirt_ports[primary_or_secondary],
+            container_port=container_ports[primary_or_secondary],
             ialirt_bucket=ialirt_bucket.ialirt_bucket,
         )
+
+    # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)
+    ialirt_ingest_lambda_construct.IalirtIngestLambda(
+        scope=ialirt_stack,
+        construct_id="IalirtIngestLambda",
+        ialirt_bucket=ialirt_bucket.ialirt_bucket,
+    )
 
 
 def build_backup(scope: App, env: Environment, source_account: str):

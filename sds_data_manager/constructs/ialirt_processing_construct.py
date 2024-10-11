@@ -9,8 +9,8 @@ https://aws.amazon.com/elasticloadbalancing/features/#Product_comparisons
 
 from aws_cdk import CfnOutput
 from aws_cdk import aws_autoscaling as autoscaling
+from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_ec2 as ec2
-from aws_cdk import aws_ecr as ecr
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
@@ -26,7 +26,6 @@ class IalirtProcessing(Construct):
         scope: Construct,
         construct_id: str,
         vpc: ec2.Vpc,
-        repo: ecr.Repository,
         processing_name: str,
         ialirt_ports: list[int],
         container_port: int,
@@ -43,8 +42,6 @@ class IalirtProcessing(Construct):
             A unique string identifier for this construct.
         vpc : ec2.Vpc
             VPC into which to put the resources that require networking.
-        repo : ecr.Repository
-            ECR repository containing the Docker image.
         processing_name : str
             Name of the processing stack.
         ialirt_ports : list[int]
@@ -62,7 +59,6 @@ class IalirtProcessing(Construct):
         self.ports = ialirt_ports
         self.container_port = container_port
         self.vpc = vpc
-        self.repo = repo
         self.s3_bucket_name = ialirt_bucket.bucket_name
 
         # Add a security group in which network load balancer will reside
@@ -159,12 +155,16 @@ class IalirtProcessing(Construct):
             task_role=task_role,
         )
 
+        nexus_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "NexusCredentials", secret_name="nexus-credentials"
+        )
+
         # Adds a container to the ECS task definition
         # Logging is configured to use AWS CloudWatch Logs.
         container = task_definition.add_container(
             f"IalirtContainer{processing_name}",
-            image=ecs.ContainerImage.from_ecr_repository(
-                self.repo, f"latest-{processing_name.lower()}"
+            image=ecs.ContainerImage.from_registry(
+                f"docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev"
             ),
             # Allowable values:
             # https://docs.aws.amazon.com/cdk/api/v2/docs/
@@ -173,6 +173,10 @@ class IalirtProcessing(Construct):
             cpu=256,
             logging=ecs.LogDrivers.aws_logs(stream_prefix=f"Ialirt{processing_name}"),
             environment={"S3_BUCKET": self.s3_bucket_name},
+            secrets={
+                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(nexus_secret, "username"),
+                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(nexus_secret, "password")
+            },
             # Ensure the ECS task is running in privileged mode,
             # which allows the container to use FUSE.
             privileged=True,
