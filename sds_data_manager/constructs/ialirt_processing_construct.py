@@ -5,6 +5,9 @@ I-ALiRT algorithms. It was built using best practices as shown here:
 
 https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-inbound.html
 https://aws.amazon.com/elasticloadbalancing/features/#Product_comparisons
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth.html
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-private-auth
 """
 
 from aws_cdk import CfnOutput
@@ -145,6 +148,30 @@ class IalirtProcessing(Construct):
             )
         )
 
+        # Add permissions for Secrets Manager to retrieve Nexus credentials
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["secretsmanager:GetSecretValue"],
+                resources=["arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"]
+            )
+        )
+
+        execution_role = iam.Role(
+            self, "IalirtTaskExecutionRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")]
+        )
+
+        # Grant Secrets Manager access
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue"],
+                resources=["arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"]
+            )
+        )
+
         # Specifies the networking mode as AWS_VPC.
         # ECS tasks in AWS_VPC mode can be registered with
         # Network Load Balancers (NLB).
@@ -153,6 +180,7 @@ class IalirtProcessing(Construct):
             f"IalirtTaskDef{processing_name}",
             network_mode=ecs.NetworkMode.AWS_VPC,
             task_role=task_role,
+            execution_role=execution_role,
         )
 
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
@@ -177,6 +205,7 @@ class IalirtProcessing(Construct):
                 "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(nexus_secret, "username"),
                 "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(nexus_secret, "password")
             },
+            repository_credentials=ecs.RepositoryCredentials.from_secrets_manager(nexus_secret),
             # Ensure the ECS task is running in privileged mode,
             # which allows the container to use FUSE.
             privileged=True,
@@ -203,7 +232,7 @@ class IalirtProcessing(Construct):
             security_groups=[self.ecs_security_group],
             desired_count=1,
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                subnet_type=ec2.SubnetType.PUBLIC
             ),
         )
 
@@ -221,6 +250,9 @@ class IalirtProcessing(Construct):
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             vpc=self.vpc,
             desired_capacity=1,
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PUBLIC
+            ),
         )
 
         # integrates ECS with EC2 Auto Scaling Groups
