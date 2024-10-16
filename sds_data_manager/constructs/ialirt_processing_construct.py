@@ -218,6 +218,7 @@ class IalirtProcessing(Construct):
                 ),
             },
             repository_credentials=ecs.RepositoryCredentials.from_secrets_manager(nexus_secret),
+            # 
             # Ensure the ECS task is running in privileged mode,
             # which allows the container to use FUSE.
             privileged=True,
