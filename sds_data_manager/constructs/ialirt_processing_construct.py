@@ -8,6 +8,8 @@ https://aws.amazon.com/elasticloadbalancing/features/#Product_comparisons
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth.html
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-private-auth
+https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth-container-instances.html
+https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ecs-taskdefinition-repositorycredentials.html
 """
 
 from aws_cdk import CfnOutput
@@ -140,24 +142,16 @@ class IalirtProcessing(Construct):
 
         task_role.add_to_policy(
             iam.PolicyStatement(
-                actions=["s3:GetObject", "s3:ListBucket", "s3:PutObject"],
+                actions=["s3:GetObject", "s3:ListBucket", "s3:PutObject", "secretsmanager:GetSecretValue"],
                 resources=[
                     f"arn:aws:s3:::{self.s3_bucket_name}",
                     f"arn:aws:s3:::{self.s3_bucket_name}/*",
-                ],
-            )
-        )
-
-        # Add permissions for Secrets Manager to retrieve Nexus credentials
-        task_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["secretsmanager:GetSecretValue"],
-                resources=[
                     "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
                 ],
             )
         )
 
+        # Create execution role for the ECS task
         execution_role = iam.Role(
             self,
             "IalirtTaskExecutionRole",
@@ -169,14 +163,23 @@ class IalirtProcessing(Construct):
             ],
         )
 
-        # Grant Secrets Manager access
+        # Grant Secrets Manager access for Nexus credentials
         execution_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue"],
+                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
                 resources=[
                     "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
                 ],
+            )
+        )
+
+        # Grant CloudWatch Logs access for logging
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["logs:CreateLogStream", "logs:PutLogEvents"],
+                resources=["arn:aws:logs:us-west-2:301233867300:log-group:IalirtStack-*"]
             )
         )
 
@@ -191,37 +194,25 @@ class IalirtProcessing(Construct):
             execution_role=execution_role,
         )
 
+        # Retrieve the secret from Secrets Manager as an ISecret object
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
-            self, "NexusCredentials", secret_name="nexus-credentials"
+            self,
+            "NexusCredentials",  # Logical ID in your CDK stack
+            "nexus-credentials"  # Secret name (not ARN)
         )
 
-        # Adds a container to the ECS task definition
-        # Logging is configured to use AWS CloudWatch Logs.
+        # Use the ISecret object in your container image definition
         container = task_definition.add_container(
             f"IalirtContainer{processing_name}",
             image=ecs.ContainerImage.from_registry(
-                f"docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev"
+                f"docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
+                credentials=nexus_secret.secret_arn  # Correctly pass the secret object
             ),
-            # Allowable values:
-            # https://docs.aws.amazon.com/cdk/api/v2/docs/
-            # aws-cdk-lib.aws_ecs.TaskDefinition.html#cpu
             memory_limit_mib=512,
             cpu=256,
             logging=ecs.LogDrivers.aws_logs(stream_prefix=f"Ialirt{processing_name}"),
             environment={"S3_BUCKET": self.s3_bucket_name},
-            secrets={
-                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(
-                    nexus_secret, "username"
-                ),
-                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(
-                    nexus_secret, "password"
-                ),
-            },
-            repository_credentials=ecs.RepositoryCredentials.from_secrets_manager(nexus_secret),
-            # 
-            # Ensure the ECS task is running in privileged mode,
-            # which allows the container to use FUSE.
-            privileged=True,
+            privileged=True
         )
 
         # Map ports to container
