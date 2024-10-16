@@ -12,12 +12,12 @@ https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_r
 
 from aws_cdk import CfnOutput
 from aws_cdk import aws_autoscaling as autoscaling
-from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
 
@@ -152,15 +152,21 @@ class IalirtProcessing(Construct):
         task_role.add_to_policy(
             iam.PolicyStatement(
                 actions=["secretsmanager:GetSecretValue"],
-                resources=["arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"]
+                resources=[
+                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
+                ],
             )
         )
 
         execution_role = iam.Role(
-            self, "IalirtTaskExecutionRole",
+            self,
+            "IalirtTaskExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")]
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonECSTaskExecutionRolePolicy"
+                )
+            ],
         )
 
         # Grant Secrets Manager access
@@ -168,7 +174,9 @@ class IalirtProcessing(Construct):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["secretsmanager:GetSecretValue"],
-                resources=["arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"]
+                resources=[
+                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
+                ],
             )
         )
 
@@ -202,8 +210,12 @@ class IalirtProcessing(Construct):
             logging=ecs.LogDrivers.aws_logs(stream_prefix=f"Ialirt{processing_name}"),
             environment={"S3_BUCKET": self.s3_bucket_name},
             secrets={
-                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(nexus_secret, "username"),
-                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(nexus_secret, "password")
+                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(
+                    nexus_secret, "username"
+                ),
+                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(
+                    nexus_secret, "password"
+                ),
             },
             repository_credentials=ecs.RepositoryCredentials.from_secrets_manager(nexus_secret),
             # Ensure the ECS task is running in privileged mode,
@@ -231,9 +243,7 @@ class IalirtProcessing(Construct):
             task_definition=task_definition,
             security_groups=[self.ecs_security_group],
             desired_count=1,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PUBLIC
-            ),
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
     def add_autoscaling(self, processing_name):
@@ -250,9 +260,7 @@ class IalirtProcessing(Construct):
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             vpc=self.vpc,
             desired_capacity=1,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PUBLIC
-            ),
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
         # integrates ECS with EC2 Auto Scaling Groups
