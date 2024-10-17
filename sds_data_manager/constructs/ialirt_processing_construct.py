@@ -10,6 +10,8 @@ https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_r
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-private-auth
 https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth-container-instances.html
 https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ecs-taskdefinition-repositorycredentials.html
+https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ecs/ContainerImage.html
+https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ecs/Ec2TaskDefinition.html
 """
 
 from aws_cdk import CfnOutput
@@ -206,7 +208,7 @@ class IalirtProcessing(Construct):
             f"IalirtContainer{processing_name}",
             image=ecs.ContainerImage.from_registry(
                 f"docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
-                credentials=nexus_secret.secret_arn  # Correctly pass the secret object
+                credentials=nexus_secret  # Correctly pass the secret object
             ),
             memory_limit_mib=512,
             cpu=256,
