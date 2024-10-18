@@ -165,16 +165,7 @@ class IalirtProcessing(Construct):
             ],
         )
 
-        # Grant Secrets Manager access for Nexus credentials
-        execution_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
-                resources=[
-                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
-                ],
-            )
-        )
+
 
         # Grant CloudWatch Logs access for logging
         execution_role.add_to_policy(
@@ -200,7 +191,18 @@ class IalirtProcessing(Construct):
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
             self,
             "NexusCredentials",  # Logical ID in your CDK stack
-            "nexus-credentials"  # Secret name (not ARN)
+            secret_name="nexus-credentials"  # Secret name (not ARN)
+        )
+
+        # Grant Secrets Manager access for Nexus credentials
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+                resources=[
+                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
+                ],
+            )
         )
 
         # Use the ISecret object in your container image definition
@@ -214,7 +216,13 @@ class IalirtProcessing(Construct):
             cpu=256,
             logging=ecs.LogDrivers.aws_logs(stream_prefix=f"Ialirt{processing_name}"),
             environment={"S3_BUCKET": self.s3_bucket_name},
-            privileged=True
+            secrets={
+                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(nexus_secret, "username"),
+                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(nexus_secret, "password")
+            },
+            # Ensure the ECS task is running in privileged mode,
+            # which allows the container to use FUSE.
+            privileged=True,
         )
 
         # Map ports to container
