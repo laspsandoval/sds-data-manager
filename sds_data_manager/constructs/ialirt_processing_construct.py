@@ -135,6 +135,13 @@ class IalirtProcessing(Construct):
             self, f"IalirtCluster{processing_name}", vpc=self.vpc
         )
 
+        # Retrieve the secret from Secrets Manager as an ISecret object
+        nexus_secret = secretsmanager.Secret.from_secret_name_v2(
+            self,
+            "NexusCredentials",  # Logical ID in your CDK stack
+            secret_name="nexus-credentials"  # Secret name (not ARN)
+        )
+
         # Add IAM role and policy for S3 access
         task_role = iam.Role(
             self,
@@ -148,7 +155,7 @@ class IalirtProcessing(Construct):
                 resources=[
                     f"arn:aws:s3:::{self.s3_bucket_name}",
                     f"arn:aws:s3:::{self.s3_bucket_name}/*",
-                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
+                    nexus_secret.secret_arn
                 ],
             )
         )
@@ -160,12 +167,12 @@ class IalirtProcessing(Construct):
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonECSTaskExecutionRolePolicy"
-                )
+                    "service-role/AmazonECSTaskExecutionRolePolicy",
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("SecretsManagerReadWrite"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
             ],
         )
-
-
 
         # Grant CloudWatch Logs access for logging
         execution_role.add_to_policy(
@@ -173,6 +180,17 @@ class IalirtProcessing(Construct):
                 effect=iam.Effect.ALLOW,
                 actions=["logs:CreateLogStream", "logs:PutLogEvents"],
                 resources=["arn:aws:logs:us-west-2:301233867300:log-group:IalirtStack-*"]
+            )
+        )
+
+        # Grant Secrets Manager access for Nexus credentials
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+                resources=[
+                    nexus_secret.secret_arn
+                ],
             )
         )
 
@@ -187,29 +205,11 @@ class IalirtProcessing(Construct):
             execution_role=execution_role,
         )
 
-        # Retrieve the secret from Secrets Manager as an ISecret object
-        nexus_secret = secretsmanager.Secret.from_secret_name_v2(
-            self,
-            "NexusCredentials",  # Logical ID in your CDK stack
-            secret_name="nexus-credentials"  # Secret name (not ARN)
-        )
-
-        # Grant Secrets Manager access for Nexus credentials
-        execution_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
-                resources=[
-                    "arn:aws:secretsmanager:us-west-2:301233867300:secret:nexus-credentials"
-                ],
-            )
-        )
-
         # Use the ISecret object in your container image definition
         container = task_definition.add_container(
             f"IalirtContainer{processing_name}",
             image=ecs.ContainerImage.from_registry(
-                f"docker-registry.pdmz.lasp.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
+                f"lasp-registry.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
                 credentials=nexus_secret  # Correctly pass the secret object
             ),
             memory_limit_mib=512,
@@ -250,6 +250,17 @@ class IalirtProcessing(Construct):
 
     def add_autoscaling(self, processing_name):
         """Add autoscaling resources."""
+        # Create an IAM role for the Auto Scaling Group
+        instance_role = iam.Role(
+            self,
+            f"AutoScalingRole{processing_name}",
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonEC2ContainerServiceforEC2Role"),
+            ],
+        )
+
         # This auto-scaling group is used to manage the
         # number of instances in the ECS cluster. If an instance
         # becomes unhealthy, the auto-scaling group will replace it.
@@ -263,6 +274,7 @@ class IalirtProcessing(Construct):
             vpc=self.vpc,
             desired_capacity=1,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            role=instance_role  # Assign the instance role with SSM permissions
         )
 
         # integrates ECS with EC2 Auto Scaling Groups
