@@ -15,7 +15,6 @@ from sds_data_manager.constructs import (
     backup_bucket_construct,
     data_bucket_construct,
     database_construct,
-    ecr_construct,
     efs_construct,
     ialirt_bucket_construct,
     ialirt_ingest_lambda_construct,
@@ -259,12 +258,6 @@ def build_sds(
     )
 
     ialirt_stack = Stack(scope, "IalirtStack", env=env)
-    # # I-ALiRT IOIS ECR
-    # ialirt_ecr = ecr_construct.EcrConstruct(
-    #     scope=ialirt_stack,
-    #     construct_id="IalirtEcr",
-    #     instrument_name="IalirtEcr",
-    # )
 
     # I-ALiRT IOIS S3 bucket
     ialirt_bucket = ialirt_bucket_construct.IAlirtBucketConstruct(
@@ -274,6 +267,7 @@ def build_sds(
     # All traffic to I-ALiRT is directed to listed container ports
     ialirt_ports = {"Primary": [8080, 8081], "Secondary": [80]}
     container_ports = {"Primary": 8080, "Secondary": 80}
+    ialirt_secret_name = "nexus-credentials"  # noqa
 
     for primary_or_secondary in ialirt_ports:
         ialirt_processing_construct.IalirtProcessing(
@@ -284,6 +278,7 @@ def build_sds(
             ialirt_ports=ialirt_ports[primary_or_secondary],
             container_port=container_ports[primary_or_secondary],
             ialirt_bucket=ialirt_bucket.ialirt_bucket,
+            secret_name=ialirt_secret_name,
         )
 
     # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)

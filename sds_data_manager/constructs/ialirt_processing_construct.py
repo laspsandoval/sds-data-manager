@@ -30,6 +30,7 @@ class IalirtProcessing(Construct):
         ialirt_ports: list[int],
         container_port: int,
         ialirt_bucket: s3.Bucket,
+        secret_name: str,
         **kwargs,
     ) -> None:
         """Construct the i-alirt processing stack.
@@ -50,6 +51,8 @@ class IalirtProcessing(Construct):
             Port to be used by the container.
         ialirt_bucket: s3.Bucket
             S3 bucket
+        secret_name : str,
+            Database secret_name for Secrets Manager
         kwargs : dict
             Keyword arguments
 
@@ -60,6 +63,7 @@ class IalirtProcessing(Construct):
         self.container_port = container_port
         self.vpc = vpc
         self.s3_bucket_name = ialirt_bucket.bucket_name
+        self.secret_name = secret_name
 
         # Add a security group in which network load balancer will reside
         self.create_load_balancer_security_group(processing_name)
@@ -130,9 +134,7 @@ class IalirtProcessing(Construct):
 
         # Retrieve the secret from Secrets Manager.
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
-            self,
-            f"NexusCredentials{processing_name}",
-            secret_name="nexus-credentials"
+            self, f"NexusCredentials{processing_name}", secret_name=self.secret_name
         )
 
         # Add IAM role and policy for S3 access
@@ -144,11 +146,16 @@ class IalirtProcessing(Construct):
 
         task_role.add_to_policy(
             iam.PolicyStatement(
-                actions=["s3:GetObject", "s3:ListBucket", "s3:PutObject", "secretsmanager:GetSecretValue"],
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "secretsmanager:GetSecretValue",
+                ],
                 resources=[
                     f"arn:aws:s3:::{self.s3_bucket_name}",
                     f"arn:aws:s3:::{self.s3_bucket_name}/*",
-                    nexus_secret.secret_arn
+                    nexus_secret.secret_arn,
                 ],
             )
         )
@@ -157,14 +164,15 @@ class IalirtProcessing(Construct):
         # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth.html
         execution_role = iam.Role(
             self,
-            "IalirtTaskExecutionRole",
+            f"IalirtTaskExecutionRole{processing_name}",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "service-role/AmazonECSTaskExecutionRolePolicy",
                 ),
-                iam.ManagedPolicy.from_aws_managed_policy_name("SecretsManagerReadWrite"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "SecretsManagerReadWrite"
+                ),
             ],
         )
 
@@ -173,9 +181,7 @@ class IalirtProcessing(Construct):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["secretsmanager:GetSecretValue"],
-                resources=[
-                    nexus_secret.secret_arn
-                ],
+                resources=[nexus_secret.secret_arn],
             )
         )
 
@@ -196,7 +202,7 @@ class IalirtProcessing(Construct):
             f"IalirtContainer{processing_name}",
             image=ecs.ContainerImage.from_registry(
                 f"lasp-registry.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
-                credentials=nexus_secret  # Correctly pass the secret object
+                credentials=nexus_secret,
             ),
             # Allowable values:
             # https://docs.aws.amazon.com/cdk/api/v2/docs/
