@@ -5,13 +5,6 @@ I-ALiRT algorithms. It was built using best practices as shown here:
 
 https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-inbound.html
 https://aws.amazon.com/elasticloadbalancing/features/#Product_comparisons
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth.html
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-private-auth
-https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth-container-instances.html
-https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ecs-taskdefinition-repositorycredentials.html
-https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ecs/ContainerImage.html
-https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ecs/Ec2TaskDefinition.html
 """
 
 from aws_cdk import CfnOutput
@@ -135,11 +128,11 @@ class IalirtProcessing(Construct):
             self, f"IalirtCluster{processing_name}", vpc=self.vpc
         )
 
-        # Retrieve the secret from Secrets Manager as an ISecret object
+        # Retrieve the secret from Secrets Manager.
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
             self,
-            "NexusCredentials",  # Logical ID in your CDK stack
-            secret_name="nexus-credentials"  # Secret name (not ARN)
+            f"NexusCredentials{processing_name}",
+            secret_name="nexus-credentials"
         )
 
         # Add IAM role and policy for S3 access
@@ -160,7 +153,8 @@ class IalirtProcessing(Construct):
             )
         )
 
-        # Create execution role for the ECS task
+        # Required for pulling images from Nexus.
+        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/private-auth.html
         execution_role = iam.Role(
             self,
             "IalirtTaskExecutionRole",
@@ -174,20 +168,11 @@ class IalirtProcessing(Construct):
             ],
         )
 
-        # Grant CloudWatch Logs access for logging
+        # Grant Secrets Manager access for Nexus credentials.
         execution_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["logs:CreateLogStream", "logs:PutLogEvents"],
-                resources=["arn:aws:logs:us-west-2:301233867300:log-group:IalirtStack-*"]
-            )
-        )
-
-        # Grant Secrets Manager access for Nexus credentials
-        execution_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+                actions=["secretsmanager:GetSecretValue"],
                 resources=[
                     nexus_secret.secret_arn
                 ],
