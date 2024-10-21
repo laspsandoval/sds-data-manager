@@ -205,21 +205,21 @@ class IalirtProcessing(Construct):
             execution_role=execution_role,
         )
 
-        # Use the ISecret object in your container image definition
+        # Adds a container to the ECS task definition
+        # Logging is configured to use AWS CloudWatch Logs.
         container = task_definition.add_container(
             f"IalirtContainer{processing_name}",
             image=ecs.ContainerImage.from_registry(
                 f"lasp-registry.colorado.edu/ialirt/my-image-{processing_name.lower()}:dev",
                 credentials=nexus_secret  # Correctly pass the secret object
             ),
+            # Allowable values:
+            # https://docs.aws.amazon.com/cdk/api/v2/docs/
+            # aws-cdk-lib.aws_ecs.TaskDefinition.html#cpu
             memory_limit_mib=512,
             cpu=256,
             logging=ecs.LogDrivers.aws_logs(stream_prefix=f"Ialirt{processing_name}"),
             environment={"S3_BUCKET": self.s3_bucket_name},
-            secrets={
-                "NEXUS_USERNAME": ecs.Secret.from_secrets_manager(nexus_secret, "username"),
-                "NEXUS_PASSWORD": ecs.Secret.from_secrets_manager(nexus_secret, "password")
-            },
             # Ensure the ECS task is running in privileged mode,
             # which allows the container to use FUSE.
             privileged=True,
@@ -250,17 +250,6 @@ class IalirtProcessing(Construct):
 
     def add_autoscaling(self, processing_name):
         """Add autoscaling resources."""
-        # Create an IAM role for the Auto Scaling Group
-        instance_role = iam.Role(
-            self,
-            f"AutoScalingRole{processing_name}",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonEC2ContainerServiceforEC2Role"),
-            ],
-        )
-
         # This auto-scaling group is used to manage the
         # number of instances in the ECS cluster. If an instance
         # becomes unhealthy, the auto-scaling group will replace it.
@@ -273,8 +262,6 @@ class IalirtProcessing(Construct):
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             vpc=self.vpc,
             desired_capacity=1,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
-            role=instance_role  # Assign the instance role with SSM permissions
         )
 
         # integrates ECS with EC2 Auto Scaling Groups
