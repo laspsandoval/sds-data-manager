@@ -230,7 +230,9 @@ class IalirtProcessing(Construct):
             task_definition=task_definition,
             security_groups=[self.ecs_security_group],
             desired_count=1,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
         )
 
     def add_autoscaling(self, processing_name):
