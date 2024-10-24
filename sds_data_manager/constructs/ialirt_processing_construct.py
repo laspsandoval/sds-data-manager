@@ -7,7 +7,7 @@ https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-inbou
 https://aws.amazon.com/elasticloadbalancing/features/#Product_comparisons
 """
 
-from aws_cdk import CfnOutput
+from aws_cdk import CfnOutput, RemovalPolicy
 from aws_cdk import aws_autoscaling as autoscaling
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecs as ecs
@@ -256,6 +256,8 @@ class IalirtProcessing(Construct):
             vpc=self.vpc,
             desired_capacity=1,
         )
+
+        auto_scaling_group.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # integrates ECS with EC2 Auto Scaling Groups
         # to manage the scaling and provisioning of the underlying
