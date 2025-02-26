@@ -24,6 +24,9 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("AWS_SECURITY_TOKEN", "testing")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    # Mock the api gateway url
+    # This is used in batch_starter.py
+    monkeypatch.setenv("IMAP_DATA_ACCESS_URL", "https://test.url")
 
 
 @pytest.fixture(scope="module")

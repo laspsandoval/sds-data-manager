@@ -17,7 +17,7 @@ logger.setLevel(logging.INFO)
 class DataSource:
     """Valid data sources for dependency tracking.
 
-    Valid data sources includes valid instruments names
+    Valid data sources include valid instruments names
     from imap_data_access and other data sources related to SPICE.
     """
 
@@ -56,7 +56,7 @@ class DataSource:
 class DataType:
     """Valid data types for dependency tracking.
 
-    Valid data types includes valid data levels from imap_data_access
+    Valid data types include valid data levels from imap_data_access
     and other data types related to SPICE and ancillary data.
     """
 
@@ -232,7 +232,7 @@ class DependencyConfig:
 
                 if len(contents) != 8:
                     raise ValueError(
-                        f"Each dependency shoud have {header}\nCurrent line: {line}"
+                        f"Each dependency should have {header}\nCurrent line: {line}"
                     )
 
                 # data_source, data_type, descriptor
@@ -377,6 +377,7 @@ def lambda_handler(event, context):
             ]
     """
     logger.info(f"Event: {event}")
+    logger.info(f"Context: {context}")
 
     dependencies = get_dependencies(
         (event["data_source"], event["data_type"], event["descriptor"]),

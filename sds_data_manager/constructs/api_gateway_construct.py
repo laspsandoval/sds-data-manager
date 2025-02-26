@@ -61,6 +61,7 @@ class ApiGateway(Construct):
             self.prefix = ""
             self.lowercase_prefix = "api"
 
+        self.domain_name = f"{self.lowercase_prefix}.{domain_construct.domain_name}"
         # Create a single API Gateway
         self.api = apigw.RestApi(
             self,
@@ -75,7 +76,7 @@ class ApiGateway(Construct):
             custom_domain = apigw.DomainName(
                 self,
                 f"{self.prefix}RestAPI-DomainName",
-                domain_name=f"{self.lowercase_prefix}.{domain_construct.domain_name}",
+                domain_name=self.domain_name,
                 certificate=certificate,
                 endpoint_type=apigw.EndpointType.REGIONAL,
             )
@@ -93,7 +94,7 @@ class ApiGateway(Construct):
                 self,
                 f"{self.prefix}RestAPI-AliasRecord",
                 zone=domain_construct.hosted_zone,
-                record_name=f"{self.lowercase_prefix}.{domain_construct.domain_name}",
+                record_name=self.domain_name,
                 target=route53.RecordTarget.from_alias(
                     targets.ApiGatewayDomain(custom_domain)
                 ),

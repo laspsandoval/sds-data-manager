@@ -15,6 +15,7 @@ from sds_data_manager.constructs import (
     backup_bucket_construct,
     data_bucket_construct,
     database_construct,
+    dependency_finder_construct,
     efs_construct,
     ialirt_api_manager_construct,
     ialirt_bucket_construct,
@@ -214,6 +215,14 @@ def build_sds(
         scope=sdc_stack, construct_id="EFSConstruct", vpc=networking.vpc
     )
 
+    dependency_finder_construct.DependencyFinder(
+        scope=sdc_stack,
+        construct_id="DependencyFinder",
+        code=lambda_code,
+        layers=[db_lambda_layer],
+        api=api,
+    )
+
     # This valid instrument list is from imap-data-access package
     processing_volumes = [
         batch.EfsVolume(
@@ -252,6 +261,7 @@ def build_sds(
         vpc=networking.vpc,
         sqs_queue=instrument_sqs,
         layers=[db_lambda_layer],
+        api_domain=api.domain_name,
     )
 
     # Create lambda that mounts EFS and writes data to EFS

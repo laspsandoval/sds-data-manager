@@ -29,6 +29,7 @@ class BatchStarterLambda(Construct):
         vpc: ec2.Vpc,
         sqs_queue: sqs.Queue,
         layers: list,
+        api_domain: str,
         **kwargs,
     ):
         """BatchStarterLambda Constructor.
@@ -40,15 +41,15 @@ class BatchStarterLambda(Construct):
         construct_id : str
             A unique string identifier for this construct.
         env : Environment
-            Account and region
+            Account and region.
         data_bucket: s3.Bucket
-            S3 bucket
+            S3 bucket.
         code : lambda_.Code
-            Lambda code bundle
+            Lambda code bundle.
         rds_construct: SdpDatabase
-            Database stack
+            Database stack.
         rds_security_group : ec2.SecurityGroup
-            RDS security group
+            RDS security group.
         subnets : ec2.SubnetSelection
             RDS subnet selection.
         vpc : ec2.Vpc
@@ -56,7 +57,9 @@ class BatchStarterLambda(Construct):
         sqs_queue: sqs.Queue
             A FIFO queue to trigger the lambda with.
         layers : list
-            List of Lambda layers cdk.cdfnOutput names
+            List of Lambda layers cdk.cdfnOutput names.
+        api_domain : str
+            Domain for creating an api request url.
         kwargs : dict
             Keyword arguments
 
@@ -70,6 +73,7 @@ class BatchStarterLambda(Construct):
             "SECRET_NAME": rds_construct.rds_creds.secret_name,
             "ACCOUNT": f"{env.account}",
             "REGION": f"{env.region}",
+            "IMAP_DATA_ACCESS_URL": f"https://{api_domain}",
         }
 
         self.instrument_lambda = lambda_.Function(
