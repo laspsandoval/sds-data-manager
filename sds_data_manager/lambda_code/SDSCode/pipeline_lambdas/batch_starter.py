@@ -440,7 +440,6 @@ def lambda_handler(events: dict, context):
 
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
-        # Build the full URL with query parameters
         potential_jobs = _get_dependencies(dependency_event_msg)
 
         with db.Session() as session:
