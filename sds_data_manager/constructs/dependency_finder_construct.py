@@ -29,12 +29,6 @@ class DependencyFinder(Construct):
             A unique string identifier for this construct.
         code : lambda_.Code
             Lambda code bundle
-        rds_security_group : ec2.SecurityGroup
-            RDS security group
-        subnets : ec2.SubnetSelection
-            RDS subnet selection.
-        vpc : ec2.Vpc
-            VPC into which to put the resources that require networking.
         layers : list
             List of Lambda layers cdk.cdfnOutput names
         api : ApiGateway
@@ -47,7 +41,7 @@ class DependencyFinder(Construct):
         self.dependency_finder_lambda = lambda_.Function(
             self,
             "DependencyFinderLambda",
-            function_name="DependencyFinderLambda",
+            function_name="dependency-finder-handler",
             code=code,
             handler="SDSCode.pipeline_lambdas.dependency.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,

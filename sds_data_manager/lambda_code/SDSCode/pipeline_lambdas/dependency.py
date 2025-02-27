@@ -375,10 +375,15 @@ def lambda_handler(event, context):
     logger.info(f"Event: {event}")
     logger.info(f"Context: {context}")
 
+    query_params = event["queryStringParameters"]
     dependencies = get_dependencies(
-        (event["data_source"], event["data_type"], event["descriptor"]),
-        event["dependency_type"],
-        event["relationship"],
+        (
+            query_params["data_source"],
+            query_params["data_type"],
+            query_params["descriptor"],
+        ),
+        query_params["dependency_type"],
+        query_params["relationship"],
     )
 
     if dependencies is None:
