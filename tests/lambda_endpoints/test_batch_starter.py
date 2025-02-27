@@ -46,14 +46,18 @@ def urlopen_side_effect(url):
         mock_dependencies["data_type"] = "l1a"
     elif "l1a" in url and "DOWNSTREAM" in url:
         mock_dependencies["data_type"] = "l1b"
-    else:
+    elif "l1a" in url and "UPSTREAM" in url:
         mock_dependencies["data_type"] = "l0"
         mock_dependencies["descriptor"] = "raw"
+    else:
+        mock_dependencies = None
 
+    # Return an empty list for "test_lambda_handler_no_dependencies()" test.
+    dep_list = [mock_dependencies] if mock_dependencies else []
     # Create a mock response object that supports context manager
     mock_response = MagicMock()
     mock_context_manager = MagicMock()
-    mock_response.read.return_value = json.dumps([mock_dependencies]).encode("utf-8")
+    mock_response.read.return_value = json.dumps(dep_list).encode("utf-8")
 
     # Mock the context manager and return it
     mock_context_manager.__enter__.return_value = mock_response
@@ -257,6 +261,26 @@ def test_lambda_handler_multiple_events(session, mock_urlopen):
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 2
+
+
+def test_lambda_handler_no_dependencies(session, mock_urlopen):
+    """Tests ``lambda_handler`` when there are no depenencies for the file."""
+    _populate_file_catalog(session)
+    # Test Multiple Events:
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_ultra_l2_sci_20000101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        # Verify the function was not called
+        assert mock_submit.call_count == 0
 
 
 def test_spice_file():

@@ -334,10 +334,6 @@ def get_dependencies(node, dependency_type, relationship):
 def lambda_handler(event, context):
     """Lambda handler for dependency tracking.
 
-    TODO: Create a Lambda function that will be triggered by API Gateway.
-    See https://github.com/IMAP-Science-Operations-Center/sds-data-manager/issues/419
-    for more details.
-
     Parameters
     ----------
     event : dict

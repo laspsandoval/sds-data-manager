@@ -1,7 +1,7 @@
 """Functions for supporting the batch starter component of the architecture."""
 
 # ruff: noqa: S310
-# potentially unsafe usage of urlopen, but we aren't concerned here
+# potentially unsafe usage of urlopen TODO: are we concerned here?
 import contextlib
 import json
 import logging
