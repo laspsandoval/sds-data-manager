@@ -261,7 +261,7 @@ def build_sds(
         vpc=networking.vpc,
         sqs_queue=instrument_sqs,
         layers=[db_lambda_layer],
-        api_domain=api.domain_name,
+        api_domain=api.api_domain_name,
     )
 
     # Create lambda that mounts EFS and writes data to EFS
