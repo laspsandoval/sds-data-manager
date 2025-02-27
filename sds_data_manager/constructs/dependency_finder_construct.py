@@ -55,5 +55,4 @@ class DependencyFinder(Construct):
             route="dependency",
             http_method="GET",
             lambda_function=self.dependency_finder_lambda,
-            use_path_params=True,
         )
