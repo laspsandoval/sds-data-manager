@@ -257,7 +257,6 @@ def build_sds(
         code=lambda_code,
         rds_construct=rds_construct,
         rds_security_group=rds_construct.rds_security_group,
-        subnets=rds_construct.rds_subnet_selection,
         vpc=networking.vpc,
         sqs_queue=instrument_sqs,
         layers=[db_lambda_layer],

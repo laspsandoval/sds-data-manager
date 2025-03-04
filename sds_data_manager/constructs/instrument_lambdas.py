@@ -25,7 +25,6 @@ class BatchStarterLambda(Construct):
         code: lambda_.Code,
         rds_construct: SdpDatabase,
         rds_security_group: ec2.SecurityGroup,
-        subnets: ec2.SubnetSelection,
         vpc: ec2.Vpc,
         sqs_queue: sqs.Queue,
         layers: list,
@@ -50,8 +49,6 @@ class BatchStarterLambda(Construct):
             Database stack.
         rds_security_group : ec2.SecurityGroup
             RDS security group.
-        subnets : ec2.SubnetSelection
-            RDS subnet selection.
         vpc : ec2.Vpc
             VPC into which to put the resources that require networking.
         sqs_queue: sqs.Queue
@@ -75,6 +72,8 @@ class BatchStarterLambda(Construct):
             "REGION": f"{env.region}",
             "IMAP_DATA_ACCESS_URL": f"https://{api_domain}",
         }
+        # Lambda should use private subnet with routes to NAT gateway
+        subnet = ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
 
         self.instrument_lambda = lambda_.Function(
             self,
@@ -87,7 +86,7 @@ class BatchStarterLambda(Construct):
             memory_size=512,
             timeout=Duration.minutes(1),
             vpc=vpc,
-            vpc_subnets=subnets,
+            vpc_subnets=subnet,
             security_groups=[rds_security_group],
             allow_public_subnet=True,
             layers=layers,
