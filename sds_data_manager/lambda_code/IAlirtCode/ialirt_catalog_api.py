@@ -22,6 +22,9 @@ def lambda_handler(event, context) -> dict:
     If files exist for the requested date range, the response body returns all file
     versions for every date, including the file name and its last date modified.
 
+    An example of a query to this endpoint as a URL is:
+    "https://ialirt.dev.imap-mission.com/ialirt-catalog?start_date=2025-02-06&end_date=2025-02-07&station=test_station"
+
     Parameters
     ----------
     event : dict
@@ -29,9 +32,11 @@ def lambda_handler(event, context) -> dict:
         lambda function to process, i.e., date range and ground station
         Ex:
             event = {
-                "start_date": "2025-02-06",  # inclusive
-                "end_date": "2025-02-07",  # exclusive
-                "station": "station1",
+                "queryStringParameters": {
+                    "start_date": "2025-02-06",
+                    "end_date": "2025-02-07",
+                    "station": "station1",
+                }
             }
     context : LambdaContext
         This object provides methods and properties that provide
@@ -60,8 +65,10 @@ def lambda_handler(event, context) -> dict:
     """
     logger.info("Received event: " + json.dumps(event, indent=2))
 
-    day = datetime.strptime(event["start_date"], "%Y-%m-%d")
-    end_date = datetime.strptime(event["end_date"], "%Y-%m-%d")
+    query_params = event["queryStringParameters"]
+    day = datetime.strptime(query_params.get("start_date"), "%Y-%m-%d")
+    end_date = datetime.strptime(query_params.get("end_date"), "%Y-%m-%d")
+    station = query_params.get("station")
 
     if not day < end_date:
         return {
@@ -91,7 +98,7 @@ def lambda_handler(event, context) -> dict:
 
     response_body = {}
     while day < end_date:
-        day_path = f"pointing_schedules/{event['station']}/{day.strftime('%Y%m%d')}/"
+        day_path = f"pointing_schedules/{station}/{day.strftime('%Y%m%d')}/"
         files = s3_client.list_objects_v2(Bucket=bucket, Prefix=day_path)
         if "Contents" not in files.keys():
             return {
