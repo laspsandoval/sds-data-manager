@@ -429,3 +429,24 @@ def test_api_request_error(mock_urlopen: unittest.mock.MagicMock):
     mock_urlopen.side_effect = URLError(reason="Not Found")
     with pytest.raises(IMAPDependencyFinderError, match="URL Error"):
         _get_dependencies(dependency_event_msg)
+
+
+def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
+    """Test that _get_dependencies() returns the expected dependency result.
+
+    Parameters
+    ----------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+    }
+    dependencies = _get_dependencies(dependency_event_msg)
+    assert dependencies == [
+        {"data_source": "swe", "data_type": "l0", "descriptor": "raw"}
+    ]
