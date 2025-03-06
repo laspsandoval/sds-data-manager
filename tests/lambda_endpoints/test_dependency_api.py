@@ -11,11 +11,13 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 def test_get_downstream_dependencies():
     "Tests get_downstream_dependencies function."
     event = {
-        "dependency_type": "DOWNSTREAM",
-        "relationship": "HARD",
-        "data_source": "hit",
-        "data_type": "l1a",
-        "descriptor": "count-rates",
+        "queryStringParameters": {
+            "dependency_type": "DOWNSTREAM",
+            "relationship": "HARD",
+            "data_source": "hit",
+            "data_type": "l1a",
+            "descriptor": "count-rates",
+        }
     }
 
     dependency_response = dependency.lambda_handler(event, None)
@@ -36,11 +38,13 @@ def test_get_downstream_dependencies():
 def test_lambda_handler_no_dependencies():
     """Test lambda_handler when no dependencies are found."""
     event = {
-        "data_source": "nonexistent",
-        "data_type": "l0",
-        "descriptor": "raw",
-        "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
+        "queryStringParameters": {
+            "data_source": "nonexistent",
+            "data_type": "l0",
+            "descriptor": "raw",
+            "dependency_type": "UPSTREAM",
+            "relationship": "HARD",
+        }
     }
 
     response = dependency.lambda_handler(event, None)
@@ -55,11 +59,13 @@ def test_lambda_handler_no_dependencies():
 def test_lambda_handler_invalid_dependency_type(mock_get_dependencies):
     """Test lambda_handler when invalid dependency type is provided."""
     event = {
-        "data_source": "jim",
-        "data_type": "l0",
-        "descriptor": "raw",
-        "dependency_type": "INVALID",
-        "relationship": "HARD",
+        "queryStringParameters": {
+            "data_source": "jim",
+            "data_type": "l0",
+            "descriptor": "raw",
+            "dependency_type": "INVALID",
+            "relationship": "HARD",
+        }
     }
     mock_get_dependencies.return_value = None
 
