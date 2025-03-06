@@ -1,7 +1,11 @@
 """Tests the batch starter."""
 
+import json
+import unittest
 from datetime import datetime
-from unittest.mock import Mock, patch
+from io import BytesIO
+from unittest.mock import MagicMock, Mock, patch
+from urllib.error import HTTPError, URLError
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -13,12 +17,66 @@ from sds_data_manager.lambda_code.SDSCode.database.models import (
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
+    IMAPDependencyFinderError,
+    _get_dependencies,
     get_file,
     is_job_in_processing_table,
     lambda_handler,
 )
 
 from .conftest import POSTGRES_AVAILABLE
+
+
+def urlopen_side_effect(url):
+    """Create a list of dependencies based on the api request url.
+
+    Parameters
+    ----------
+    url : str
+       The request url
+
+    Returns
+    -------
+    unittest.mock.MagicMock
+       A mock context manager returning a HTTP response with the expected dependencies.
+    """
+    mock_dependencies = {"data_source": "swe", "descriptor": "sci"}
+
+    if "l0" in url and "DOWNSTREAM" in url:
+        mock_dependencies["data_type"] = "l1a"
+    elif "l1a" in url and "DOWNSTREAM" in url:
+        mock_dependencies["data_type"] = "l1b"
+    elif "l1a" in url and "UPSTREAM" in url:
+        mock_dependencies["data_type"] = "l0"
+        mock_dependencies["descriptor"] = "raw"
+    else:
+        mock_dependencies = None
+
+    # Return an empty list for "test_lambda_handler_no_dependencies()" test.
+    dep_list = [mock_dependencies] if mock_dependencies else []
+    # Create a mock response object that supports context manager
+    mock_response = MagicMock()
+    mock_context_manager = MagicMock()
+    mock_response.read.return_value = json.dumps(dep_list).encode("utf-8")
+
+    # Mock the context manager and return it
+    mock_context_manager.__enter__.return_value = mock_response
+
+    return mock_context_manager
+
+
+@pytest.fixture()
+def mock_urlopen():
+    """Mock urlopen to return a list of dependency dictionaries.
+
+    Yields
+    ------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = urlopen_side_effect
+        yield mock_urlopen
 
 
 def _populate_file_catalog(session):
@@ -152,6 +210,7 @@ def test_get_file(session):
 
 def test_lambda_handler(
     session,
+    mock_urlopen: unittest.mock.MagicMock,
 ):
     """Tests ``lambda_handler`` function."""
     _populate_file_catalog(session)
@@ -178,7 +237,7 @@ def test_lambda_handler(
         mock_batch_client.submit_job.assert_called_once()
 
 
-def test_lambda_handler_multiple_events(session):
+def test_lambda_handler_multiple_events(session, mock_urlopen):
     """Tests ``lambda_handler`` function with multiple events."""
     _populate_file_catalog(session)
 
@@ -198,11 +257,30 @@ def test_lambda_handler_multiple_events(session):
             },
         ]
     }
-
     context = {"context": "sample_context"}
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 2
+
+
+def test_lambda_handler_no_dependencies(session, mock_urlopen):
+    """Tests ``lambda_handler`` when there are no depenencies for the file."""
+    _populate_file_catalog(session)
+    # Test Multiple Events:
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_ultra_l2_sci_20000101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        # Verify the function was not called
+        assert mock_submit.call_count == 0
 
 
 def test_spice_file():
@@ -323,3 +401,52 @@ def test_duplicate_job(session, first_status, second_status):
     session.add(record)
     session.commit()
     assert session.query(ProcessingJob).count() == 5
+
+
+def test_api_request_error(mock_urlopen: unittest.mock.MagicMock):
+    """Test that invalid URLs raise an appropriate HTTPError or URLError.
+
+    Parameters
+    ----------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+    }
+    # Set up the mock to raise an HTTPError
+    mock_urlopen.side_effect = HTTPError(
+        url="http://example.com", code=404, msg="Not Found", hdrs={}, fp=BytesIO()
+    )
+    with pytest.raises(IMAPDependencyFinderError, match="HTTP Error"):
+        _get_dependencies(dependency_event_msg)
+
+    # Set up the mock to raise a URLError
+    mock_urlopen.side_effect = URLError(reason="Not Found")
+    with pytest.raises(IMAPDependencyFinderError, match="URL Error"):
+        _get_dependencies(dependency_event_msg)
+
+
+def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
+    """Test that _get_dependencies() returns the expected dependency result.
+
+    Parameters
+    ----------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+    }
+    dependencies = _get_dependencies(dependency_event_msg)
+    assert dependencies == [
+        {"data_source": "swe", "data_type": "l0", "descriptor": "raw"}
+    ]
