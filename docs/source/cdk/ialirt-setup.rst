@@ -44,6 +44,7 @@ We will have a versioned image and latest image in the Nexus repo. The versioned
 
     docker push docker-registry.pdmz.lasp.colorado.edu/ialirt/ialirt:X.Y.Z
     docker push docker-registry.pdmz.lasp.colorado.edu/ialirt/ialirt:latest
+
 #. Images may be viewed on the Nexus website: https://artifacts.pdmz.lasp.colorado.edu
 #. To verify that the latest image and the most recent version image are the same, run the following and compare the image IDs::
 
@@ -58,5 +59,6 @@ ECS Recognition of a New Image
 ~~~~~~~~~~~~~
 To have ECS recognize a new image the cdk must be redeployed::
 
-    aws ecs update-service --cluster <cluster name> --service <service name> --force-new-deployment --deployment-configuration maximumPercent=200,minimumHealthyPercent=0
+    aws ecs update-service --cluster <cluster name> --service <service name> --force-new-deployment --deployment-configuration maximumPercent=100,minimumHealthyPercent=0
 
+The reason that we can only have a single task running is that the same ports would be in use by the old task, and as a result, the new task will fail to start because it wouldn't be able bind to the required ports.

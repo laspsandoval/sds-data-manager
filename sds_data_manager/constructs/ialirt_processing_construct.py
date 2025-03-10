@@ -1,10 +1,17 @@
 """Configure the i-alirt processing stack."""
 
-from aws_cdk import RemovalPolicy
+import pathlib
+
+import aws_cdk as cdk
+from aws_cdk import Duration, RemovalPolicy
 from aws_cdk import aws_autoscaling as autoscaling
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecs as ecs
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_lambda_python_alpha as lambda_alpha_
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
@@ -17,6 +24,7 @@ class IalirtProcessing(Construct):
         self,
         scope: Construct,
         construct_id: str,
+        env: cdk.Environment,
         vpc: ec2.Vpc,
         ports: list[int],
         ialirt_bucket: s3.Bucket,
@@ -31,6 +39,8 @@ class IalirtProcessing(Construct):
             Parent construct.
         construct_id : str
             A unique string identifier for this construct.
+        env : cdk.Environment
+            The environment in which to deploy the stack.
         vpc : ec2.Vpc
             VPC into which to put the resources that require networking.
         ports : list[int]
@@ -49,6 +59,7 @@ class IalirtProcessing(Construct):
         self.vpc = vpc
         self.s3_bucket_name = ialirt_bucket.bucket_name
         self.secret_name = secret_name
+        self.region = env.region
 
         # Create security group in which containers will reside
         self.create_ecs_security_group()
@@ -92,7 +103,7 @@ class IalirtProcessing(Construct):
         # ECS Cluster manages EC2 instances on which containers are deployed.
         self.ecs_cluster = ecs.Cluster(self, "IalirtCluster", vpc=self.vpc)
 
-        # Retrieve the secret from Secrets Manager.
+        # Retrieve the secrets from Secrets Manager.
         nexus_secret = secretsmanager.Secret.from_secret_name_v2(
             self, "NexusCredentials", secret_name=self.secret_name
         )
@@ -148,7 +159,7 @@ class IalirtProcessing(Construct):
         # Specifies the networking mode as HOST.
         # In "HOST" you can access the container using the EC2 public IP
         # that is automatically assigned.
-        # The ECS tasks to automatically inherit the EC2 instance
+        # The ECS tasks automatically inherit the EC2 instance
         # Elastic IP so that they always use a publicly accessible IP address.
         task_definition = ecs.Ec2TaskDefinition(
             self,
@@ -189,6 +200,77 @@ class IalirtProcessing(Construct):
             desired_count=1,
         )
 
+    def create_autoscaling_event_rule(
+        self,
+        assign_eip_lambda: lambda_alpha_.PythonFunction,
+        auto_scaling_group: autoscaling.AutoScalingGroup,
+    ) -> None:
+        """Create Rules to trigger Lambda on Auto Scaling Group instance launch."""
+        deploy_rule = events.Rule(
+            self,
+            "AssignEipOnEc2InstanceLaunch",
+            rule_name="assign-eip-ec2-instance-launch",
+            event_pattern=events.EventPattern(
+                source=["aws.ec2"],
+                detail_type=["EC2 Instance State-change Notification"],
+                detail={
+                    "state": ["running"],
+                },
+            ),
+        )
+        asg_lifecycle_rule = events.Rule(
+            self,
+            "AssignEipOnInstanceLaunch",
+            rule_name="assign-eip-instance-launch",
+            event_pattern=events.EventPattern(
+                source=["aws.autoscaling"],
+                detail_type=["EC2 Instance-launch Lifecycle Action"],
+                detail={
+                    "AutoScalingGroupName": [auto_scaling_group.auto_scaling_group_name]
+                },
+            ),
+        )
+
+        deploy_rule.add_target(targets.LambdaFunction(assign_eip_lambda))
+        asg_lifecycle_rule.add_target(targets.LambdaFunction(assign_eip_lambda))
+
+    def create_lambda_function(
+        self,
+    ) -> lambda_alpha_.PythonFunction:
+        """Create and return the Lambda function."""
+        lambda_role = iam.Role(
+            self,
+            "IalirtEipLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2FullAccess"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AutoScalingFullAccess"),
+            ],
+        )
+
+        eip_lambda = lambda_alpha_.PythonFunction(
+            self,
+            id="IalirtAssignEipLambda",
+            function_name="ialirt-eip",
+            entry=str(
+                pathlib.Path(__file__).parent.parent.joinpath("lambda_code").resolve()
+            ),
+            index="IAlirtCode/ialirt_eip.py",
+            handler="lambda_handler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            timeout=Duration.minutes(1),
+            memory_size=1000,
+            role=lambda_role,
+        )
+
+        # The resource is deleted when the stack is deleted.
+        eip_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        return eip_lambda
+
     def add_autoscaling(self):
         """Add autoscaling resources."""
         # This auto-scaling group is used to manage the
@@ -213,12 +295,33 @@ class IalirtProcessing(Construct):
         )
 
         auto_scaling_group.apply_removal_policy(RemovalPolicy.DESTROY)
+        eip_lambda = self.create_lambda_function()
+        self.create_autoscaling_event_rule(eip_lambda, auto_scaling_group)
 
         # Attach the AmazonSSMManagedInstanceCore policy for SSM access
         auto_scaling_group.role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name(
                 "AmazonSSMManagedInstanceCore"
             )
+        )
+        # Add EventBridgeFullAccess policy for EventBridge access
+        auto_scaling_group.role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "AmazonEventBridgeFullAccess"
+            )
+        )
+
+        autoscaling.LifecycleHook(
+            self,
+            "EipAssignmentHook",
+            auto_scaling_group=auto_scaling_group,
+            lifecycle_transition=autoscaling.LifecycleTransition.INSTANCE_LAUNCHING,
+            default_result=autoscaling.DefaultResult.CONTINUE,
+            heartbeat_timeout=Duration.minutes(
+                5
+            ),  # Allow up to 5 minutes for EIP assignment
+            lifecycle_hook_name="EipAssignmentHook",
+            notification_metadata="EIP Assignment Lifecycle Hook",
         )
 
         # integrates ECS with EC2 Auto Scaling Groups

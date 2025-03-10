@@ -1,8 +1,15 @@
 """Functions for supporting the batch starter component of the architecture."""
 
+# ruff: noqa: S310
+# potentially unsafe usage of urlopen TODO: are we concerned here?
+import contextlib
 import json
 import logging
+import os
+import urllib
 from datetime import datetime
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 
 import boto3
 import imap_data_access
@@ -14,7 +21,6 @@ from ..database import database as db
 from ..database import models
 
 # import dependency
-from ..pipeline_lambdas import dependency
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -22,6 +28,52 @@ logger.setLevel(logging.INFO)
 
 # Create a batch client
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
+
+
+class IMAPDependencyFinderError(Exception):
+    """Base class for exceptions in this module."""
+
+    pass
+
+
+@contextlib.contextmanager
+def _get_url_response(url: str):
+    """Get the response from a URL.
+
+    This is a helper function to make it easier to handle
+    the different types of errors that can occur when
+    opening a URL and write out the response body.
+    """
+    try:
+        # Open the URL and yield the response
+        with urllib.request.urlopen(url) as response:
+            yield response
+    except HTTPError as e:
+        message = (
+            f"HTTP Error: {e.code} - {e.reason}\n"
+            f"Server Message: {e.read().decode('utf-8')}"
+        )
+        raise IMAPDependencyFinderError(message) from e
+
+    except URLError as e:
+        message = f"URL Error: {e.reason}"
+        raise IMAPDependencyFinderError(message) from e
+
+
+def _get_dependencies(dependency_events):
+    base = f"{os.getenv('IMAP_DATA_ACCESS_URL')}/dependency?"
+    url = f"{base}{urlencode(dependency_events)}"
+
+    logger.info("Finding dependencies for %s with url %s", dependency_events, url)
+    with _get_url_response(url) as response:
+        # Retrieve the response as a list of dictionaries containing the dependency
+        # information
+        dependency_repsonse = response.read().decode("utf-8")
+        # Parse the JSON responses
+        dependencies = json.loads(dependency_repsonse)
+        logger.debug(f"Received dependencies: {dependencies}")
+
+    return dependencies
 
 
 def get_file(session, instrument, data_level, descriptor, start_date, version):
@@ -171,14 +223,7 @@ def try_to_submit_job(session, job_info, start_date, version):
         "relationship": "HARD",
     }
 
-    # TODO: call dependency lambda when it's implemented
-    dependency_response = dependency.lambda_handler(dependency_event_msg, None)
-
-    upstream_dependencies = json.loads(dependency_response["body"])
-
-    if dependency_response["statusCode"] != 200:
-        logger.error(f"Dependency query failed with {upstream_dependencies}")
-        return {"statusCode": 500, "body": "Dependency query failed"}
+    upstream_dependencies = _get_dependencies(dependency_event_msg)
 
     for upstream_dependency in upstream_dependencies:
         upstream_source = upstream_dependency["data_source"]
@@ -393,20 +438,9 @@ def lambda_handler(events: dict, context):
         if file_obj is None:
             raise ValueError(f"File handling {filename} is not implemented yet")
 
-        logger.info(f"Sending this event to dependency query: {dependency_event_msg}")
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
-        # TODO: call dependency lambda when it's implemented
-        dependency_response = dependency.lambda_handler(dependency_event_msg, None)
-
-        logger.info(f"Dependency query response: {dependency_response}")
-        potential_jobs = json.loads(dependency_response["body"])
-
-        if dependency_response["statusCode"] != 200:
-            logger.error(f"Dependency query failed with {potential_jobs}")
-            raise ValueError("Dependency query failed")
-
-        logger.info(f"Potential jobs found [{len(potential_jobs)}]: {potential_jobs}")
+        potential_jobs = _get_dependencies(dependency_event_msg)
 
         with db.Session() as session:
             for job in potential_jobs:

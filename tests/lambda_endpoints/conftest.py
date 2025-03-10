@@ -24,6 +24,15 @@ def _set_env(monkeypatch):
     monkeypatch.setenv("AWS_SECURITY_TOKEN", "testing")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    # Mock the api gateway url
+    # This is used in batch_starter.py
+    monkeypatch.setenv("IMAP_DATA_ACCESS_URL", "https://test.url")
+
+
+@pytest.fixture(scope="module")
+def ancillary_file():
+    """Path to a valid ancillary file."""
+    return "imap/ancillary/swe/imap_swe_test-ancillary-description_20100101_v000.cdf"
 
 
 @pytest.fixture(scope="module")
@@ -36,6 +45,15 @@ def science_file():
 def spice_file():
     """Path to a valid spice file."""
     return "spice/ck/test_v000.bc"
+
+
+@pytest.fixture(scope="module")
+def invalid_file():
+    """Path for an invalid file."""
+    return (
+        "imap/swe/l1a/2010/01/imap_swe_l1a_test-description_"
+        "second-description_20100101_v000.cdf"
+    )
 
 
 @pytest.fixture(autouse=True, scope="module")

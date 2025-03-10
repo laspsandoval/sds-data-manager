@@ -124,7 +124,7 @@ class SdsApiManager(Construct):
         )
 
         api.add_route(
-            route="query/{table_type}",  # do we support dynamic paths?
+            route="query",
             http_method="GET",
             lambda_function=query_api_lambda,
         )

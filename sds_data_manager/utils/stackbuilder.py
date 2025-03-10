@@ -15,6 +15,7 @@ from sds_data_manager.constructs import (
     backup_bucket_construct,
     data_bucket_construct,
     database_construct,
+    dependency_finder_construct,
     efs_construct,
     ialirt_api_manager_construct,
     ialirt_bucket_construct,
@@ -214,6 +215,14 @@ def build_sds(
         scope=sdc_stack, construct_id="EFSConstruct", vpc=networking.vpc
     )
 
+    dependency_finder_construct.DependencyFinder(
+        scope=sdc_stack,
+        construct_id="DependencyFinder",
+        code=lambda_code,
+        layers=[db_lambda_layer],
+        api=api,
+    )
+
     # This valid instrument list is from imap-data-access package
     processing_volumes = [
         batch.EfsVolume(
@@ -248,10 +257,10 @@ def build_sds(
         code=lambda_code,
         rds_construct=rds_construct,
         rds_security_group=rds_construct.rds_security_group,
-        subnets=rds_construct.rds_subnet_selection,
         vpc=networking.vpc,
         sqs_queue=instrument_sqs,
         layers=[db_lambda_layer],
+        api_domain=api.api_domain_name,
     )
 
     # Create lambda that mounts EFS and writes data to EFS
@@ -270,6 +279,13 @@ def build_sds(
     # I-ALiRT IOIS S3 bucket
     ialirt_bucket = ialirt_bucket_construct.IAlirtBucketConstruct(
         scope=ialirt_stack, construct_id="IAlirtBucket", env=env
+    )
+
+    # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)
+    ingest = ialirt_ingest_lambda_construct.IalirtIngestLambda(
+        scope=ialirt_stack,
+        construct_id="IalirtIngestLambda",
+        ialirt_bucket=ialirt_bucket.ialirt_bucket,
     )
 
     ialirt_lambda_layer = lambda_layer_construct.IMAPLambdaLayer(
@@ -301,6 +317,7 @@ def build_sds(
         data_bucket=ialirt_bucket.ialirt_bucket,
         vpc=networking.vpc,
         layers=[ialirt_lambda_layer],
+        algorithm_table=ingest.algorithm_data_table,
     )
 
     # All traffic to I-ALiRT is directed to listed container ports
@@ -310,17 +327,11 @@ def build_sds(
     ialirt_processing_construct.IalirtProcessing(
         scope=ialirt_stack,
         construct_id="IalirtProcessing",
+        env=env,
         vpc=networking.vpc,
         ports=ialirt_ports,
         ialirt_bucket=ialirt_bucket.ialirt_bucket,
         secret_name=ialirt_secret_name,
-    )
-
-    # I-ALiRT IOIS ingest lambda (facilitates s3 to dynamodb)
-    ialirt_ingest_lambda_construct.IalirtIngestLambda(
-        scope=ialirt_stack,
-        construct_id="IalirtIngestLambda",
-        ialirt_bucket=ialirt_bucket.ialirt_bucket,
     )
 
 

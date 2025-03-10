@@ -35,20 +35,14 @@ def lambda_handler(event, context):
 
     # add session, pick model like in indexer and add query to filter_as
     query_params = event["queryStringParameters"]
-    path = event["resource"]
-    # getting table portion of the path (e.g. '/query/table')
-    table_type = path.split("/")[-1].lower()
-    # select the appropriate table for the query
-    if table_type == "spice":
-        query = select(models.SPICEFiles.__table__)
-    elif table_type == "ancillary":
-        query = select(models.AncillaryFiles.__table__)
-    else:
-        query = select(models.ScienceFiles.__table__)
 
+    # select the science files table for the query
+    query = select(models.ScienceFiles.__table__)
     # get a list of all valid search parameters
     valid_parameters = [
-        column.key for column in query.columns if column.key not in ["id"]
+        column.key
+        for column in models.ScienceFiles.__table__.columns
+        if column.key not in ["id"]
     ]
     # Up until this point, valid_parameters are the same as the
     # columns in the ScienceFiles table. And looks like we removed
