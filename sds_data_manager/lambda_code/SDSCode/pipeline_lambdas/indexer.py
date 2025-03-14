@@ -164,6 +164,7 @@ def s3_event_handler(event):
         #     "data_level": self.data_level,
         #     "descriptor": self.descriptor,
         #     "start_date": datetime.strptime(self.startdate, "%Y%m%d"),
+        #     "end_date": datetime.strptime(self.enddate, "%Y%m%d"),
         #     "repointing": self.repointing,
         #     "version": self.version,
         #     "extension": self.extension,
@@ -176,10 +177,6 @@ def s3_event_handler(event):
         sci_params["start_date"] = datetime.strptime(
             sci_params.pop("start_date"), "%Y%m%d"
         )
-        if sci_params.get("end_date"):
-            sci_params["end_date"] = datetime.strptime(
-                sci_params.pop("end_date"), "%Y%m%d"
-            )
 
         sci_params["file_path"] = s3_filepath
         ingestion_date_object = get_file_ingestion_date(s3_filepath)

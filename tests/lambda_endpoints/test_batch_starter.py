@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
+    AncillaryFiles,
     ProcessingJob,
     ScienceFiles,
 )
@@ -19,7 +20,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
     IMAPDependencyFinderError,
     _get_dependencies,
-    get_file,
+    get_files,
     is_job_in_processing_table,
     lambda_handler,
 )
@@ -49,6 +50,10 @@ def urlopen_side_effect(url):
     elif "l1a" in url and "UPSTREAM" in url:
         mock_dependencies["data_type"] = "l0"
         mock_dependencies["descriptor"] = "raw"
+    elif "l1b" in url and "UPSTREAM" in url:
+        mock_dependencies["data_type"] = "l1a"
+    elif "ancillary" in url and "l1b-in-flight-cal" in url:
+        mock_dependencies["data_type"] = "l1b"
     else:
         mock_dependencies = None
 
@@ -84,7 +89,7 @@ def _populate_file_catalog(session):
     # Setup: Add records to the database
     test_records = [
         ScienceFiles(
-            file_path="/path/to/file1",
+            file_path="/path/to/imap_ultra_l2_sci_20240101_v001.cdf",
             instrument="ultra",
             data_level="l2",
             descriptor="sci",
@@ -96,7 +101,7 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/file2",
+            file_path="/path/to/imap_hit_l0_raw_20240101_v001.pkts",
             instrument="hit",
             data_level="l0",
             descriptor="raw",
@@ -108,7 +113,7 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/file3",
+            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
             instrument="swe",
             data_level="l0",
             descriptor="raw",
@@ -120,7 +125,7 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/file4",
+            file_path="/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
             instrument="swe",
             data_level="l1a",
             descriptor="sci",
@@ -131,9 +136,34 @@ def _populate_file_catalog(session):
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
         ),
+        # Add multiple swe l1a records but with different start dates
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1a_sci_20240102_v001.cdf",
+            instrument="swe",
+            data_level="l1a",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 2),
+            version="v001",
+            extension="pkts",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1a_sci_20240103_v001.cdf",
+            instrument="swe",
+            data_level="l1a",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 3),
+            version="v001",
+            extension="pkts",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
         # Adding files to test for duplicate job
         ScienceFiles(
-            file_path="/path/to/file5",
+            file_path="/path/to/imap_lo_l1a_de_20240101_v001.cdf",
             instrument="lo",
             data_level="l1a",
             descriptor="de",
@@ -145,12 +175,35 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/file6",
+            file_path="/path/to/imap_lo_l1a_sci_20240101_v001.cdf",
             instrument="lo",
             data_level="l1a",
             descriptor="spin",
             start_date=datetime(2010, 1, 1),
             version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_l1b-in-flight-cal_20240125_v001.cdf",
+            instrument="swe",
+            descriptor="l1b-in-flight-cal",
+            start_date=datetime(2024, 1, 25),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        AncillaryFiles(
+            file_path="/path/to/imap_mag_l1a-cal_20250124-20250126_v002.cdf",
+            instrument="mag",
+            descriptor="l1a-cal",
+            start_date=datetime(2025, 1, 24),
+            end_date=datetime(2025, 1, 26),
+            version="v002",
             extension="cdf",
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
@@ -177,18 +230,18 @@ def _populate_processing_table(session):
     session.commit()
 
 
-def test_get_file(session):
-    """Tests the get_file function."""
+def test_get_science_files(session):
+    """Tests the get_file function for science files."""
     _populate_file_catalog(session)
 
-    record = get_file(
+    record = get_files(
         session,
         instrument="ultra",
-        data_level="l2",
+        data_type="l2",
         descriptor="sci",
-        start_date="20240101",
+        start_date=datetime(2024, 1, 1),
         version="v001",
-    )
+    )[0]
 
     assert record.instrument == "ultra"
     assert record.data_level == "l2"
@@ -196,16 +249,92 @@ def test_get_file(session):
     assert record.start_date == datetime(2024, 1, 1)
     assert record.version == "v001"
 
-    # Non-existent record should return None
-    record = get_file(
+    # Non-existent record should return an empty list
+    record = get_files(
         session,
         instrument="ultra",
-        data_level="l2",
+        data_type="l2",
         descriptor="sci",
-        start_date="20000101",
+        start_date=datetime(2010, 1, 1),
         version="v001",
     )
-    assert record is None
+    assert record == []
+
+
+def test_get_science_files_upstream_ancillary(session):
+    """Tests the get_file function for science files dependent on an ancillary file."""
+    _populate_file_catalog(session)
+    # Test with end date
+    # It should return two swe records
+    records_1 = get_files(
+        session,
+        instrument="swe",
+        data_type="l1b",
+        descriptor="sci",
+        start_date=datetime(2024, 1, 1),
+        version="v001",
+        ancillary_upstream=True,
+        end_date=datetime(2024, 1, 2),
+    )
+    assert len(records_1) == 2
+
+    # Test with no end date
+    # It should return three swe records
+    record = get_files(
+        session,
+        instrument="swe",
+        data_type="l1b",
+        descriptor="sci",
+        start_date=datetime(2024, 1, 1),
+        version="v001",
+        ancillary_upstream=True,
+    )
+    assert len(record) == 3
+
+
+def test_get_ancillary_files(session):
+    """Tests the get_file function."""
+    _populate_file_catalog(session)
+
+    record = get_files(
+        session,
+        instrument="swe",
+        data_type="ancillary",
+        descriptor="l1b-in-flight-cal",
+        start_date=datetime(2024, 1, 26),
+        version="v001",
+    )[0]
+
+    assert record.instrument == "swe"
+    assert record.descriptor == "l1b-in-flight-cal"
+    assert record.start_date == datetime(2024, 1, 25)
+    assert record.version == "v001"
+
+    # Get ancillary file covering range
+    start_date = datetime(2025, 1, 25)
+    record = get_files(
+        session,
+        instrument="mag",
+        data_type="ancillary",
+        descriptor="l1a-cal",
+        start_date=start_date,
+        version="v002",
+    )[0]
+    assert record.instrument == "mag"
+    assert record.descriptor == "l1a-cal"
+    assert record.start_date <= start_date
+    assert record.end_date >= start_date
+    assert record.version == "v002"
+    # Non-existent record should an empty list
+    record = get_files(
+        session,
+        instrument="mag",
+        data_type="ancillary",
+        descriptor="l1b-cal",
+        start_date=datetime(2000, 1, 1),
+        version="v001",
+    )
+    assert record == []
 
 
 def test_lambda_handler(
@@ -263,8 +392,65 @@ def test_lambda_handler_multiple_events(session, mock_urlopen):
         assert mock_batch_client.submit_job.call_count == 2
 
 
+def test_lambda_handler_ancillary_event(
+    session,
+    mock_urlopen: unittest.mock.MagicMock,
+):
+    """Tests ``lambda_handler`` function when triggerd by an ancillary file."""
+    _populate_file_catalog(session)
+
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": '
+                '"imap_swe_l1b-in-flight-cal_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(events, context)
+        # There should be three different jobs submitted for one swe l1b ancillary file
+        assert mock_batch_client.submit_job.call_count == 3
+        # Assert_called_with only works on the last call
+        # Check that the last call is what we expect with the corrected
+        serialized_processing_input = (
+            '[{"type": "science", "files": ["imap_swe_l1a_sci_20240103_v001.cdf"]}]'
+        )
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="swe-l1b-sci-job-3",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-swe",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "swe",
+                    "--data-level",
+                    "l1b",
+                    "--descriptor",
+                    "sci",
+                    "--start-date",
+                    "20240103",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    serialized_processing_input,
+                    "--upload-to-sdc",
+                ]
+            },
+        )
+        # Submit a second job with the same file as input which will try to kick
+        # off a duplicate job. We expect the submit_job method to not be called
+        # so make sure it is still only called three times from our previous iteration.
+        lambda_handler(events, context)
+        assert mock_batch_client.submit_job.call_count == 3
+
+
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
-    """Tests ``lambda_handler`` when there are no depenencies for the file."""
+    """Tests ``lambda_handler`` when there are no dependencies for the file."""
     _populate_file_catalog(session)
     # Test Multiple Events:
     events = {
@@ -315,7 +501,7 @@ def test_is_job_in_status_table(session):
         instrument="lo",
         data_level="l1b",
         descriptor="de",
-        start_date="20100101",
+        start_date=datetime(2010, 1, 1),
         version="v001",
     )
 
@@ -326,7 +512,7 @@ def test_is_job_in_status_table(session):
         instrument="swapi",
         data_level="l1b",
         descriptor="sci",
-        start_date="20100101",
+        start_date=datetime(2010, 1, 1),
         version="v001",
     )
     assert not result
