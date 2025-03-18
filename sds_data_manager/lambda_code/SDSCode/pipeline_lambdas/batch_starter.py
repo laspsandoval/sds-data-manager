@@ -8,17 +8,17 @@ import logging
 import os
 import urllib
 from datetime import datetime
-from os.path import basename
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
 import boto3
 from imap_data_access import AncillaryFilePath, ScienceFilePath, processing_input
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from ..database import database as db
 from ..database import models
+from .dependency import get_files
 
 # import dependency
 
@@ -75,99 +75,6 @@ def _get_dependencies(dependency_events):
         logger.debug(f"Received dependencies: {dependencies}")
 
     return dependencies
-
-
-def get_files(
-    session,
-    instrument,
-    data_type,
-    descriptor,
-    start_date,
-    version,
-    end_date=None,
-    ancillary_upstream=False,
-):
-    """Query to database to get ScienceFile or AncillaryFile records.
-
-    Parameters
-    ----------
-    session : orm session
-        Database session.
-    instrument : str
-        Instrument name.
-    data_type : str
-        Data type.
-    descriptor : str
-        Data descriptor.
-    start_date : datetime
-        Start date of the event data.
-    version : str
-        Version of the event data.
-    end_date: datetime, optional
-        End date of the event data.
-    ancillary_upstream: bool, optional,
-        Determines how start date filtering is queried.
-        When True, indicates we are looking for files that are downstream from an
-        ancillary file, so we query for files with start dates greater than or equal
-        to the ancillary file's start date. When False, we query for files with a match
-        to the start time. Default is False.
-
-    Returns
-    -------
-    records : list[Union[models.ScienceFiles, models.AncillaryFiles]]
-        The ScienceFiles or AncillaryFiles records matching the query criteria.
-    """
-    # TODO can we use query spice/ ancillary/ science api here?
-    type_specific_conditions = []
-    # TODO replace with enum?
-    if data_type == "ancillary":
-        table = models.AncillaryFiles
-        # Query for ancillary files whose ranges cover the
-        # start date.
-        # E.g., if the start date is '20250102', the query could return an ancillary
-        # file with the date range ('20250101', '20250103')
-        type_specific_conditions.append(
-            and_(
-                table.start_date <= start_date,
-                or_(table.end_date >= start_date, table.end_date.is_(None)),
-            )
-        )
-    else:
-        table = models.ScienceFiles
-        if ancillary_upstream:
-            if end_date:
-                # Find files that are downstream from an ancillary file
-                # Query for science files with a start date later or equal to the
-                # ancillary start date and less than the ancillary end date.
-                type_specific_conditions.append(
-                    and_(
-                        models.ScienceFiles.start_date >= start_date,
-                        models.ScienceFiles.start_date <= end_date,
-                    )
-                )
-            else:
-                # Find files that are downstream from an ancillary file
-                # if there is no end date query for science files with dates past or
-                # equal the ancillary start date
-                type_specific_conditions.append(
-                    models.ScienceFiles.start_date >= start_date
-                )
-        else:
-            # Query for science files matching the start date
-            type_specific_conditions.append(
-                models.ScienceFiles.start_date == start_date
-            )
-
-    filter_conditions = [
-        table.instrument == instrument,
-        table.descriptor == descriptor,
-        table.version == version,
-        *type_specific_conditions,
-    ]
-
-    records = session.query(table).filter(*filter_conditions).all()
-
-    return records
 
 
 def is_job_in_processing_table(
@@ -272,42 +179,13 @@ def try_to_submit_job(session, job_info, start_date, version):
         "descriptor": descriptor,
         "dependency_type": "UPSTREAM",
         "relationship": "HARD",
+        "start_date": start_date,
+        "version": version,
     }
 
     upstream_dependencies = _get_dependencies(dependency_event_msg)
-
-    input_collection = processing_input.ProcessingInputCollection()
-    for upstream_dependency in upstream_dependencies:
-        upstream_source = upstream_dependency["data_source"]
-        upstream_data_type = upstream_dependency["data_type"]
-        upstream_descriptor = upstream_dependency["descriptor"]
-
-        records = get_files(
-            session,
-            upstream_source,
-            upstream_data_type,
-            upstream_descriptor,
-            start_date,
-            version,
-        )
-        if not records:
-            logger.info(
-                f"Dependency not found: {upstream_source}, "
-                f"{upstream_data_type}, "
-                f"{upstream_descriptor}, "
-                f"{start_date_str}, "
-                f"{version}"
-            )
-            return  # Exit the loop early as we already found a missing dependency
-        else:
-            filenames = [basename(record.file_path) for record in records]
-            if upstream_data_type == "ancillary":
-                input_collection.add(processing_input.AncillaryInput(*filenames))
-            else:
-                input_collection.add(processing_input.ScienceInput(*filenames))
-
-            # TODO handle SPICE input type here
-
+    # TODO return if dependency is not found
+    #
     logger.info(f"All dependencies found for the job: {job_info}")
 
     # All of our upstream requirements have been met.
@@ -334,32 +212,6 @@ def try_to_submit_job(session, job_info, start_date, version):
         f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
     )
 
-    # TODO: change the upstream dependency keys as needed in the future based
-    # on needs. Right now, we are keeping same as before to reduce complexity.
-    # FYI, upstream_dependencies in the command below should contain these keys:
-    #   'instrument',
-    #   'data_level',
-    #   'descriptor',
-    #   'start_date',
-    #   'version'
-    # Example list of upstream_dependencies in the command below:
-    # [
-    #   {
-    #     'instrument': 'swe',
-    #     'data_level': 'l1b',
-    #     'descriptor': 'sci',
-    #     'start_date': '20231212',
-    #     'version': 'v001',
-    #   },
-    #   {
-    #     'instrument': 'sc_attitude',
-    #     'data_level': 'spice',
-    #     'descriptor': 'historical',
-    #     'start_date': '20231212',
-    #     'version': '01',
-    #   },
-    # ]
-
     # Reformat the upstream dependencies from dependency call to match
     # what batch job expects. Change 'data_source' to 'instrument' and
     # 'data_type' to 'data_level'.
@@ -376,7 +228,7 @@ def try_to_submit_job(session, job_info, start_date, version):
         "--version",
         version,
         "--dependency",
-        f"{input_collection.serialize()}",
+        f"{upstream_dependencies}",
         "--upload-to-sdc",
     ]
 
@@ -466,6 +318,11 @@ def find_upstream_science_start_dates(
     return [record.start_date for record in records]
 
 
+def get_all_files_to_process(potential_jobs):
+    """Get all files that need to be processed."""
+    pass
+
+
 def lambda_handler(events: dict, context):
     """Lambda handler.
 
@@ -529,7 +386,8 @@ def lambda_handler(events: dict, context):
 
         # TODO: How to handle repointing
 
-        start_date = datetime.strptime(file_obj.start_date, "%Y%m%d")
+        start_date = file_obj.start_date
+        end_date = file_obj.end_date if hasattr(file_obj, "end_date") else None
         version = file_obj.version
 
         # TODO: handle spice once implemented
@@ -543,10 +401,14 @@ def lambda_handler(events: dict, context):
             "data_type": data_type,
             "dependency_type": "DOWNSTREAM",
             "relationship": "HARD",
+            "start_date": start_date,
+            "end_date": end_date,
         }
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
         potential_jobs = _get_dependencies(dependency_event_msg)
+        potential_jobs = processing_input.ProcessingInputCollection.deserialize()
+        # TODO now get own primary source data.
 
         # If 'file_obj' is an ancillary file, there could be more than one
         # potential downstream dependency job for a given data_source, data_type, and
@@ -562,16 +424,14 @@ def lambda_handler(events: dict, context):
         # e.g. [20250102, 20250103, 20250104].
         # Then call try_to_submit_job for the dependency, and each of these start times
         with db.Session() as session:
+            # Convert start_date to a datetime obj
+            start_date = datetime.strptime(start_date, "%Y%m%d")
             if isinstance(file_obj, AncillaryFilePath):
-                end_date = (
-                    datetime.strptime(file_obj.end_date, "%Y%m%d")
-                    if file_obj.end_date
-                    else None
-                )
-
+                if end_date:
+                    end_date = datetime.strptime(file_obj.end_date, "%Y%m%d")
                 for job in potential_jobs:
-                    upstream_science_start_dates = find_upstream_science_start_dates(
-                        session, job, start_date, version, end_date
+                    upstream_science_start_dates = get_all_files_to_process(
+                        potential_jobs
                     )
 
                     for upstream_date in upstream_science_start_dates:

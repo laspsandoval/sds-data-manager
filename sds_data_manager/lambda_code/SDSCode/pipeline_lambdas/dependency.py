@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import imap_data_access
+from imap_data_access import processing_input
+from sqlalchemy import and_, or_
+
+from ..database import database as db
+from ..database import models
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -331,6 +336,112 @@ def get_dependencies(node, dependency_type, relationship):
     return dependencies
 
 
+def get_dependency_processing_input(
+    upstream_data_type, dependencies: list, start_date: str, version: str, end_date: str
+):
+    """Construct a ProcessingInputCollection of dependency files."""
+    ins = processing_input.ProcessingInputCollection()
+    # TODO return if we dont find any files
+    with db.Session() as session:
+        for dep in dependencies:
+            files = get_files(
+                session, upstream_data_type, dep, start_date, version, end_date
+            )
+            if upstream_data_type == DataType.ANCILLARY:
+                ins.add(processing_input.AncillaryInput(*files))
+            else:
+                ins.add(processing_input.ScienceInput(*files))
+    return ins
+
+
+def get_files(
+    session,
+    upstream_data_type,
+    dependency,
+    start_date,
+    version,
+    end_date=None,
+):
+    """Query to database to get ScienceFile or AncillaryFile records.
+
+    Parameters
+    ----------
+    upstream_data_type: str,
+        The upstream data type.
+    session : orm session
+        Database session.
+    dependency : dict
+        dictionary containing:
+        instrument : str
+            Instrument name.
+        data_type : str
+            Data type.
+        descriptor : str
+            Data descriptor.
+    start_date : datetime
+        Start date of the event data.
+    version : str
+        Version of the event data.
+    end_date: datetime, optional
+        End date of the event data.
+
+    Returns
+    -------
+    records : list[Union[models.ScienceFiles, models.AncillaryFiles]]
+        The ScienceFiles or AncillaryFiles records matching the query criteria.
+    """
+    # TODO can we use query spice/ ancillary/ science api here?
+    type_specific_conditions = []
+    if dependency["data_type"] == DataType.ANCILLARY:
+        table = models.AncillaryFiles
+        # Query for ancillary files whose ranges cover the
+        # start date.
+        # E.g., if the start date is '20250102', the query could return an ancillary
+        # file with the date range ('20250101', '20250103')
+        type_specific_conditions.append(
+            and_(
+                table.start_date <= start_date,
+                or_(table.end_date >= start_date, table.end_date.is_(None)),
+            )
+        )
+    else:
+        table = models.ScienceFiles
+        if upstream_data_type == DataType.ANCILLARY:
+            if end_date:
+                # Find files that are downstream from an ancillary file
+                # Query for science files with a start date later or equal to the
+                # ancillary start date and less than the ancillary end date.
+                type_specific_conditions.append(
+                    and_(
+                        models.ScienceFiles.start_date >= start_date,
+                        models.ScienceFiles.start_date <= end_date,
+                    )
+                )
+            else:
+                # Find files that are downstream from an ancillary file
+                # if there is no end date query for science files with dates past or
+                # equal the ancillary start date
+                type_specific_conditions.append(
+                    models.ScienceFiles.start_date >= start_date
+                )
+        else:
+            # Query for science files matching the start date
+            type_specific_conditions.append(
+                models.ScienceFiles.start_date == start_date
+            )
+
+    filter_conditions = [
+        table.instrument == dependency["instrument"],
+        table.descriptor == dependency["descriptor"],
+        table.version == version,
+        *type_specific_conditions,
+    ]
+
+    records = session.query(table).filter(*filter_conditions).all()
+
+    return records
+
+
 def lambda_handler(event, context):
     """Lambda handler for dependency tracking.
 
@@ -344,14 +455,20 @@ def lambda_handler(event, context):
                 "descriptor": "raw",
                 "dependency_type": "UPSTREAM",
                 "relationship": "HARD",
+                "start_time": "20250101", (optional)
+                "end_time": "20250102", (optional)
+                "version": "v001" (optional)
             }
+        "start_time", "end_time", and "version" are optional.
+        If "start_time" is supplied, then "version" is required.
 
     context : dict
         Context dictionary.
 
     Returns
     -------
-    dependencies : list of dict
+    dependencies : list or ProcessingInputCollection
+        If "start_date" is not supplied return list of dictionaries:
         statusCode and body containing list of dictionary containing
         the dependencies information like this:
             [
@@ -371,6 +488,33 @@ def lambda_handler(event, context):
                     "descriptor": "historical",
                 },
             ]
+        If "start_date" is supplied ("version" is required and "end_date" is optional)
+        return a ProcessingInputCollection containing references to files that exist on
+        s3.
+            [
+                {
+                    "type": "ancillary",
+                    "files": [
+                        "imap_mag_l1b-cal_20250101_v001.cdf",
+                        "imap_mag_l1b-cal_20250103-20250104_v002.cdf"
+                    ]
+                },
+                {
+                    "type": "ancillary",
+                    "files": [
+                        "imap_mag_l1b-lut_20250101_v001.cdf",
+                    ]
+                },
+                {
+                    "type": "science",
+                    "files": [
+                        "imap_mag_l1a_norm-magi_20240312_v000.cdf",
+                        "imap_mag_l1a_norm-magi_20240312_v001.cdf"
+                    ]
+                }
+            ]
+
+
     """
     logger.info(f"Event: {event}")
     logger.info(f"Context: {context}")
@@ -391,9 +535,28 @@ def lambda_handler(event, context):
             "statusCode": 500,
             "body": "Failed to load dependencies",
         }
+    # If start_date is supplied, check for version and end_date.
+    if "start_date" in query_params:
+        start_date = query_params["start_date"]
+
+        if "version" not in query_params:
+            return {
+                "statusCode": 400,  # Client error
+                "body": "Version not found. If 'start_date' is supplied, 'version' is "
+                "required",
+            }
+
+        version = query_params["version"]
+        end_date = query_params["end_date"] if "end_date" in query_params else None
+
+        dependencies = get_dependency_processing_input(
+            query_params["data_type"], dependencies, start_date, version, end_date
+        ).serialize()
+    else:
+        dependencies = json.dumps(dependencies)
 
     # TODO: add reprocessing dependencies are handled here
     return {
         "statusCode": 200,
-        "body": json.dumps(dependencies),
+        "body": dependencies,
     }
