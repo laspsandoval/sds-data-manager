@@ -45,7 +45,7 @@ def expected_response():
                 "repointing": None,
                 "version": "v001",
                 "extension": "pkts",
-                "ingestion_date": "2025-11-07 10:13:12",
+                "ingestion_date": "20251107 10:13:12",
             }
         ]
     )
