@@ -88,14 +88,15 @@ def lambda_handler(event, context):
             )
         elif param == "ingestion_start_date":
             # filtering by ingestion date
+
             query = query.where(
                 models.ScienceFiles.ingestion_date.date()
-                >= datetime.datetime.strptime(value, "%Y-%m-%d").date()
+                >= datetime.datetime.strptime(value, "%Y-%m-%d")
             )
         elif param == "ingestion_end_date":
             query = query.where(
                 models.ScienceFiles.ingestion_date.date()
-                <= datetime.datetime.strptime(value, "%Y-%m-%d").date()
+                <= datetime.datetime.strptime(value, "%Y-%m-%d")
             )
         # all non-time string matching parameters
         else:
