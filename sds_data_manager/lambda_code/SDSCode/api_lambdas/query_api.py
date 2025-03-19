@@ -124,7 +124,7 @@ def lambda_handler(event, context):
         if d.tzinfo is not None:
             # If the datetime has a timezone, convert it to UTC and remove the timezone
             d = d.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-        result["ingestion_date"] = d.strftime("%Y-%m-%d %H:%M:%S")
+        result["ingestion_date"] = d.strftime("%Y%m%d %H:%M:%S")
 
     logger.info(
         "Found [%s] Query Search Results: %s", len(search_results), str(search_results)
