@@ -88,18 +88,18 @@ def lambda_handler(event, context):
             )
         elif param == "ingestion_start_date":
             # filtering by ingestion date
-            start_date = datetime.datetime.strptime(value, "%Y-%m-%d").date() #debuggin
-            print(f"Filtering for start_date: {start_date}") #debugging
+            start_date = datetime.datetime.strptime(value, "%Y%m%d").date()  # debuggin
+            print(f"Filtering for start_date: {start_date}")  # debugging
             query = query.where(
                 func.date(models.ScienceFiles.ingestion_date)
-                >= datetime.datetime.strptime(value, "%Y-%m-%d").date()
+                >= datetime.datetime.strptime(value, "%Y%m%d").date()
             )
         elif param == "ingestion_end_date":
-            end_date = datetime.datetime.strptime(value, "%Y-%m-%d").date()  # debuggin
+            end_date = datetime.datetime.strptime(value, "%Y%m%d").date()  # debuggin
             print(f"Filtering for start_date: {end_date}")  # debugging
             query = query.where(
                 func.date(models.ScienceFiles.ingestion_date)
-                <= datetime.datetime.strptime(value, "%Y-%m-%d").date()
+                <= datetime.datetime.strptime(value, "%Y%m%d").date()
             )
         # all non-time string matching parameters
         else:

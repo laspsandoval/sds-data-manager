@@ -22,7 +22,7 @@ def _populate_test_data(session):
         "version": "v001",
         "extension": "pkts",
         "ingestion_date": datetime.datetime.strptime(
-            "2025-11-07 10:13:12+00:00", "%Y-%m-%d %H:%M:%S%z"
+            "20251107 10:13:12+00:00", "%Y-%m-%d %H:%M:%S%z"
         ),
     }
 
@@ -45,7 +45,7 @@ def expected_response():
                 "repointing": None,
                 "version": "v001",
                 "extension": "pkts",
-                "ingestion_date": "2025-11-07 10:13:12",
+                "ingestion_date": "20251107 10:13:12",
             }
         ]
     )
