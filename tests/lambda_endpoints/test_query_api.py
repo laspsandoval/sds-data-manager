@@ -119,10 +119,59 @@ def test_empty_end_date_query(session):
     assert returned_query["body"] == expected_response
 
 
-def test_empty_non_date_query(session):
-    """Test that a non-date query with no matches returns an empty list."""
+def test_non_date_query(session, expected_response):
+    """Test that a non-date parameters can be queried."""
     _populate_test_data(session)
-    event = {"queryStringParameters": {"data_level": "l2"}}
+    event = {"queryStringParameters": {"instrument": "hit"}}
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_ingestion_start_date_query(session, expected_response):
+    """Test that ingestion_start_date can be queried."""
+    _populate_test_data(session)
+    event = {"queryStringParameters": {"ingestion_start_date": "2025-11-07"}}
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_ingestion_end_date_query(session, expected_response):
+    """Test that ingestion_end_date can be queried."""
+    _populate_test_data(session)
+    event = {"queryStringParameters": {"ingestion_end_date": "2025-11-07"}}
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_ingestion_start_and_end_date_query(session, expected_response):
+    """Test that both ingestion_start_date and ingestion_end_date can be queried."""
+    _populate_test_data(session)
+    event = {
+        "queryStringParameters": {
+            "ingestion_start_date": "2025-11-06",
+            "ingestion_end_date": "2025-11-08",
+        }
+    }
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_empty_ingestion_start_date_query(session):
+    """Test that an ingestion_start_date query with no matches returns an empty list."""
+    _populate_test_data(session)
+    event = {"queryStringParameters": {"ingestion_start_date": "2026-11-01"}}
     expected_response = json.dumps([])
     returned_query = query_api.lambda_handler(event=event, context={})
 
@@ -130,11 +179,38 @@ def test_empty_non_date_query(session):
     assert returned_query["body"] == expected_response
 
 
-def test_non_date_query(session, expected_response):
-    """Test that a non-date parameters can be queried."""
+def test_empty_ingestion_end_date_query(session):
+    """Test that an ingestion_end_date query with no matches returns an empty list."""
     _populate_test_data(session)
-    event = {"queryStringParameters": {"instrument": "hit"}}
+    event = {"queryStringParameters": {"ingestion_end_date": "2026-11-01"}}
+    expected_response = json.dumps([])
+    returned_query = query_api.lambda_handler(event=event, context={})
 
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_empty_ingestion_start_and_end_date_query(session):
+    """Test that an ingestion_start_date and ingestion_end_date query with no matches returns an empty list."""
+    _populate_test_data(session)
+    event = {
+        "queryStringParameters": {
+            "ingestion_start_date": "2026-11-01",
+            "ingestion_end_date": "2026-11-10",
+        }
+    }
+    expected_response = json.dumps([])
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response
+
+
+def test_empty_non_date_query(session):
+    """Test that a non-date query with no matches returns an empty list."""
+    _populate_test_data(session)
+    event = {"queryStringParameters": {"data_level": "l2"}}
+    expected_response = json.dumps([])
     returned_query = query_api.lambda_handler(event=event, context={})
 
     assert returned_query["statusCode"] == 200
