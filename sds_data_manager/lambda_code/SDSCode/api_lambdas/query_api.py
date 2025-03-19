@@ -49,6 +49,8 @@ def lambda_handler(event, context):
     # the "id" column from the list. But we also need to add
     # 'end_date' to the list of valid_parameters.
     valid_parameters.append("end_date")
+    valid_parameters.append("ingestion_start_date")
+    valid_parameters.append("ingestion_end_date")
 
     # go through each query parameter to set up sqlalchemy query conditions
     for param, value in query_params.items():
@@ -70,7 +72,7 @@ def lambda_handler(event, context):
                 " valid options are: {valid_parameters}"
             )
             return response
-        # check if we're search for start_date or end date to
+        # check if we're search for start_date or end date or ingestion dates to
         # setup the correct "where" time condition
         if param == "start_date":
             query = query.where(
@@ -80,6 +82,17 @@ def lambda_handler(event, context):
         elif param == "end_date":
             # TODO: Need to discuss as a team how to handle date queries. For now,
             # the date queries will only look at the file start_date.
+            query = query.where(
+                models.ScienceFiles.start_date
+                <= datetime.datetime.strptime(value, "%Y%m%d")
+            )
+        elif param == "ingestion_start_date":
+            # filtering by ingestion date
+            query = query.where(
+                models.ScienceFiles.ingestion_date
+                >= datetime.datetime.strptime(value, "%Y%m%d")
+            )
+        elif param == "ingestion_end_date":
             query = query.where(
                 models.ScienceFiles.start_date
                 <= datetime.datetime.strptime(value, "%Y%m%d")
