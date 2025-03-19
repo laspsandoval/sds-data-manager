@@ -5,6 +5,7 @@ import json
 import logging
 
 from sqlalchemy import select
+from sqlalchemy import func
 
 from ..database import database as db
 from ..database import models
@@ -90,12 +91,12 @@ def lambda_handler(event, context):
             # filtering by ingestion date
 
             query = query.where(
-                models.ScienceFiles.ingestion_date.date()
+                func.date(models.ScienceFiles.ingestion_date)
                 >= datetime.datetime.strptime(value, "%Y-%m-%d")
             )
         elif param == "ingestion_end_date":
             query = query.where(
-                models.ScienceFiles.ingestion_date.date()
+                func.date(models.ScienceFiles.ingestion_date)
                 <= datetime.datetime.strptime(value, "%Y-%m-%d")
             )
         # all non-time string matching parameters
