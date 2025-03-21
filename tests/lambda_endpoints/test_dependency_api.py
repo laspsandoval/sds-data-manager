@@ -334,31 +334,29 @@ def test_get_upstream_ancillary_trigger(session):
         trigger_source="ancillary",
     )
     dependency_response = dependency.lambda_handler(event, None)
-    dependents = ProcessingInputCollection()
-    dependents.deserialize(dependency_response["body"])
+    dependencies = dependency_response["body"]
     # There are three swe l1a records before 20240104, but one of them was filtered
     # out because the swe l1b downstream dependency for that date and version
     # was already processed, so it is not included in the output.
     science_in = ScienceInput(
-        "/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
-        "/path/to/imap_swe_l1a_sci_20240103_v001.cdf",
+        "imap_swe_l1a_sci_20240101_v001.cdf",
+        "imap_swe_l1a_sci_20240103_v001.cdf",
     )
     ancillary_in = AncillaryInput("imap_swe_l1b-in-flight-cal_20230101_v001.cdf")
     # Expect ancillary dependencies and science dependencies
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
 
-    assert dependents == expected_processing_input
+    assert dependencies == expected_processing_input.serialize()
     # Move start_date forward by one and we should now have 2 ancillary files.
     event["queryStringParameters"]["start_date"] = "20231231"
     dependency_response = dependency.lambda_handler(event, None)
-    dependents = ProcessingInputCollection()
-    dependents.deserialize(dependency_response["body"])
+    dependencies = dependency_response["body"]
     ancillary_in = AncillaryInput(
         "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
         "imap_swe_l1b-in-flight-cal_20231231-20240102_v002.cdf",
     )
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
-    assert dependents == expected_processing_input
+    assert dependencies == expected_processing_input.serialize()
 
 
 def test_get_upstream_science_trigger(session):
@@ -373,16 +371,15 @@ def test_get_upstream_science_trigger(session):
         trigger_source="l1a",
     )
     dependency_response = dependency.lambda_handler(event, None)
-    dependents = ProcessingInputCollection()
-    dependents.deserialize(dependency_response["body"])
+    dependencies = dependency_response["body"]
     # There are three swe l1a records, but since the trigger is the same source as
     # the upstream source, then the exact date is used to find the swe l1a file.
-    science_in = ScienceInput("/path/to/imap_swe_l1a_sci_20240103_v001.cdf")
+    science_in = ScienceInput("imap_swe_l1a_sci_20240103_v001.cdf")
     ancillary_in = AncillaryInput("imap_swe_l1b-in-flight-cal_20230101_v001.cdf")
     # Expect ancillary dependencies and science dependencies
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
 
-    assert dependents == expected_processing_input
+    assert dependencies == expected_processing_input.serialize()
 
 
 @patch.object(dependency.DependencyConfig, "_load_dependencies")

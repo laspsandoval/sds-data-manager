@@ -8,11 +8,17 @@ import logging
 import os
 import urllib
 from datetime import datetime
+from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
 import boto3
-from imap_data_access import AncillaryFilePath, ScienceFilePath, processing_input
+import imap_data_access
+from imap_data_access import (
+    SPICEFilePath,
+    processing_input,
+)
+from imap_data_access.processing_input import ProcessingInputCollection
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -71,8 +77,8 @@ def _get_dependencies(dependency_events: dict):
         dependency_response = response.read().decode("utf-8")
         logger.debug(f"Received dependencies: {dependency_response}")
     if "start_date" in url:
-        dependencies = processing_input.ProcessingInputCollection()
-        dependencies.deserialize(dependency_response["body"])
+        dependencies = ProcessingInputCollection()
+        dependencies.deserialize(dependency_response)
     else:
         dependencies = json.loads(dependency_response)
 
@@ -129,7 +135,12 @@ def is_job_in_processing_table(
     return False
 
 
-def try_to_submit_job(job_info, start_date, version, upstream_dependencies):
+def try_to_submit_job(
+    job_info: dict,
+    start_date: datetime,
+    version: str,
+    upstream_dependencies: ProcessingInputCollection,
+):
     """Try to submit a batch job with the given job information.
 
     Go through the job information to retrieve all necessary input files
@@ -174,8 +185,6 @@ def try_to_submit_job(job_info, start_date, version, upstream_dependencies):
                 f"{descriptor}, {start_date_str}, {version}"
             )
             return
-
-        logger.info(f"All dependencies found for the job: {job_info}")
 
         # All of our upstream requirements have been met.
         # Try to insert a record into the Processing Jobs table
@@ -242,10 +251,33 @@ def try_to_submit_job(job_info, start_date, version, upstream_dependencies):
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_jobs(job, start_date, version, trigger_source, end_date=None):
-    """Try to submit job for each file in potential job."""
-    # Find the files that this job depends on
+def submit_all_jobs(
+    job: dict,
+    start_date: datetime,
+    version: str,
+    trigger_source: str,
+    end_date: Optional[datetime] = None,
+):
+    """Submit downstream jobs for each upstream primary science dependency file.
 
+    Parameters
+    ----------
+    job : dict
+        Job information containing data_source, data_type, and descriptor.
+    start_date : datetime
+        The trigger file start date.
+    version : str
+        The trigger file version.
+    trigger_source : str
+        The data_source of the file that triggered the batch starter.
+    end_date : datetime, optional
+        The trigger file end date, by default None.
+
+    Returns
+    -------
+    None
+    """
+    # Find the files that this job depends on
     dependency_event_msg = {
         "data_source": job["data_source"],
         "data_type": job["data_type"],
@@ -260,8 +292,9 @@ def submit_jobs(job, start_date, version, trigger_source, end_date=None):
         dependency_event_msg["end_date"] = end_date
 
     upstream_dependencies = _get_dependencies(dependency_event_msg)
+    logger.info(f"All dependencies found for the job: {job}")
     # Find science processingInputs that have the same source as the potential job
-    for dep in upstream_dependencies.processing_input:
+    for dep in upstream_dependencies.get_science_files():
         if job["data_source"] == dep.source and isinstance(
             dep, processing_input.ScienceInput
         ):
@@ -277,10 +310,16 @@ def submit_jobs(job, start_date, version, trigger_source, end_date=None):
             # That means we need to kick off two swe l1b jobs for dates: "20240312" and
             # "20240313"
             for upstream_file in dep.imap_file_paths:
+                # TODO add function to processingInput to filter for start_date.
                 dep.imap_file_paths = [upstream_file]
-                try_to_submit_job(
-                    job, upstream_file.start_date, version, upstream_dependencies
-                )
+                job_start_date = datetime.strptime(upstream_file.start_date, "%Y%m%d")
+                try_to_submit_job(job, job_start_date, version, upstream_dependencies)
+        # TODO should we break?
+        # For example if the potential job is mag_l1c (dependent on
+        # mag_l1b_norm_20250101 and mag_l1b_burst__20250101), we only want to
+        # kick off one mag l1c_20250101 job once and run it with both
+        # mag_l1b_norm and mag_l1b_burst as dependencies.
+        break
 
 
 def lambda_handler(events: dict, context):
@@ -326,23 +365,13 @@ def lambda_handler(events: dict, context):
         filename = body["detail"]["object"]["key"]
         logger.info(f"Retrieved filename: {filename}")
 
-        # Try to create a science file first
-        # TODO replace with Maxine's factory method
-        try:
-            file_obj = ScienceFilePath(filename)
-        except ScienceFilePath.InvalidScienceFileError as e:
-            logger.error(str(e))
-            try:
-                file_obj = AncillaryFilePath(filename)
-            except AncillaryFilePath.InvalidAncillaryFileError as e:
-                # No science or ancillary file type matched, return an error with the
-                # exception message indicating how to fix it to the user
-                logger.error(str(e))
+        file_obj = imap_data_access.file_validation.generate_imap_file_path(filename)
 
-                file_obj = None
-
-        if file_obj is None:
-            raise ValueError(f"File handling {filename} is not implemented yet")
+        if isinstance(file_obj, SPICEFilePath):
+            raise ValueError(
+                f"Batch starter handling for spice file: {filename} is not "
+                f"implemented yet"
+            )
 
         # TODO: How to handle repointing
 
@@ -367,4 +396,4 @@ def lambda_handler(events: dict, context):
         potential_jobs = _get_dependencies(dependency_event_msg)
 
         for job in potential_jobs:
-            submit_jobs(job, start_date, version, data_type, end_date)
+            submit_all_jobs(job, start_date, version, data_type, end_date)

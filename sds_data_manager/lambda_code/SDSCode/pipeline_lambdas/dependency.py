@@ -388,7 +388,7 @@ def filter_primary_science_dependencies(
         upstream_primary_source = session.execute(query).first()
 
         if not upstream_primary_source:
-            files.append(record.file_path)
+            files.append(basename(record.file_path))
 
     return files
 

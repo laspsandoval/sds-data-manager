@@ -8,6 +8,11 @@ from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError, URLError
 
 import pytest
+from imap_data_access.processing_input import (
+    AncillaryInput,
+    ProcessingInputCollection,
+    ScienceInput,
+)
 from sqlalchemy.exc import IntegrityError
 
 from sds_data_manager.lambda_code.SDSCode.database import models
@@ -44,22 +49,39 @@ def urlopen_side_effect(url):
         mock_dependencies["data_type"] = "l1a"
     elif "l1a" in url and "DOWNSTREAM" in url:
         mock_dependencies["data_type"] = "l1b"
-    elif "l1a" in url and "UPSTREAM" in url:
+    elif "l1a" in url and "UPSTREAM" in url and "start_date" not in url:
         mock_dependencies["data_type"] = "l0"
         mock_dependencies["descriptor"] = "raw"
-    elif "l1b" in url and "UPSTREAM" in url:
+    elif "l1b" in url and "UPSTREAM" in url and "start_date" not in url:
         mock_dependencies["data_type"] = "l1a"
     elif "ancillary" in url and "l1b-in-flight-cal" in url:
         mock_dependencies["data_type"] = "l1b"
+    elif "start_date" in url and "swe" in url and "l1a" in url:
+        science_in = ScienceInput("imap_swe_l0_raw_20240101_v001.pkts")
+        mock_dependencies = ProcessingInputCollection(science_in)
+    elif "start_date" in url and "swe" in url and "l1b" in url:
+        ancillary_in = AncillaryInput(
+            "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
+            "imap_swe_l1b-in-flight-cal_20230101-20240101_v001.cdf",
+        )
+        science_in = ScienceInput(
+            "imap_swe_l1a_sci_20240101_v001.cdf",
+            "imap_swe_l1a_sci_20240102_v001.cdf",
+            "imap_swe_l1a_sci_20240103_v001.cdf",
+        )
+        mock_dependencies = ProcessingInputCollection(science_in, ancillary_in)
     else:
         mock_dependencies = None
 
-    # Return an empty list for "test_lambda_handler_no_dependencies()" test.
-    dep_list = [mock_dependencies] if mock_dependencies else []
-    # Create a mock response object that supports context manager
     mock_response = MagicMock()
     mock_context_manager = MagicMock()
-    mock_response.read.return_value = json.dumps(dep_list).encode("utf-8")
+    if not isinstance(mock_dependencies, ProcessingInputCollection):
+        # Return an empty list for "test_lambda_handler_no_dependencies()" test.
+        dep_list = [mock_dependencies] if mock_dependencies else []
+        # Create a mock response object that supports context manager
+        mock_response.read.return_value = json.dumps(dep_list).encode("utf-8")
+    else:
+        mock_response.read.return_value = mock_dependencies.serialize().encode("utf-8")
 
     # Mock the context manager and return it
     mock_context_manager.__enter__.return_value = mock_response
@@ -98,6 +120,7 @@ def _populate_processing_table(session):
 
 
 def test_lambda_handler(
+    session,
     mock_urlopen: unittest.mock.MagicMock,
 ):
     """Tests ``lambda_handler`` function."""
@@ -110,7 +133,9 @@ def test_lambda_handler(
             }
         ]
     }
-
+    serialized_processing_input = (
+        '[{"type": "science", "files": ["imap_swe_l0_raw_20240101_v001.pkts"]}]'
+    )
     context = {"context": "sample_context"}
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
@@ -121,9 +146,31 @@ def test_lambda_handler(
         # so make sure it is still only called once from our previous iteration.
         lambda_handler(events, context)
         mock_batch_client.submit_job.assert_called_once()
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="swe-l1a-sci-job-1",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-swe",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "swe",
+                    "--data-level",
+                    "l1a",
+                    "--descriptor",
+                    "sci",
+                    "--start-date",
+                    "20240101",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    serialized_processing_input,
+                    "--upload-to-sdc",
+                ]
+            },
+        )
 
 
-def test_lambda_handler_multiple_events(mock_urlopen):
+def test_lambda_handler_multiple_events(session, mock_urlopen):
     """Tests ``lambda_handler`` function with multiple events."""
     # Test Multiple Events:
 
@@ -148,6 +195,7 @@ def test_lambda_handler_multiple_events(mock_urlopen):
 
 
 def test_lambda_handler_ancillary_event(
+    session,
     mock_urlopen: unittest.mock.MagicMock,
 ):
     """Tests ``lambda_handler`` function when triggerd by an ancillary file."""
@@ -169,9 +217,16 @@ def test_lambda_handler_ancillary_event(
         assert mock_batch_client.submit_job.call_count == 3
         # Assert_called_with only works on the last call
         # Check that the last call is what we expect with the corrected
-        serialized_processing_input = (
-            '[{"type": "science", "files": ["imap_swe_l1a_sci_20240103_v001.cdf"]}]'
+        ancillary_in = AncillaryInput(
+            "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
+            "imap_swe_l1b-in-flight-cal_20230101-20240101_v001.cdf",
         )
+        science_in = ScienceInput(
+            "imap_swe_l1a_sci_20240101_v001.cdf",
+            "imap_swe_l1a_sci_20240102_v001.cdf",
+            "imap_swe_l1a_sci_20240103_v001.cdf",
+        )
+        dependencies = ProcessingInputCollection(science_in, ancillary_in)
         mock_batch_client.submit_job.assert_called_with(
             jobName="swe-l1b-sci-job-3",
             jobQueue="ProcessingJobQueue",
@@ -189,7 +244,7 @@ def test_lambda_handler_ancillary_event(
                     "--version",
                     "v001",
                     "--dependency",
-                    serialized_processing_input,
+                    dependencies.serialize(),
                     "--upload-to-sdc",
                 ]
             },
@@ -238,7 +293,8 @@ def test_spice_file():
     # TODO: undo this and add correct tests when it's implemented.
     with pytest.raises(
         ValueError,
-        match="File handling imap_yyyy_doy_yyyy_doy.spin.csv is not implemented yet",
+        match="Batch starter handling for spice file: "
+        "imap_yyyy_doy_yyyy_doy.spin.csv is not implemented yet",
     ):
         lambda_handler(events, context)
 
