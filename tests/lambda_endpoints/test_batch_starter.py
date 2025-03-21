@@ -12,15 +12,12 @@ from sqlalchemy.exc import IntegrityError
 
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
-    AncillaryFiles,
     ProcessingJob,
-    ScienceFiles,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
     IMAPDependencyFinderError,
     _get_dependencies,
-    get_files,
     is_job_in_processing_table,
     lambda_handler,
 )
@@ -84,136 +81,6 @@ def mock_urlopen():
         yield mock_urlopen
 
 
-def _populate_file_catalog(session):
-    """Add records to the ScienceFiles table."""
-    # Setup: Add records to the database
-    test_records = [
-        ScienceFiles(
-            file_path="/path/to/imap_ultra_l2_sci_20240101_v001.cdf",
-            instrument="ultra",
-            data_level="l2",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_hit_l0_raw_20240101_v001.pkts",
-            instrument="hit",
-            data_level="l0",
-            descriptor="raw",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
-            instrument="swe",
-            data_level="l0",
-            descriptor="raw",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        # Add multiple swe l1a records but with different start dates
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240102_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 2),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240103_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 3),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        # Adding files to test for duplicate job
-        ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_de_20240101_v001.cdf",
-            instrument="lo",
-            data_level="l1a",
-            descriptor="de",
-            start_date=datetime(2010, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_sci_20240101_v001.cdf",
-            instrument="lo",
-            data_level="l1a",
-            descriptor="spin",
-            start_date=datetime(2010, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        AncillaryFiles(
-            file_path="/path/to/imap_swe_l1b-in-flight-cal_20240125_v001.cdf",
-            instrument="swe",
-            descriptor="l1b-in-flight-cal",
-            start_date=datetime(2024, 1, 25),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        AncillaryFiles(
-            file_path="/path/to/imap_mag_l1a-cal_20250124-20250126_v002.cdf",
-            instrument="mag",
-            descriptor="l1a-cal",
-            start_date=datetime(2025, 1, 24),
-            end_date=datetime(2025, 1, 26),
-            version="v002",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-    ]
-    session.add_all(test_records)
-    session.commit()
-
-
 def _populate_processing_table(session):
     """Add test data to database."""
     # Add an inprogress record to the processing table
@@ -230,120 +97,10 @@ def _populate_processing_table(session):
     session.commit()
 
 
-def test_get_science_files(session):
-    """Tests the get_file function for science files."""
-    _populate_file_catalog(session)
-
-    record = get_files(
-        session,
-        instrument="ultra",
-        data_type="l2",
-        descriptor="sci",
-        start_date=datetime(2024, 1, 1),
-        version="v001",
-    )[0]
-
-    assert record.instrument == "ultra"
-    assert record.data_level == "l2"
-    assert record.descriptor == "sci"
-    assert record.start_date == datetime(2024, 1, 1)
-    assert record.version == "v001"
-
-    # Non-existent record should return an empty list
-    record = get_files(
-        session,
-        instrument="ultra",
-        data_type="l2",
-        descriptor="sci",
-        start_date=datetime(2010, 1, 1),
-        version="v001",
-    )
-    assert record == []
-
-
-def test_get_science_files_upstream_ancillary(session):
-    """Tests the get_file function for science files dependent on an ancillary file."""
-    _populate_file_catalog(session)
-    # Test with end date
-    # It should return two swe records
-    records_1 = get_files(
-        session,
-        instrument="swe",
-        data_type="l1b",
-        descriptor="sci",
-        start_date=datetime(2024, 1, 1),
-        version="v001",
-        ancillary_upstream=True,
-        end_date=datetime(2024, 1, 2),
-    )
-    assert len(records_1) == 2
-
-    # Test with no end date
-    # It should return three swe records
-    record = get_files(
-        session,
-        instrument="swe",
-        data_type="l1b",
-        descriptor="sci",
-        start_date=datetime(2024, 1, 1),
-        version="v001",
-        ancillary_upstream=True,
-    )
-    assert len(record) == 3
-
-
-def test_get_ancillary_files(session):
-    """Tests the get_file function."""
-    _populate_file_catalog(session)
-
-    record = get_files(
-        session,
-        instrument="swe",
-        data_type="ancillary",
-        descriptor="l1b-in-flight-cal",
-        start_date=datetime(2024, 1, 26),
-        version="v001",
-    )[0]
-
-    assert record.instrument == "swe"
-    assert record.descriptor == "l1b-in-flight-cal"
-    assert record.start_date == datetime(2024, 1, 25)
-    assert record.version == "v001"
-
-    # Get ancillary file covering range
-    start_date = datetime(2025, 1, 25)
-    record = get_files(
-        session,
-        instrument="mag",
-        data_type="ancillary",
-        descriptor="l1a-cal",
-        start_date=start_date,
-        version="v002",
-    )[0]
-    assert record.instrument == "mag"
-    assert record.descriptor == "l1a-cal"
-    assert record.start_date <= start_date
-    assert record.end_date >= start_date
-    assert record.version == "v002"
-    # Non-existent record should an empty list
-    record = get_files(
-        session,
-        instrument="mag",
-        data_type="ancillary",
-        descriptor="l1b-cal",
-        start_date=datetime(2000, 1, 1),
-        version="v001",
-    )
-    assert record == []
-
-
 def test_lambda_handler(
-    session,
     mock_urlopen: unittest.mock.MagicMock,
 ):
     """Tests ``lambda_handler`` function."""
-    _populate_file_catalog(session)
-
     events = {
         "Records": [
             {
@@ -366,10 +123,8 @@ def test_lambda_handler(
         mock_batch_client.submit_job.assert_called_once()
 
 
-def test_lambda_handler_multiple_events(session, mock_urlopen):
+def test_lambda_handler_multiple_events(mock_urlopen):
     """Tests ``lambda_handler`` function with multiple events."""
-    _populate_file_catalog(session)
-
     # Test Multiple Events:
 
     multiple_events = {
@@ -393,12 +148,9 @@ def test_lambda_handler_multiple_events(session, mock_urlopen):
 
 
 def test_lambda_handler_ancillary_event(
-    session,
     mock_urlopen: unittest.mock.MagicMock,
 ):
     """Tests ``lambda_handler`` function when triggerd by an ancillary file."""
-    _populate_file_catalog(session)
-
     events = {
         "Records": [
             {
@@ -449,9 +201,8 @@ def test_lambda_handler_ancillary_event(
         assert mock_batch_client.submit_job.call_count == 3
 
 
-def test_lambda_handler_no_dependencies(session, mock_urlopen):
+def test_lambda_handler_no_dependencies(mock_urlopen):
     """Tests ``lambda_handler`` when there are no dependencies for the file."""
-    _populate_file_catalog(session)
     # Test Multiple Events:
     events = {
         "Records": [
