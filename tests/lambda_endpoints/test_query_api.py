@@ -182,7 +182,7 @@ def test_empty_ingestion_start_date_query(session):
 def test_empty_ingestion_end_date_query(session):
     """Test that an ingestion_end_date query with no matches returns an empty list."""
     _populate_test_data(session)
-    event = {"queryStringParameters": {"ingestion_end_date": "20261101"}}
+    event = {"queryStringParameters": {"ingestion_end_date": "20241101"}}
     expected_response = json.dumps([])
     returned_query = query_api.lambda_handler(event=event, context={})
 
