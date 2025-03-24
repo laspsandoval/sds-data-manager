@@ -183,11 +183,20 @@ def s3_event_handler(event):
             )
 
         sci_params["file_path"] = s3_filepath
-        #ingestion_date_object = get_file_ingestion_date(s3_filepath)
+        # ingestion_date_object = get_file_ingestion_date(s3_filepath)
 
+        # Get ingestion date str
         ingestion_date_str = get_file_ingestion_date(s3_filepath)
-        # Convert string to datetime object
-        ingestion_date_object: datetime = datetime.strptime(ingestion_date_str, "%Y-%m-%d %H:%M:%S%z")
+
+        # convert str to datetime with no hyphens
+        ingestion_date_no_hyphens: datetime = datetime.strptime(
+            ingestion_date_str, "%Y%m%d %H:%M:%S%z"
+        )
+
+        # add hyphens
+        ingestion_date_object = ingestion_date_no_hyphens.strftime(
+            "%Y-%m-%d %H:%M:%S%z"
+        )
 
         sci_params["ingestion_date"] = ingestion_date_object
         with db.Session() as session, session.begin():
@@ -224,9 +233,18 @@ def s3_event_handler(event):
                 )
             anc_params["file_path"] = s3_filepath
 
+            # Get ingestion date str
             ingestion_date_str = get_file_ingestion_date(s3_filepath)
-            # Convert string to datetime object
-            ingestion_date_object: datetime = datetime.strptime(ingestion_date_str, "%Y-%m-%d %H:%M:%S%z")
+
+            # convert str to datetime with no hyphens
+            ingestion_date_no_hyphens: datetime = datetime.strptime(
+                ingestion_date_str, "%Y%m%d %H:%M:%S%z"
+            )
+
+            # add hyphens
+            ingestion_date_object = ingestion_date_no_hyphens.strftime(
+                "%Y-%m-%d %H:%M:%S%z"
+            )
 
             anc_params["ingestion_date"] = ingestion_date_object
             with db.Session() as session, session.begin():
