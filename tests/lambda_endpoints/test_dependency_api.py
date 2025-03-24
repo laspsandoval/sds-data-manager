@@ -171,7 +171,7 @@ def test_get_upstream_ancillary_trigger(session):
     dependencies = dependency_response["body"]
     ancillary_in = AncillaryInput(
         "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
-        "imap_swe_l1b-in-flight-cal_20231231-20240102_v002.cdf",
+        "imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf",
     )
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
     assert dependencies == expected_processing_input.serialize()

@@ -257,7 +257,7 @@ def _populate_file_catalog(session):
             ),
         ),
         AncillaryFiles(
-            file_path="/path/to/imap_swe_l1b-in-flight-cal_20231231-20240102_v002.cdf",
+            file_path="/path/to/imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf",
             instrument="swe",
             descriptor="l1b-in-flight-cal",
             start_date=datetime(2023, 12, 31),

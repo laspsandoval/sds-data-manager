@@ -205,7 +205,7 @@ def test_lambda_handler_ancillary_event(
         # Check that the last call is what we expect with the corrected
         ancillary_in = AncillaryInput(
             "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
-            "imap_swe_l1b-in-flight-cal_20231231-20240102_v002.cdf",
+            "imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf",
         )
         science_in = ScienceInput(
             "imap_swe_l1a_sci_20240103_v001.cdf",
