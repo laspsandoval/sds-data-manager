@@ -29,7 +29,7 @@ def get_file_ingestion_date(file_path):
 
     Returns
     -------
-    file_ingestion_date: datetime.datetime
+    file_ingestion_date: str
         Last modified data of s3 file.
 
     """
@@ -183,7 +183,11 @@ def s3_event_handler(event):
             )
 
         sci_params["file_path"] = s3_filepath
-        ingestion_date_object = get_file_ingestion_date(s3_filepath)
+        #ingestion_date_object = get_file_ingestion_date(s3_filepath)
+
+        ingestion_date_str = get_file_ingestion_date(s3_filepath)
+        # Convert string to datetime object
+        ingestion_date_object: datetime = datetime.strptime(ingestion_date_str, "%Y-%m-%d %H:%M:%S%z")
 
         sci_params["ingestion_date"] = ingestion_date_object
         with db.Session() as session, session.begin():
@@ -219,7 +223,11 @@ def s3_event_handler(event):
                     anc_params.pop("end_date"), "%Y%m%d"
                 )
             anc_params["file_path"] = s3_filepath
-            ingestion_date_object = get_file_ingestion_date(s3_filepath)
+
+            ingestion_date_str = get_file_ingestion_date(s3_filepath)
+            # Convert string to datetime object
+            ingestion_date_object: datetime = datetime.strptime(ingestion_date_str, "%Y-%m-%d %H:%M:%S%z")
+
             anc_params["ingestion_date"] = ingestion_date_object
             with db.Session() as session, session.begin():
                 session.add(models.AncillaryFiles(**anc_params))
