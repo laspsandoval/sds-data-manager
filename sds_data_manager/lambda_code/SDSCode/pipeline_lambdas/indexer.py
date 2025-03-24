@@ -43,9 +43,10 @@ def get_file_ingestion_date(file_path):
     response = s3_client.head_object(Bucket=bucket_name, Key=file_path)
     file_ingestion_date = response["LastModified"]
 
+    file_ingestion_date_formatted = file_ingestion_date.strftime("%Y%m%d %H:%M:%S%z")
     # LastModified looks like this:
-    # 2024-01-25 23:35:26+00:00
-    return file_ingestion_date
+    # 20240125 23:35:26+00:00
+    return file_ingestion_date_formatted
 
 
 def http_response(headers=None, status_code=200, body="Success"):
