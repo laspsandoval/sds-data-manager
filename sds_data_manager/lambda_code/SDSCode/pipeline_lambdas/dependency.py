@@ -453,7 +453,7 @@ def get_dependency_processing_input(
         Dependency files that can include Ancillary, SPICE, or Science inputs
     """
     dependency_inputs = processing_input.ProcessingInputCollection()
-
+    inputs = []
     with db.Session() as session:
         for dep in dependencies:
             # Check if the dependency is a primary science dependency and if the file
@@ -504,9 +504,10 @@ def get_dependency_processing_input(
                     return dependency_inputs
             # Create a processingInput instance and add it to the collection
             if dep["data_type"] == DataType.ANCILLARY:
-                dependency_inputs.add(processing_input.AncillaryInput(*filenames))
+                inputs.append(processing_input.AncillaryInput(*filenames))
             else:
-                dependency_inputs.add(processing_input.ScienceInput(*filenames))
+                inputs.append(processing_input.ScienceInput(*filenames))
+    dependency_inputs.add(inputs)
     return dependency_inputs
 
 
@@ -619,7 +620,7 @@ def get_files(
             # Downstream: swe_l1a_sci
             # Upstream: Look for mag_l1d_sci with start dates less than or equal
             # to 20250102
-            # TODO return a lot of ancillary files with start dates before 20250102
+            # TODO returns a lot of ancillary files with start dates before 20250102
             type_specific_conditions.append(
                 models.ScienceFiles.start_date <= start_date
             )
@@ -761,16 +762,16 @@ def lambda_handler(event, context):
         )
         # TODO this only works for upstream deps right now. Do we need to ever get files
         # for downstream?
-        dependencies = get_dependency_processing_input(
+        dependencies_output = get_dependency_processing_input(
             query_params, dependencies, start_date, version, trigger_source, end_date
         )
 
-        dependencies = dependencies.serialize()
+        dependencies_output = dependencies_output.serialize()
     else:
-        dependencies = json.dumps(dependencies)
+        dependencies_output = json.dumps(dependencies)
 
     # TODO: add reprocessing dependencies are handled here
     return {
         "statusCode": 200,  # Success
-        "body": dependencies,
+        "body": dependencies_output,
     }
