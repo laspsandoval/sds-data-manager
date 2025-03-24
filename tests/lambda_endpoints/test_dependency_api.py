@@ -2,7 +2,6 @@
 
 import json
 from datetime import datetime
-from typing import Optional
 from unittest.mock import patch
 
 import pytest
@@ -12,190 +11,9 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
-from sds_data_manager.lambda_code.SDSCode.database.models import (
-    AncillaryFiles,
-    ScienceFiles,
-)
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
-
-
-def create_event(
-    source: str,
-    data_type: str,
-    descriptor="sci",
-    dep_type: str = "DOWNSTREAM",
-    relationship: str = "HARD",
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    version: Optional[str] = None,
-    trigger_source: Optional[str] = None,
-):
-    """Create event dictionaries for tests."""
-    event = {
-        "queryStringParameters": {
-            "dependency_type": dep_type,
-            "relationship": relationship,
-            "data_source": source,
-            "data_type": data_type,
-            "descriptor": descriptor,
-        }
-    }
-    optional_params = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "version": version,
-        "trigger_source": trigger_source,
-    }
-    for param, val in optional_params.items():
-        if val:
-            event["queryStringParameters"][param] = val
-
-    return event
-
-
-def _populate_file_catalog(session):
-    """Add records to the ScienceFiles table."""
-    # Setup: Add records to the database
-    test_records = [
-        ScienceFiles(
-            file_path="/path/to/imap_ultra_l2_sci_20240101_v001.cdf",
-            instrument="ultra",
-            data_level="l2",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_hit_l0_raw_20240101_v001.pkts",
-            instrument="hit",
-            data_level="l0",
-            descriptor="raw",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
-            instrument="swe",
-            data_level="l0",
-            descriptor="raw",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 1),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        # Add multiple swe l1a records but with different start dates
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240102_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 2),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240103_v001.cdf",
-            instrument="swe",
-            data_level="l1a",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 3),
-            version="v001",
-            extension="pkts",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        # Adding a downstream swe l1b file that depends on the science file above
-        ScienceFiles(
-            file_path="/path/to/imap_swe_l1b_sci_20240102_v001.cdf",
-            instrument="swe",
-            data_level="l1b",
-            descriptor="sci",
-            start_date=datetime(2024, 1, 2),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        # Adding files to test for duplicate job
-        ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_de_20240101_v001.cdf",
-            instrument="lo",
-            data_level="l1a",
-            descriptor="de",
-            start_date=datetime(2010, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_sci_20240101_v001.cdf",
-            instrument="lo",
-            data_level="l1a",
-            descriptor="spin",
-            start_date=datetime(2010, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        AncillaryFiles(
-            file_path="/path/to/imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
-            instrument="swe",
-            descriptor="l1b-in-flight-cal",
-            start_date=datetime(2023, 1, 1),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-        AncillaryFiles(
-            file_path="/path/to/imap_swe_l1b-in-flight-cal_20231231-20240102_v002.cdf",
-            instrument="swe",
-            descriptor="l1b-in-flight-cal",
-            start_date=datetime(2023, 12, 31),
-            end_date=datetime(2024, 1, 2),
-            version="v001",
-            extension="cdf",
-            ingestion_date=datetime.strptime(
-                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-            ),
-        ),
-    ]
-    session.add_all(test_records)
-    session.commit()
-
+from tests.conftest import _populate_file_catalog, create_dependency_api_event
 
 #####################################
 # ERROR STATUS CODE TESTS
@@ -244,13 +62,13 @@ def test_lambda_handler_invalid_dependency_type(mock_get_dependencies):
 
 def test_missing_dependency(session):
     """Test that 206 error is returned."""
-    event = create_event(
+    event = create_dependency_api_event(
         "swe", "l1b", start_date="20240104", version="v001", trigger_source="ancillary"
     )
     dependency_response = dependency.lambda_handler(event, None)
 
-    assert dependency_response["statusCode"] == 206
-    assert dependency_response["body"] == ("At least one dependency is missing.")
+    assert dependency_response["statusCode"] == 200
+    assert dependency_response["body"] == "[]"
 
 
 def test_missing_required_params():
@@ -285,7 +103,7 @@ def test_missing_required_params():
 #####################################
 def test_get_downstream_dependencies():
     """Tests get_downstream_dependencies function."""
-    event = create_event("hit", "l1a", "counts")
+    event = create_dependency_api_event("hit", "l1a", "counts")
 
     dependency_response = dependency.lambda_handler(event, None)
     dependents = json.loads(dependency_response["body"])
@@ -302,7 +120,7 @@ def test_get_downstream_dependencies():
     assert dependents == expected_complete_dependent
 
     # Add test for getting back ancillary dependency
-    event = create_event("swe", "l1b", dep_type="UPSTREAM")
+    event = create_dependency_api_event("swe", "l1b", dep_type="UPSTREAM")
     dependency_response = dependency.lambda_handler(event, None)
     dependents = json.loads(dependency_response["body"])
 
@@ -325,7 +143,7 @@ def test_get_downstream_dependencies():
 def test_get_upstream_ancillary_trigger(session):
     """Tests get upstream dependencies with an ancillary trigger source."""
     _populate_file_catalog(session)
-    event = create_event(
+    event = create_dependency_api_event(
         "swe",
         "l1b",
         dep_type="UPSTREAM",
@@ -362,7 +180,7 @@ def test_get_upstream_ancillary_trigger(session):
 def test_get_upstream_science_trigger(session):
     """Tests get upstream dependencies with a science file as the trigger source."""
     _populate_file_catalog(session)
-    event = create_event(
+    event = create_dependency_api_event(
         "swe",
         "l1b",
         dep_type="UPSTREAM",

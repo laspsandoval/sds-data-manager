@@ -481,7 +481,7 @@ def get_dependency_processing_input(
                 primary_sci_dep,
             )
             if not records:
-                return None
+                continue
             filenames = [basename(record.file_path) for record in records]
             # If this is a primary science dependency, filter files for ones that have a
             # downstream counterpart that needs to be processed.
@@ -501,7 +501,7 @@ def get_dependency_processing_input(
                     session, records, query["data_type"]
                 )
                 if not filenames:
-                    return None
+                    continue
             # Create a processingInput instance and add it to the collection
             if dep["data_type"] == DataType.ANCILLARY:
                 dependency_inputs.add(processing_input.AncillaryInput(*filenames))
@@ -732,9 +732,12 @@ def lambda_handler(event, context):
             "body": "Failed to load dependencies",
         }
     # If start_date is supplied, check for the version and end_date.
-    if "start_date" in query_params:
-        start_date = datetime.strptime(query_params["start_date"], "%Y%m%d")
-
+    start_date = (
+        datetime.strptime(query_params["start_date"], "%Y%m%d")
+        if query_params.get("start_date")
+        else None
+    )
+    if start_date:
         version = query_params.get("version")
         if not version:
             return {
@@ -761,11 +764,7 @@ def lambda_handler(event, context):
         dependencies = get_dependency_processing_input(
             query_params, dependencies, start_date, version, trigger_source, end_date
         )
-        if not dependencies:
-            return {
-                "statusCode": 206,  # Partial content
-                "body": "At least one dependency is missing.",
-            }
+
         dependencies = dependencies.serialize()
     else:
         dependencies = json.dumps(dependencies)

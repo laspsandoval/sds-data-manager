@@ -76,6 +76,8 @@ def _get_dependencies(dependency_events: dict):
         # information
         dependency_response = response.read().decode("utf-8")
         logger.debug(f"Received dependencies: {dependency_response}")
+    # If start_date is supplied, the dependency api will return a serialized
+    # ProcessingInputCollection instance.
     if "start_date" in url:
         dependencies = ProcessingInputCollection()
         dependencies.deserialize(dependency_response)
@@ -292,6 +294,18 @@ def submit_all_jobs(
         dependency_event_msg["end_date"] = end_date
 
     upstream_dependencies = _get_dependencies(dependency_event_msg)
+    if not upstream_dependencies.processing_input:
+        logger.info(
+            f"Upstream dependency not found: {job['data_source']}, "
+            f"{job['data_type']}, "
+            f"{job['descriptor']}, "
+            f"{start_date}, "
+            f"{end_date}, "
+            f"{trigger_source}, "
+            f"{version}"
+        )
+        return  # Exit the loop early
+
     logger.info(f"All dependencies found for the job: {job}")
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_files():
@@ -312,6 +326,7 @@ def submit_all_jobs(
             for upstream_file in dep.imap_file_paths:
                 # TODO add function to processingInput to filter for start_date.
                 dep.imap_file_paths = [upstream_file]
+                dep.filename_list = [str(upstream_file.filename)]
                 job_start_date = datetime.strptime(upstream_file.start_date, "%Y%m%d")
                 try_to_submit_job(job, job_start_date, version, upstream_dependencies)
         # TODO should we break?
