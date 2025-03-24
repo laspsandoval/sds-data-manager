@@ -481,7 +481,7 @@ def get_dependency_processing_input(
                 primary_sci_dep,
             )
             if not records:
-                continue
+                return dependency_inputs
             filenames = [basename(record.file_path) for record in records]
             # If this is a primary science dependency, filter files for ones that have a
             # downstream counterpart that needs to be processed.
@@ -501,7 +501,7 @@ def get_dependency_processing_input(
                     session, records, query["data_type"]
                 )
                 if not filenames:
-                    continue
+                    return dependency_inputs
             # Create a processingInput instance and add it to the collection
             if dep["data_type"] == DataType.ANCILLARY:
                 dependency_inputs.add(processing_input.AncillaryInput(*filenames))

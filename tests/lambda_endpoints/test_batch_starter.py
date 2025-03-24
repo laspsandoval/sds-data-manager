@@ -278,7 +278,7 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
         lambda_handler(events, context)
         # Verify the info statement was logged.
         assert any(
-            "Upstream dependency not found: swe, l2, sci, 20000101, None, l1b, v001"
+            "Upstream dependency not found for: swe, l2, sci, 20000101, None, l1b, v001"
             in message
             for message in caplog.text.splitlines()
         )

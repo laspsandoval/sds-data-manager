@@ -296,7 +296,7 @@ def submit_all_jobs(
     upstream_dependencies = _get_dependencies(dependency_event_msg)
     if not upstream_dependencies.processing_input:
         logger.info(
-            f"Upstream dependency not found: {job['data_source']}, "
+            f"Upstream dependency not found for: {job['data_source']}, "
             f"{job['data_type']}, "
             f"{job['descriptor']}, "
             f"{start_date}, "
