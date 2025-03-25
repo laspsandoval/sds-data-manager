@@ -237,9 +237,33 @@ def _populate_file_catalog(session):
             file_path="/path/to/imap_lo_l1a_sci_20240101_v001.cdf",
             instrument="lo",
             data_level="l1a",
-            descriptor="spin",
+            descriptor="sci",
             start_date=datetime(2010, 1, 1),
             version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ScienceFiles(
+            file_path="/path/to/imap_lo_l1a_sci_20240101_v002.cdf",
+            instrument="lo",
+            data_level="l1a",
+            descriptor="sci",
+            start_date=datetime(2010, 1, 1),
+            version="v002",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ScienceFiles(
+            file_path="/path/to/imap_lo_l1a_sci_20240102_v002.cdf",
+            instrument="lo",
+            data_level="l1a",
+            descriptor="sci",
+            start_date=datetime(2010, 1, 2),
+            version="v003",
             extension="cdf",
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"

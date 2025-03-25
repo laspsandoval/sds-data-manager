@@ -342,3 +342,47 @@ def test_get_exact_date_science_files(session):
     assert record.descriptor == "sci"
     assert record.start_date == datetime(2024, 1, 1)
     assert record.version == "v001"
+
+
+def test_get_files_exact_version(session):
+    """Test get_files returns the exact version."""
+    _populate_file_catalog(session)
+    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
+    record = get_files(
+        session,
+        dependency=dep,
+        start_date=datetime(2010, 1, 1),
+        version="v001",
+        exact_science_date=True,
+    )
+
+    assert len(record) == 1
+    record = record[0]
+    assert record.instrument == "lo"
+    assert record.descriptor == "sci"
+    assert record.start_date == datetime(2010, 1, 1)
+    assert record.version == "v001"
+
+
+def test_get_files_latest_version(session):
+    """Test get_files returns the latest version."""
+    _populate_file_catalog(session)
+    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
+    records = get_files(
+        session,
+        dependency=dep,
+        start_date=datetime(2010, 1, 2),
+        version="v001",
+        exact_science_date=False,
+    )
+
+    assert len(records) == 2
+
+    for record in records:
+        assert record.instrument == "lo"
+        assert record.descriptor == "sci"
+
+    assert records[0].start_date == datetime(2010, 1, 1)
+    assert records[1].start_date == datetime(2010, 1, 2)
+    assert records[0].version == "v002"
+    assert records[1].version == "v003"

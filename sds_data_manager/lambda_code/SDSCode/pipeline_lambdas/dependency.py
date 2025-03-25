@@ -11,7 +11,7 @@ from typing import Optional
 
 import imap_data_access
 from imap_data_access import processing_input
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from ..database import database as db
 from ..database import models
@@ -551,8 +551,6 @@ def get_files(
         When False, treat science files from different sources like ancillary files
         Look for science files with start_date <= query start_date.
 
-
-
     Returns
     -------
     records : list[Union[models.ScienceFiles, models.AncillaryFiles]]
@@ -577,13 +575,17 @@ def get_files(
         table = models.ScienceFiles
         type_specific_conditions.append(table.data_level == dependency["data_type"])
         if exact_science_date:
-            # Query for science files matching the start date
+            # Query for science files matching the start date and version
             # Example:
             # Trigger source: swe_l0_raw_20250102_v001.pkts
             # Downstream: swe_l1a_sci
-            # Upstream: Look for swe_l0_raw with start date == 20250102.
-            type_specific_conditions.append(
-                models.ScienceFiles.start_date == start_date
+            # Upstream: Look for swe_l0_raw with start date == 20250102 and
+            # version == v001
+            type_specific_conditions.extend(
+                [
+                    models.ScienceFiles.start_date == start_date,
+                    table.version == version,
+                ]
             )
         elif end_date:
             # Find files that are downstream from an ancillary file
@@ -628,11 +630,29 @@ def get_files(
     filter_conditions = [
         table.instrument == dependency["data_source"],
         table.descriptor == dependency["descriptor"],
-        table.version == version,
+        # table.version == version,
         *type_specific_conditions,
     ]
 
-    records = session.query(table).filter(*filter_conditions).all()
+    # Create a subquery that makes a column with the max version grouped by start_date
+    subquery = (
+        session.query(table.start_date, func.max(table.version).label("latest_version"))
+        .filter(*filter_conditions)
+        .group_by(table.start_date)
+        .subquery()
+    )
+
+    # Join subquery and select only the files with the latest version per grouping
+    records = (
+        session.query(table)
+        .join(
+            subquery,
+            (table.start_date == subquery.c.start_date)
+            & (table.version == subquery.c.latest_version),
+        )
+        .filter(*filter_conditions)
+        .all()
+    )
 
     return records
 

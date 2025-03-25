@@ -328,7 +328,11 @@ def submit_all_jobs(
                 dep.imap_file_paths = [upstream_file]
                 dep.filename_list = [str(upstream_file.filename)]
                 job_start_date = datetime.strptime(upstream_file.start_date, "%Y%m%d")
-                try_to_submit_job(job, job_start_date, version, upstream_dependencies)
+                job_version = upstream_file.version
+                # TODO when do we bump version?
+                try_to_submit_job(
+                    job, job_start_date, job_version, upstream_dependencies
+                )
         # TODO should we break?
         # For example if the potential job is mag_l1c (dependent on
         # mag_l1b_norm_20250101 and mag_l1b_burst__20250101), we only want to
@@ -412,3 +416,22 @@ def lambda_handler(events: dict, context):
 
         for job in potential_jobs:
             submit_all_jobs(job, start_date, version, data_type, end_date)
+
+
+# TODO version
+"""
+CASE 1. New instrument ancillary : e.g mag_l1a_sci
+ - look downstream -> swe_l1a_sci
+ - look upstream ->
+            - primary dep (swe l0) =  get latest
+            - instrument ancillary upstream = get latest
+            - ancillary upstream = get latest
+- use latest version from primary dep
+
+CASE 2. Primary dep trigger : e.g mag_l1a_sci
+
+
+
+if version == "latest":
+del query_params["version"]
+"""
