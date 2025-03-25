@@ -41,12 +41,18 @@ def get_file_ingestion_date(file_path):
     logger.info(f"looking up ingestion date for {file_path}")
 
     response = s3_client.head_object(Bucket=bucket_name, Key=file_path)
+    # get date time object
     file_ingestion_date = response["LastModified"]
-
+    # format datetime object as a string
     file_ingestion_date_formatted = file_ingestion_date.strftime("%Y%m%d %H:%M:%S%z")
+    # convert back to datetime object
+    ingestion_date_object = datetime.strptime(
+        file_ingestion_date_formatted, "%Y%m%d %H:%M:%S%z"
+    )
+
     # LastModified looks like this:
     # 20240125 23:35:26+00:00
-    return file_ingestion_date_formatted
+    return ingestion_date_object
 
 
 def http_response(headers=None, status_code=200, body="Success"):
@@ -183,20 +189,7 @@ def s3_event_handler(event):
             )
 
         sci_params["file_path"] = s3_filepath
-        # ingestion_date_object = get_file_ingestion_date(s3_filepath)
-
-        # Get ingestion date str
-        ingestion_date_str = get_file_ingestion_date(s3_filepath)
-
-        # convert str to datetime with no hyphens
-        ingestion_date_no_hyphens: datetime = datetime.strptime(
-            ingestion_date_str, "%Y%m%d %H:%M:%S%z"
-        )
-
-        # add hyphens
-        ingestion_date_object = ingestion_date_no_hyphens.strftime(
-            "%Y-%m-%d %H:%M:%S%z"
-        )
+        ingestion_date_object = get_file_ingestion_date(s3_filepath)
 
         sci_params["ingestion_date"] = ingestion_date_object
         with db.Session() as session, session.begin():
@@ -233,18 +226,7 @@ def s3_event_handler(event):
                 )
             anc_params["file_path"] = s3_filepath
 
-            # Get ingestion date str
-            ingestion_date_str = get_file_ingestion_date(s3_filepath)
-
-            # convert str to datetime with no hyphens
-            ingestion_date_no_hyphens: datetime = datetime.strptime(
-                ingestion_date_str, "%Y%m%d %H:%M:%S%z"
-            )
-
-            # add hyphens
-            ingestion_date_object = ingestion_date_no_hyphens.strftime(
-                "%Y-%m-%d %H:%M:%S%z"
-            )
+            ingestion_date_object = get_file_ingestion_date(s3_filepath)
 
             anc_params["ingestion_date"] = ingestion_date_object
             with db.Session() as session, session.begin():
