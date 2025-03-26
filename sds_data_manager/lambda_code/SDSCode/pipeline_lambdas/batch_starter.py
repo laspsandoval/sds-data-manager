@@ -90,8 +90,8 @@ def _get_dependencies(dependency_events: dict):
 def is_job_in_processing_table(
     session: db.Session,
     instrument: str,
-    descriptor: str,
     data_level: str,
+    descriptor: str,
     start_date: datetime,
     version: str,
 ):
@@ -103,10 +103,10 @@ def is_job_in_processing_table(
         Database session.
     instrument : str
         Instrument.
-    descriptor : str
-        Data descriptor.
     data_level : str
         Data level.
+    descriptor : str
+        Data descriptor.
     start_date : datetime
         Start date.
     version : str
@@ -295,15 +295,7 @@ def submit_all_jobs(
 
     upstream_dependencies = _get_dependencies(dependency_event_msg)
     if not upstream_dependencies.processing_input:
-        logger.info(
-            f"Upstream dependency not found for: {job['data_source']}, "
-            f"{job['data_type']}, "
-            f"{job['descriptor']}, "
-            f"{start_date}, "
-            f"{end_date}, "
-            f"{trigger_source}, "
-            f"{version}"
-        )
+        logger.info(f"Upstream dependency not found for: {dependency_event_msg}")
         return  # Exit the loop early
 
     logger.info(f"All dependencies found for the job: {job}")
@@ -333,12 +325,6 @@ def submit_all_jobs(
                 try_to_submit_job(
                     job, job_start_date, job_version, upstream_dependencies
                 )
-        # TODO should we break?
-        # For example if the potential job is mag_l1c (dependent on
-        # mag_l1b_norm_20250101 and mag_l1b_burst__20250101), we only want to
-        # kick off one mag l1c_20250101 job once and run it with both
-        # mag_l1b_norm and mag_l1b_burst as dependencies.
-        break
 
 
 def lambda_handler(events: dict, context):
@@ -416,22 +402,3 @@ def lambda_handler(events: dict, context):
 
         for job in potential_jobs:
             submit_all_jobs(job, start_date, version, data_type, end_date)
-
-
-# TODO version
-"""
-CASE 1. New instrument ancillary : e.g mag_l1a_sci
- - look downstream -> swe_l1a_sci
- - look upstream ->
-            - primary dep (swe l0) =  get latest
-            - instrument ancillary upstream = get latest
-            - ancillary upstream = get latest
-- use latest version from primary dep
-
-CASE 2. Primary dep trigger : e.g mag_l1a_sci
-
-
-
-if version == "latest":
-del query_params["version"]
-"""

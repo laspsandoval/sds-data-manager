@@ -60,15 +60,15 @@ class DataSource:
         ]
 
 
-def valid_science(data_type) -> bool:
-    """Check if data_type is in valid data levels.
+def valid_science(data_level) -> bool:
+    """Check if data_level is a valid data level.
 
     Returns
     -------
     bool
-        True if the data_type is in VALID_DATALEVELS.
+        True if the data_level is in VALID_DATALEVELS.
     """
-    return data_type in [*imap_data_access.VALID_DATALEVELS]
+    return data_level in [*imap_data_access.VALID_DATALEVELS]
 
 
 @dataclass
@@ -393,7 +393,7 @@ def filter_primary_science_dependencies(
     return files
 
 
-def primary_science_dep(query: dict, dependency: dict) -> bool:
+def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     """Check if the dependency is a primary science dependency.
 
     A primary science dependency exists when both the upstream and downstream
@@ -401,8 +401,8 @@ def primary_science_dep(query: dict, dependency: dict) -> bool:
 
     Parameters
     ----------
-    query : dict
-        The dependency from the api call.
+    query_params : dict
+        Query parameters received from API calls.
     dependency : dict
        Upstream or downstream dependency from the query.
 
@@ -414,16 +414,17 @@ def primary_science_dep(query: dict, dependency: dict) -> bool:
     Examples
     --------
     swe_l1b_sci is a primary science dependency of swe_l1a_sci.
+    mag_l1c_norm-mago is a primary science dependency of mag_l1b_norm-burst.
     """
     return (
-        query["data_source"] == dependency["data_source"]
+        query_params["data_source"] == dependency["data_source"]
         and valid_science(dependency["data_type"])
-        and valid_science(query["data_type"])
+        and valid_science(query_params["data_type"])
     )
 
 
 def get_dependency_processing_input(
-    query: dict,
+    query_params: dict,
     dependencies: list,
     start_date: datetime,
     version: str,
@@ -434,8 +435,8 @@ def get_dependency_processing_input(
 
     Parameters
     ----------
-    query : dict
-        Api query.
+    query_params : dict
+        Query parameters received from API calls.
     dependencies : list
         List of dependency dicts
     start_date : datetime
@@ -466,7 +467,7 @@ def get_dependency_processing_input(
             # science files from a different source) or SPICE, the exact start date
             # cannot be used to find the science file because the dates are not
             # guaranteed to correspond.
-            primary_sci_dep = primary_science_dep(query, dep)
+            primary_sci_dep = primary_science_dep(query_params, dep)
             if primary_sci_dep and trigger_source == dep["data_type"]:
                 exact_start_time = True
             else:
@@ -498,7 +499,7 @@ def get_dependency_processing_input(
             # table. If the file already exists, the l1a file is ignored.
             if primary_sci_dep:
                 filenames = filter_primary_science_dependencies(
-                    session, records, query["data_type"]
+                    session, records, query_params["data_type"]
                 )
                 if not filenames:
                     return dependency_inputs
@@ -541,9 +542,9 @@ def get_files(
     end_date: datetime, optional
         End date of the event data.
     exact_science_date: bool, optional
-        When True, query for science files with a match to the start time. It is assumed
-        that the dependency is a primary science dependency and the trigger source is of
-        the same data_source. Default is False.
+        When True, query for science files with a match to the start time because it is
+        assumed that the dependency is a primary science dependency and the trigger
+        source is of the same data_source. Default is False.
     primary_sci_dep : bool, optional
         Controls how science files are queried based on their start dates.
         When True, it is assumed that the query file is a primary science dependency.
@@ -630,10 +631,9 @@ def get_files(
     filter_conditions = [
         table.instrument == dependency["data_source"],
         table.descriptor == dependency["descriptor"],
-        # table.version == version,
         *type_specific_conditions,
     ]
-
+    # TODO check if version is supplied - otherwise get latest.
     # Create a subquery that makes a column with the max version grouped by start_date
     subquery = (
         session.query(table.start_date, func.max(table.version).label("latest_version"))
@@ -705,7 +705,7 @@ def lambda_handler(event, context):
                     "descriptor": "historical",
                 },
             ]
-        If "start_date" is supplied "version" and "ancillary_trigger" are required and
+        If "start_date" is supplied, "version" and "ancillary_trigger" are required and
         "end_date" is optional. Return a ProcessingInputCollection of files that exist
         on s3.
             [

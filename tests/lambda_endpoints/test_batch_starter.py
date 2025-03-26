@@ -32,8 +32,11 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import 
     lambda_handler,
 )
 
-from ..conftest import _populate_file_catalog, create_dependency_api_event
-from .conftest import POSTGRES_AVAILABLE
+from .conftest import (
+    POSTGRES_AVAILABLE,
+    _populate_file_catalog,
+    create_dependency_api_event,
+)
 
 
 def urlopen_side_effect(url):
@@ -235,9 +238,10 @@ def test_lambda_handler_ancillary_event(
         )
         # Submit a second job with the same file as input which will try to kick
         # off a duplicate job. We expect the submit_job method to not be called
-        # so make sure it is still only called three times from our previous iteration.
+        # so make sure it is still only called two times from our previous iteration.
+        mock_batch_client.submit_job.call_count = 0
         lambda_handler(events, context)
-        assert mock_batch_client.submit_job.call_count == 2
+        assert mock_batch_client.submit_job.call_count == 0
 
 
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
@@ -276,12 +280,14 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
     context = {"context": "sample_context"}
     with caplog.at_level(logging.DEBUG):
         lambda_handler(events, context)
-        # Verify the info statement was logged.
-        assert any(
-            "Upstream dependency not found for: swe, l2, sci, 20000101, None, l1b, v001"
-            in message
-            for message in caplog.text.splitlines()
+        log_str = (
+            "Upstream dependency not found for: {'data_source': "
+            "'swe', 'data_type': 'l2', 'descriptor': 'sci', 'dependency_type': "
+            "'UPSTREAM', 'relationship': 'HARD', 'start_date': '20000101', "
+            "'version': 'v001', 'trigger_source': 'l1b'}"
         )
+        # Verify the info statement was logged.
+        assert log_str in caplog.text
 
 
 def test_spice_file():

@@ -164,7 +164,6 @@ def s3_event_handler(event):
         #     "data_level": self.data_level,
         #     "descriptor": self.descriptor,
         #     "start_date": datetime.strptime(self.startdate, "%Y%m%d"),
-        #     "end_date": datetime.strptime(self.enddate, "%Y%m%d"),
         #     "repointing": self.repointing,
         #     "version": self.version,
         #     "extension": self.extension,

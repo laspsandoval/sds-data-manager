@@ -13,7 +13,10 @@ from imap_data_access.processing_input import (
 
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
-from tests.conftest import _populate_file_catalog, create_dependency_api_event
+from tests.lambda_endpoints.conftest import (
+    _populate_file_catalog,
+    create_dependency_api_event,
+)
 
 #####################################
 # ERROR STATUS CODE TESTS
