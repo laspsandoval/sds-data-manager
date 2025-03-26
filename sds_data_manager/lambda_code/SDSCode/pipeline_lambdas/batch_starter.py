@@ -100,6 +100,10 @@ def _get_dependencies(dependency_events: dict):
         # Retrieve the response as a list of dictionaries containing the dependency
         # information
         dependency_response = response.read().decode("utf-8")
+        # Check for a 206 status code
+        if response.status == 206:
+            logger.info(f"Partial content received: {dependency_response}")
+            return None
         logger.debug(f"Received dependencies: {dependency_response}")
     # The API returns different output formats depending on the query parameters:
     # Without "start_date": Returns a list of dependency dictionaries.
@@ -122,6 +126,7 @@ def is_job_in_processing_table(
     descriptor: str,
     start_date: datetime,
     version: str,
+    only_in_progress: bool = False,
 ):
     """Check if the job is already running.
 
@@ -139,12 +144,19 @@ def is_job_in_processing_table(
         Start date.
     version : str
         Data version.
+    only_in_progress : str
+        Check only jobs that are in progress.
 
     Returns
     -------
     bool
         True if a duplicate job is found, False otherwise.
     """
+    # if only_in_progress:
+    #     status_clause = models.ProcessingJob.status.in_(
+    #         [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value])
+    # else:
+    #     status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
     # check in the processing table if the job is already in progress
     # for this instrument, data level, version, and descriptor
     query = select(models.ProcessingJob.__table__).where(
@@ -311,28 +323,58 @@ def submit_all_jobs(
     None
     """
     # Find the files that this job depends on
-    dependency_event_msg = {
+    base_event_msg = {
         "data_source": job["data_source"],
         "data_type": job["data_type"],
         "descriptor": job["descriptor"],
         "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
+        "relationship": "SOFT",
+    }
+    dependency_event_msg = base_event_msg | {
         "start_date": start_date,
         "version": version,
         "trigger_type": trigger_type,
     }
+
     if end_date:
         dependency_event_msg["end_date"] = end_date
 
+    dependency_event_msg["relationship"] = "HARD"
     upstream_dependencies = _get_dependencies(dependency_event_msg)
-    if not upstream_dependencies.processing_input:
-        logger.info(
-            f"Upstream dependency not found, or downstream dependency "
-            f"already exists for: {dependency_event_msg}"
-        )
+
+    # If neither soft nor hard dependencies are found, return.
+    if not upstream_dependencies:
+        logger.info(f"Upstream dependency not found for: {dependency_event_msg}")
         return
 
-    logger.info(f"All dependencies found for the job: {job}")
+    logger.info(f"All required dependencies found for the job: {job}")
+    # Get soft dependencies if they are available
+    all_soft_upstream_dependencies = _get_dependencies(base_event_msg)
+    # For each missing soft dependency, check if it is currently processing.
+    # If the job has been submitted, then return and let that file trigger the job.
+    for dep in all_soft_upstream_dependencies:
+        # Check only science
+        if dep["data_type"] not in ["spice", "ancillary"]:
+            if is_job_in_processing_table(
+                session,
+                dep["data_source"],
+                dep["descriptor"],
+                # TODO fix start_date and version check
+                dep["data_type"],
+                start_date,
+                version,
+                only_in_progress=True,
+            ):
+                logger.info(
+                    f"Soft dependency {dep} is currently processing. Job will be"
+                    " triggered when dependency processing completes and file is "
+                    "available in S3."
+                )
+                return
+
+    existing_soft_upstream_dependencies = _get_dependencies(dependency_event_msg)
+    # Combine soft and hard dependencies
+    upstream_dependencies.add(existing_soft_upstream_dependencies.processing_input)
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_inputs():
         if job["data_source"] == dep.source and isinstance(
@@ -347,8 +389,8 @@ def submit_all_jobs(
             #     "files": [
             #         "imap_swe_l1a_sci_20240312_v001.cdf",
             #         "imap_swe_l1a_sci_20240313_v001.cdf" ]}
-            # That means we need to kick off two swe l1b jobs for dates: "20240312" and
-            # "20240313"
+            # That means we need to kick off two swe l1b jobs for dates: "20240312"
+            # and "20240313".
             for upstream_file in dep.imap_file_paths:
                 # TODO add function to processingInput to filter for start_date.
                 dep.imap_file_paths = [upstream_file]
@@ -434,10 +476,10 @@ def lambda_handler(events: dict, context):
         # which are the downstream dependencies.
         potential_jobs = _get_dependencies(dependency_event_msg)
 
-        if not potential_jobs:
-            logger.info(f"Found no dependencies for {dependency_event_msg}.")
-            continue
+        # SOFT dependencies will try to set off processing
+        dependency_event_msg["relationship"] = "SOFT"
+        potential_soft_jobs = _get_dependencies(dependency_event_msg)
 
-        with db.Session() as session:
-            for job in potential_jobs:
+        with db.Session as session:
+            for job in potential_jobs + potential_soft_jobs:
                 submit_all_jobs(session, job, start_date, version, data_type, end_date)

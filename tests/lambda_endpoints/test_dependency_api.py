@@ -70,8 +70,33 @@ def test_missing_dependency(session):
     )
     dependency_response = dependency.lambda_handler(event, None)
 
-    assert dependency_response["statusCode"] == 200
-    assert dependency_response["body"] == "[]"
+    assert dependency_response["statusCode"] == 206
+    assert dependency_response["body"] == "At least one dependency is missing."
+
+
+def test_soft_dependencies(session):
+    """Test that correct soft dependencies are returned."""
+    _populate_file_catalog(session)
+    event = create_dependency_api_event(
+        "mag",
+        "l1c",
+        descriptor="norm-mago",
+        start_date="20240101",
+        version="v001",
+        trigger_source="l1b",
+        relationship="SOFT",
+        dep_type="UPSTREAM",
+    )
+    dependency_response = dependency.lambda_handler(event, None)
+    dependencies = dependency_response["body"]
+    # There should be two science inputs: one for mag_l1b_burst-mago and
+    # mag_l1b_norm-mago
+    # Expect ancillary dependencies and science dependencies
+    expected_processing_input = ProcessingInputCollection(
+        ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf"),
+        ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
+    )
+    assert dependencies == expected_processing_input.serialize()
 
 
 def test_missing_required_params():
@@ -245,26 +270,26 @@ def test_get_primary_science_files(session):
     """Tests the get_file function for science files."""
     _populate_file_catalog(session)
 
-    dep = {"data_source": "ultra", "data_type": "l2", "descriptor": "sci"}
+    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
     record = get_files(
         session,
         dependency=dep,
-        start_date=datetime(2024, 1, 1),
-        version="v001",
+        start_date=datetime(2010, 1, 2),
+        version="v003",
         primary_sci_dep=True,
     )[0]
 
-    assert record.instrument == "ultra"
-    assert record.data_level == "l2"
+    assert record.instrument == "lo"
+    assert record.data_level == "l1a"
     assert record.descriptor == "sci"
-    assert record.start_date == datetime(2024, 1, 1)
-    assert record.version == "v001"
+    assert record.start_date == datetime(2010, 1, 2)
+    assert record.version == "v003"
 
     # Non-existent record should return an empty list
     record = get_files(
         session,
         dependency=dep,
-        start_date=datetime(2010, 1, 1),
+        start_date=datetime(2009, 1, 5),
         version="v001",
     )
     assert record == []

@@ -66,10 +66,11 @@ def urlopen_side_effect(url):
         params.get("trigger_type", [None])[0],
     )
 
-    dependencies = dependency.lambda_handler(event, None)["body"]
+    dependencies = dependency.lambda_handler(event, None)
     mock_response = MagicMock()
     mock_context_manager = MagicMock()
-    mock_response.read.return_value = dependencies.encode("utf-8")
+    mock_response.status = dependencies["statusCode"]
+    mock_response.read.return_value = dependencies["body"].encode("utf-8")
     # Mock the context manager and return it
     mock_context_manager.__enter__.return_value = mock_response
 
@@ -245,6 +246,26 @@ def test_lambda_handler_ancillary_event(
         mock_batch_client.submit_job.call_count = 0
         lambda_handler(events, context)
         assert mock_batch_client.submit_job.call_count == 0
+
+
+def test_lambda_handler_soft_dependencies(session, mock_urlopen):
+    """Tests ``lambda_handler`` when there are soft upstream dependencies."""
+    _populate_file_catalog(session)
+    # Test Multiple Events:
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_mag_l1b_norm-mago_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        # Verify the function was not called
+        assert mock_submit.call_count == 0
 
 
 def test_lambda_handler_no_dependencies(session, mock_urlopen):

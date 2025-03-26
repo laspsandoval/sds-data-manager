@@ -432,6 +432,7 @@ def get_dependency_processing_input(
     dependencies: list,
     start_date: datetime,
     version: str,
+    relationship: str,
     trigger_type: str,
     end_date: Optional[datetime] = None,
 ):
@@ -453,6 +454,10 @@ def get_dependency_processing_input(
         Start date to find dependent files with.
     version : str
         Version to find dependent files with.
+    relationship : str
+        Whether it's HARD or SOFT dependency.
+        HARD means data is required for pipeline and SOFT
+        means data is optional for pipeline.
     trigger_type : str
         Data type of the file that triggered the batch starter.
     end_date : datetime, optional
@@ -464,7 +469,6 @@ def get_dependency_processing_input(
         Dependency files that can include Ancillary, SPICE, or Science inputs.
     """
     dependency_inputs = processing_input.ProcessingInputCollection()
-    inputs = []
     with db.Session() as session:
         for dep in dependencies:
             # Check if the dependency is a primary science dependency and if the file
@@ -500,18 +504,20 @@ def get_dependency_processing_input(
                 primary_sci_trigger,
                 primary_sci_dep,
             )
-            if not records:
-                # TODO change return
+
+            if not records and relationship == Relationship.HARD:
                 logger.info(
                     "No records found for dependency. Returning empty collection."
                 )
-                return dependency_inputs
+                return None
+            elif not records:
+                continue
 
             filenames = [basename(record.file_path) for record in records]
             logger.info(f"Found filenames: {filenames}. Adding to collection.")
             # If this is a primary science dependency, filter files for ones that have a
             # downstream counterpart that needs to be processed.
-            # E.g. if imap_mag_l1d-sci_0250105.cdf file triggers batch starter,
+            # E.g., if imap_mag_l1d-sci_0250105.cdf file triggers batch starter,
             # This could potentially trigger multiple swe l1b files that have been
             # waiting. E.g.,
             #    - imap_swe_l1b_sci_20250102.cdf
@@ -529,18 +535,22 @@ def get_dependency_processing_input(
                     query_params["data_type"],
                     query_params["descriptor"],
                 )
-                if not filenames:
+
+                if not filenames and relationship == Relationship.HARD:
                     logger.info(
                         "Primary dependency files already processed. Returning empty "
                         "collection."
                     )
-                    return dependency_inputs
+                    return None
+                elif not filenames:
+                    continue
+
             # Create a processingInput instance and add it to the collection
             if dep["data_type"] == DataType.ANCILLARY:
-                inputs.append(processing_input.AncillaryInput(*filenames))
+                dependency_inputs.add(processing_input.AncillaryInput(*filenames))
             else:
-                inputs.append(processing_input.ScienceInput(*filenames))
-    dependency_inputs.add(inputs)
+                dependency_inputs.add(processing_input.ScienceInput(*filenames))
+
     return dependency_inputs
 
 
@@ -859,8 +869,19 @@ def lambda_handler(event, context):
         # TODO this only works for upstream deps right now. Do we need to ever get files
         # for downstream?
         dependencies_output = get_dependency_processing_input(
-            query_params, dependencies, start_date, version, trigger_type, end_date
+            query_params,
+            dependencies,
+            start_date,
+            version,
+            trigger_type,
+            query_params["relationship"],
+            end_date
         )
+        if not dependencies_output:
+            return {
+                "statusCode": 206,  # Partial content
+                "body": "At least one dependency is missing.",
+            }
 
         dependencies_output = dependencies_output.serialize()
     else:
