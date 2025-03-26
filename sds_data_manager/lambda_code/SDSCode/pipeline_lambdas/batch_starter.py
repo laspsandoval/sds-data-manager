@@ -138,6 +138,7 @@ def is_job_in_processing_table(
 
 
 def try_to_submit_job(
+    session: db.Session,
     job_info: dict,
     start_date: datetime,
     version: str,
@@ -151,6 +152,8 @@ def try_to_submit_job(
 
     Parameters
     ----------
+    session : orm session
+        Database session.
     job_info : dict
         Dictionary containing components with dates and versions appended.
     start_date : datetime
@@ -173,45 +176,44 @@ def try_to_submit_job(
 
     logger.info("Checking for job in progress before looking for dependencies.")
 
-    with db.Session() as session:
-        if is_job_in_processing_table(
-            session=session,
-            instrument=instrument,
-            descriptor=descriptor,
-            start_date=start_date,
-            version=version,
-            data_level=data_level,
-        ):
-            logger.info(
-                f"Job already in progress for {instrument}, {data_level}, "
-                f"{descriptor}, {start_date_str}, {version}"
-            )
-            return
-
-        # All of our upstream requirements have been met.
-        # Try to insert a record into the Processing Jobs table
-        # If this job already exists, then we will get an integrity error
-        # and know that some other process has already taken care of it
-        processing_job = models.ProcessingJob(
-            status=models.Status.INPROGRESS,
-            instrument=instrument,
-            data_level=data_level,
-            descriptor=descriptor,
-            start_date=start_date,
-            version=version,
-        )
-
-        try:
-            session.add(processing_job)
-            session.commit()
-        except IntegrityError:
-            logger.info(f"Job already completed or in progress: {processing_job}")
-            return
-
+    if is_job_in_processing_table(
+        session=session,
+        instrument=instrument,
+        descriptor=descriptor,
+        start_date=start_date,
+        version=version,
+        data_level=data_level,
+    ):
         logger.info(
-            f"Wrote job INPROGRESS to Processing Jobs Table with id: "
-            f"{processing_job.id}"
+            f"Job already in progress for {instrument}, {data_level}, "
+            f"{descriptor}, {start_date_str}, {version}"
         )
+        return
+
+    # All of our upstream requirements have been met.
+    # Try to insert a record into the Processing Jobs table
+    # If this job already exists, then we will get an integrity error
+    # and know that some other process has already taken care of it
+    processing_job = models.ProcessingJob(
+        status=models.Status.INPROGRESS,
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_date=start_date,
+        version=version,
+    )
+
+    try:
+        session.add(processing_job)
+        session.commit()
+    except IntegrityError:
+        logger.info(f"Job already completed or in progress: {processing_job}")
+        return
+
+    logger.info(
+        f"Wrote job INPROGRESS to Processing Jobs Table with id: "
+        f"{processing_job.id}"
+    )
 
     # Reformat the upstream dependencies from dependency call to match
     # what batch job expects. Change 'data_source' to 'instrument' and
@@ -254,6 +256,7 @@ def try_to_submit_job(
 
 
 def submit_all_jobs(
+    session: db.Session,
     job: dict,
     start_date: datetime,
     version: str,
@@ -264,6 +267,8 @@ def submit_all_jobs(
 
     Parameters
     ----------
+    session: orm session
+        Database session.
     job : dict
         Job information containing data_source, data_type, and descriptor.
     start_date : datetime
@@ -323,7 +328,7 @@ def submit_all_jobs(
                 job_version = upstream_file.version
                 # TODO when do we bump version?
                 try_to_submit_job(
-                    job, job_start_date, job_version, upstream_dependencies
+                    session, job, job_start_date, job_version, upstream_dependencies
                 )
 
 
@@ -400,5 +405,6 @@ def lambda_handler(events: dict, context):
         # which are the downstream dependencies.
         potential_jobs = _get_dependencies(dependency_event_msg)
 
-        for job in potential_jobs:
-            submit_all_jobs(job, start_date, version, data_type, end_date)
+        with db.Session() as session:
+            for job in potential_jobs:
+                submit_all_jobs(session, job, start_date, version, data_type, end_date)
