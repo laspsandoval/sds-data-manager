@@ -152,11 +152,12 @@ def is_job_in_processing_table(
     bool
         True if a duplicate job is found, False otherwise.
     """
-    # if only_in_progress:
-    #     status_clause = models.ProcessingJob.status.in_(
-    #         [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value])
-    # else:
-    #     status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
+    if only_in_progress:
+        status_clause = models.ProcessingJob.status.in_(
+            [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
+        )
+    else:
+        status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
     # check in the processing table if the job is already in progress
     # for this instrument, data level, version, and descriptor
     query = select(models.ProcessingJob.__table__).where(
@@ -165,9 +166,7 @@ def is_job_in_processing_table(
         models.ProcessingJob.data_level == data_level,
         models.ProcessingJob.start_date == start_date,
         models.ProcessingJob.version == version,
-        models.ProcessingJob.status.in_(
-            [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
-        ),
+        status_clause,
     )
 
     results = session.execute(query).all()
@@ -328,7 +327,7 @@ def submit_all_jobs(
         "data_type": job["data_type"],
         "descriptor": job["descriptor"],
         "dependency_type": "UPSTREAM",
-        "relationship": "SOFT",
+        "relationship": "HARD",
     }
     dependency_event_msg = base_event_msg | {
         "start_date": start_date,
@@ -339,7 +338,6 @@ def submit_all_jobs(
     if end_date:
         dependency_event_msg["end_date"] = end_date
 
-    dependency_event_msg["relationship"] = "HARD"
     upstream_dependencies = _get_dependencies(dependency_event_msg)
 
     # If neither soft nor hard dependencies are found, return.
@@ -349,6 +347,8 @@ def submit_all_jobs(
 
     logger.info(f"All required dependencies found for the job: {job}")
     # Get soft dependencies if they are available
+    dependency_event_msg["relationship"] = "SOFT"
+    base_event_msg["relationship"] = "SOFT"
     all_soft_upstream_dependencies = _get_dependencies(base_event_msg)
     # For each missing soft dependency, check if it is currently processing.
     # If the job has been submitted, then return and let that file trigger the job.
@@ -480,6 +480,6 @@ def lambda_handler(events: dict, context):
         dependency_event_msg["relationship"] = "SOFT"
         potential_soft_jobs = _get_dependencies(dependency_event_msg)
 
-        with db.Session as session:
+        with db.Session() as session:
             for job in potential_jobs + potential_soft_jobs:
                 submit_all_jobs(session, job, start_date, version, data_type, end_date)

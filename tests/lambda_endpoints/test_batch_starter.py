@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, Mock, patch
 from urllib import parse
 from urllib.error import HTTPError, URLError
 
-import imap_data_access.processing_input
 import pytest
 from imap_data_access.processing_input import (
     AncillaryInput,
@@ -262,10 +261,35 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
         ]
     }
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    expected_processing_input = ProcessingInputCollection(
+        ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf"),
+        ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
+    )
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
-        # Verify the function was not called
-        assert mock_submit.call_count == 0
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="mag-l1c-norm-mago-job-1",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-mag",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "mag",
+                    "--data-level",
+                    "l1c",
+                    "--descriptor",
+                    "norm-mago",
+                    "--start-date",
+                    "20240101",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    expected_processing_input.serialize(),
+                    "--upload-to-sdc",
+                ]
+            },
+        )
 
 
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
@@ -530,4 +554,4 @@ def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMoc
         "trigger_type": "swe",
     }
     dependencies = _get_dependencies(dependency_event_msg)
-    assert dependencies == imap_data_access.processing_input.ProcessingInputCollection()
+    assert not dependencies
