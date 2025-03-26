@@ -305,7 +305,7 @@ def submit_all_jobs(
 
     logger.info(f"All dependencies found for the job: {job}")
     # Find science processingInputs that have the same source as the potential job
-    for dep in upstream_dependencies.get_science_files():
+    for dep in upstream_dependencies.get_science_inputs():
         if job["data_source"] == dep.source and isinstance(
             dep, processing_input.ScienceInput
         ):
