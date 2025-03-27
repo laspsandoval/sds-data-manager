@@ -48,6 +48,16 @@ def _get_url_response(url: str):
     This is a helper function to make it easier to handle
     the different types of errors that can occur when
     opening a URL and write out the response body.
+
+    Parameters
+    ----------
+    url: str
+        The url string to query the api with.
+
+    Yields
+    ------
+    http.client.HTTPResponse
+        The response object received from the API.
     """
     try:
         # Open the URL and yield the response
@@ -66,7 +76,22 @@ def _get_url_response(url: str):
 
 
 def _get_dependencies(dependency_events: dict):
-    """Return dependencies for the input dependency requirements."""
+    """Return dependencies for the input dependency requirements.
+
+    Parameters
+    ----------
+    dependency_events : dict
+        Dependency information to be used as query parameters in the API request url.
+
+    Returns
+    -------
+    Union[list, ProcessingInputCollection, None]
+        - A list of dependency dictionaries if "start_date" is not in the
+            request url .
+        - ProcessingInputCollection if 'start_date' is in the request url.
+        - None If the API returns a 206 status code indicating missing dependencies.
+
+    """
     base = f"{os.getenv('IMAP_DATA_ACCESS_URL')}/dependency?"
     url = f"{base}{urlencode(dependency_events)}"
 
@@ -76,8 +101,11 @@ def _get_dependencies(dependency_events: dict):
         # information
         dependency_response = response.read().decode("utf-8")
         logger.debug(f"Received dependencies: {dependency_response}")
-    # If start_date is supplied, the dependency api will return a serialized
-    # ProcessingInputCollection instance.
+    # The API returns different output formats depending on the query parameters:
+    # Without "start_date": Returns a list of dependency dictionaries.
+    #      This functionality is used when searching for downstream dependencies
+    # With "start_date" (requires "version" and "trigger_source"; "end_date" optional):
+    # Returns a serialized ProcessingInputCollection of files from S3
     if "start_date" in url:
         dependencies = ProcessingInputCollection()
         dependencies.deserialize(dependency_response)

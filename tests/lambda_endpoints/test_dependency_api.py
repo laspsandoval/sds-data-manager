@@ -143,7 +143,7 @@ def test_get_downstream_dependencies():
     assert dependents == expected_complete_dependent
 
 
-def test_get_upstream_ancillary_trigger(session):
+def test_get_upstream_ancillary_trigger(session, caplog):
     """Tests get upstream dependencies with an ancillary trigger source."""
     _populate_file_catalog(session)
     event = create_dependency_api_event(
@@ -261,7 +261,7 @@ def test_get_science_files_date_range(session):
         start_date=datetime(2024, 1, 2),
         version="v001",
         end_date=datetime(2024, 1, 3),
-        exact_science_date=False,
+        exact_science_date_and_version=False,
         primary_sci_dep=True,
     )
     assert len(records_1) == 2
@@ -273,7 +273,7 @@ def test_get_science_files_date_range(session):
         dependency=dep,
         start_date=datetime(2024, 1, 1),
         version="v001",
-        exact_science_date=False,
+        exact_science_date_and_version=False,
         primary_sci_dep=True,
     )
     assert len(records_2) == 3
@@ -337,7 +337,7 @@ def test_get_exact_date_science_files(session):
         dependency=dep,
         start_date=datetime(2024, 1, 1),
         version="v001",
-        exact_science_date=True,
+        exact_science_date_and_version=True,
     )
     assert len(record) == 1
     record = record[0]
@@ -356,7 +356,7 @@ def test_get_files_exact_version(session):
         dependency=dep,
         start_date=datetime(2010, 1, 1),
         version="v001",
-        exact_science_date=True,
+        exact_science_date_and_version=True,
     )
 
     assert len(record) == 1
@@ -376,7 +376,7 @@ def test_get_files_latest_version(session):
         dependency=dep,
         start_date=datetime(2010, 1, 2),
         version="v001",
-        exact_science_date=False,
+        exact_science_date_and_version=False,
     )
 
     assert len(records) == 2
