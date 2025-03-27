@@ -611,6 +611,7 @@ def get_files(
             type_specific_conditions.extend(
                 [
                     models.ScienceFiles.start_date == start_date,
+                    # TODO revisit - Mag L1C case.
                     table.version == version,
                 ]
             )
