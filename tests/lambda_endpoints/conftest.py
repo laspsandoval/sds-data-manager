@@ -141,11 +141,8 @@ def create_dependency_api_event(
         "trigger_source": trigger_source,
     }
     for param, value in optional_params.items():
-        if isinstance(value, list):
-            single_val = value[0]
-        else:
-            single_val = value
-        event["queryStringParameters"][param] = single_val
+        if value:
+            event["queryStringParameters"][param] = value
 
     return event
 

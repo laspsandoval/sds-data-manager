@@ -60,10 +60,10 @@ def urlopen_side_effect(url):
         params.get("descriptor")[0],
         params.get("dependency_type")[0],
         params.get("relationship")[0],
-        start_date=params.get("start_date"),
-        end_date=params.get("end_date"),
-        version=params.get("version"),
-        trigger_source=params.get("trigger_source"),
+        params.get("start_date", [None])[0],
+        params.get("end_date", [None])[0],
+        params.get("version", [None])[0],
+        params.get("trigger_source", [None])[0],
     )
 
     dependencies = dependency.lambda_handler(event, None)["body"]
