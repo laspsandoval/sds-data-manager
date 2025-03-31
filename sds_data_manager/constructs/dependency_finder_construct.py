@@ -67,7 +67,6 @@ class DependencyFinder(Construct):
                 "REGION": env.region,
                 "SECRET_NAME": db_secret_name,
             },
-            architecture=lambda_.Architecture.ARM_64,
         )
 
         api.add_route(
