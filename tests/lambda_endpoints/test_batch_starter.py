@@ -68,8 +68,8 @@ def urlopen_side_effect(url):
     dependencies = dependency.lambda_handler(event, None)
     mock_response = MagicMock()
     mock_context_manager = MagicMock()
-    mock_response.status = dependencies["statusCode"]
     mock_response.read.return_value = dependencies["body"].encode("utf-8")
+    mock_response.status = dependencies["statusCode"]
     # Mock the context manager and return it
     mock_context_manager.__enter__.return_value = mock_response
 

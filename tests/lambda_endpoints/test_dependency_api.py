@@ -270,20 +270,20 @@ def test_get_primary_science_files(session):
     """Tests the get_file function for science files."""
     _populate_file_catalog(session)
 
-    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
+    dep = {"data_source": "mag", "data_type": "l1b", "descriptor": "burst-mago"}
     record = get_files(
         session,
         dependency=dep,
-        start_date=datetime(2010, 1, 2),
-        version="v003",
+        start_date=datetime(2024, 1, 1),
+        version="v001",
         primary_sci_dep=True,
     )[0]
 
-    assert record.instrument == "lo"
-    assert record.data_level == "l1a"
-    assert record.descriptor == "sci"
-    assert record.start_date == datetime(2010, 1, 2)
-    assert record.version == "v003"
+    assert record.instrument == "mag"
+    assert record.data_level == "l1b"
+    assert record.descriptor == "burst-mago"
+    assert record.start_date == datetime(2024, 1, 1)
+    assert record.version == "v001"
 
     # Non-existent record should return an empty list
     record = get_files(

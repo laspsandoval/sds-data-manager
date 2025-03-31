@@ -334,7 +334,6 @@ def submit_all_jobs(
         "version": version,
         "trigger_type": trigger_type,
     }
-
     if end_date:
         dependency_event_msg["end_date"] = end_date
 
@@ -389,8 +388,8 @@ def submit_all_jobs(
             #     "files": [
             #         "imap_swe_l1a_sci_20240312_v001.cdf",
             #         "imap_swe_l1a_sci_20240313_v001.cdf" ]}
-            # That means we need to kick off two swe l1b jobs for dates: "20240312"
-            # and "20240313".
+            # That means we need to kick off two swe l1b jobs for dates: "20240312" and
+            # "20240313"
             for upstream_file in dep.imap_file_paths:
                 # TODO add function to processingInput to filter for start_date.
                 dep.imap_file_paths = [upstream_file]
