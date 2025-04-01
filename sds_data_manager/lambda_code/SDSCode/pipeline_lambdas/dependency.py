@@ -819,7 +819,7 @@ def lambda_handler(event, context):
     else:
         dependencies_output = json.dumps(dependencies)
 
-    logger.info(f"Found dependencies: {dependencies}.")
+    logger.info(f"Found dependencies: {dependencies} for {query_params}.")
 
     # TODO: add reprocessing dependencies are handled here
     return {
