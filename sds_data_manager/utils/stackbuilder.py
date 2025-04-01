@@ -220,6 +220,10 @@ def build_sds(
         construct_id="DependencyFinder",
         code=lambda_code,
         layers=[db_lambda_layer],
+        vpc=networking.vpc,
+        rds_security_group=rds_construct.rds_security_group,
+        env=env,
+        db_secret_name=db_secret_name,
         api=api,
     )
 
