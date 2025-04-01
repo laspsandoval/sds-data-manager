@@ -104,7 +104,7 @@ def _get_dependencies(dependency_events: dict):
     # The API returns different output formats depending on the query parameters:
     # Without "start_date": Returns a list of dependency dictionaries.
     #      This functionality is used when searching for downstream dependencies
-    # With "start_date" (requires "version" and "trigger_source"; "end_date" optional):
+    # With "start_date" (requires "version" and "trigger_type"; "end_date" optional):
     # Returns a serialized ProcessingInputCollection of files from S3
     if "start_date" in url:
         dependencies = ProcessingInputCollection()
@@ -288,7 +288,7 @@ def submit_all_jobs(
     job: dict,
     start_date: datetime,
     version: str,
-    trigger_source: str,
+    trigger_type: str,
     end_date: Optional[datetime] = None,
 ):
     """Submit downstream jobs for each upstream primary science dependency file.
@@ -303,7 +303,7 @@ def submit_all_jobs(
         The trigger file start date.
     version : str
         The trigger file version.
-    trigger_source : str
+    trigger_type : str
         The data_source of the file that triggered the batch starter.
     end_date : datetime, optional
         The trigger file end date, by default None.
@@ -321,7 +321,7 @@ def submit_all_jobs(
         "relationship": "HARD",
         "start_date": start_date,
         "version": version,
-        "trigger_source": trigger_source,
+        "trigger_type": trigger_type,
     }
     if end_date:
         dependency_event_msg["end_date"] = end_date

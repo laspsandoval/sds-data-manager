@@ -63,7 +63,7 @@ def urlopen_side_effect(url):
         params.get("start_date", [None])[0],
         params.get("end_date", [None])[0],
         params.get("version", [None])[0],
-        params.get("trigger_source", [None])[0],
+        params.get("trigger_type", [None])[0],
     )
 
     dependencies = dependency.lambda_handler(event, None)["body"]
@@ -284,7 +284,7 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
             "Upstream dependency not found for: {'data_source': "
             "'swe', 'data_type': 'l2', 'descriptor': 'sci', 'dependency_type': "
             "'UPSTREAM', 'relationship': 'HARD', 'start_date': '20000101', "
-            "'version': 'v001', 'trigger_source': 'l1b'}"
+            "'version': 'v001', 'trigger_type': 'l1b'}"
         )
         # Verify the info statement was logged.
         assert log_str in caplog.text
@@ -478,7 +478,7 @@ def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMoc
         "relationship": "HARD",
         "start_date": "20000101",
         "version": "v001",
-        "trigger_source": "swe",
+        "trigger_type": "swe",
     }
     dependencies = _get_dependencies(dependency_event_msg)
     assert dependencies == imap_data_access.processing_input.ProcessingInputCollection()
