@@ -476,16 +476,16 @@ def get_dependency_processing_input(
             # the dates are not guaranteed to correspond.
             primary_sci_dep = primary_science_dep(query_params, dep)
             if primary_sci_dep and trigger_source == dep["data_type"]:
-                exact_science_date_and_version = True
+                primary_sci_trigger = True
             else:
-                exact_science_date_and_version = False
+                primary_sci_trigger = False
 
             logger.info(
                 f"Searching for files matching dep={dep}\n"
                 f"start_date={start_date}\n"
                 f"version={version}\n"
                 f"end_date={end_date}\n"
-                f"exact_start_time={exact_science_date_and_version}\n"
+                f"primary_sci_trigger={primary_sci_trigger}\n"
                 f"primary_sci_dep={primary_sci_dep}"
             )
             records = get_files(
@@ -494,7 +494,7 @@ def get_dependency_processing_input(
                 start_date,
                 version,
                 end_date,
-                exact_science_date_and_version,
+                primary_sci_trigger,
                 primary_sci_dep,
             )
             if not records:
@@ -544,7 +544,7 @@ def get_files(
     start_date: datetime,
     version: str,
     end_date: Optional[datetime] = None,
-    exact_science_date_and_version: Optional[bool] = False,
+    primary_sci_trigger: Optional[bool] = False,
     primary_sci_dep: Optional[bool] = False,
 ):
     """Query to database to get ScienceFile or AncillaryFile records.
@@ -567,7 +567,7 @@ def get_files(
         Version of the event data.
     end_date: datetime, optional
         End date of the event data.
-    exact_science_date_and_version: bool, optional
+    primary_sci_trigger: bool, optional
         When True, query for science files with a match to the start time and version
         because it is assumed that the dependency is a primary science dependency and
         the trigger source is of the same data_source. Default is False.
@@ -601,7 +601,7 @@ def get_files(
     else:
         table = models.ScienceFiles
         type_specific_conditions.append(table.data_level == dependency["data_type"])
-        if exact_science_date_and_version:
+        if primary_sci_trigger:
             # Query for science files matching the start date and version
             # Example:
             # Trigger source: swe_l0_raw_20250102_v001.pkts
