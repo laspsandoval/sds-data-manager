@@ -873,9 +873,9 @@ def lambda_handler(event, context):
             dependencies,
             start_date,
             version,
-            trigger_type,
             query_params["relationship"],
-            end_date
+            trigger_type,
+            end_date,
         )
         if not dependencies_output:
             return {

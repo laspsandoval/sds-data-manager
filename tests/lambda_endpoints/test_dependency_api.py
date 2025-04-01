@@ -84,7 +84,7 @@ def test_soft_dependencies(session):
         descriptor="norm-mago",
         start_date="20240101",
         version="v001",
-        trigger_source="l1b",
+        trigger_type="l1b",
         relationship="SOFT",
         dep_type="UPSTREAM",
     )
@@ -124,7 +124,7 @@ def test_missing_soft_dependencies(session):
         descriptor="norm-mago",
         start_date="20240101",
         version="v001",
-        trigger_source="l1b",
+        trigger_type="l1b",
         relationship="SOFT",
         dep_type="UPSTREAM",
     )
