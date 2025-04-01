@@ -122,7 +122,7 @@ def create_dependency_api_event(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     version: Optional[str] = None,
-    trigger_source: Optional[str] = None,
+    trigger_type: Optional[str] = None,
 ):
     """Create event dictionaries for tests."""
     event = {
@@ -138,7 +138,7 @@ def create_dependency_api_event(
         "start_date": start_date,
         "end_date": end_date,
         "version": version,
-        "trigger_source": trigger_source,
+        "trigger_type": trigger_type,
     }
     for param, value in optional_params.items():
         if value:

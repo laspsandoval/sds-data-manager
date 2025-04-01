@@ -429,7 +429,7 @@ def get_dependency_processing_input(
     dependencies: list,
     start_date: datetime,
     version: str,
-    trigger_source: str,
+    trigger_type: str,
     end_date: Optional[datetime] = None,
 ):
     """Construct a ProcessingInputCollection of dependency files.
@@ -450,8 +450,8 @@ def get_dependency_processing_input(
         Start date to find dependent files with.
     version : str
         Version to find dependent files with.
-    trigger_source : str
-        Data source of the file that triggered the batch starter.
+    trigger_type : str
+        Data type of the file that triggered the batch starter.
     end_date : datetime, optional
         End date to find dependent files with.
 
@@ -475,7 +475,7 @@ def get_dependency_processing_input(
             # start date and version cannot be used to find the science file because
             # the dates are not guaranteed to correspond.
             primary_sci_dep = primary_science_dep(query_params, dep)
-            if primary_sci_dep and trigger_source == dep["data_type"]:
+            if primary_sci_dep and trigger_type == dep["data_type"]:
                 primary_sci_trigger = True
             else:
                 primary_sci_trigger = False
@@ -608,6 +608,7 @@ def get_files(
             # Downstream: swe_l1a_sci
             # Upstream: Look for swe_l0_raw with start date == 20250102 and
             # version == v001
+
             type_specific_conditions.extend(
                 [
                     models.ScienceFiles.start_date == start_date,
@@ -635,10 +636,11 @@ def get_files(
             # the start_date (start_date comes from an ancillary file, so we
             # cannot use the exact date.)
             # Example:
-            # Trigger source: swe_l1b-flight-cal_20250102_v001.pkts
+            # Trigger source: mag_l1b_sci_20240510_v001.cdf
             # Downstream: swe_l1b_sci
             # Upstream: Look for swe_l1a_sci with start dates greater than or
-            # equal to 20250102
+            # equal to 20240510
+
             type_specific_conditions.append(
                 models.ScienceFiles.start_date >= start_date
             )
@@ -700,11 +702,11 @@ def lambda_handler(event, context):
                 "start_time": "20250101", (optional)
                 "end_time": "20250102", (optional)
                 "version": "v001" (optional)
-                "trigger_source": "ancillary" (optional)
+                "trigger_type": "mag" (optional)
             }
         "start_time", "end_time", and "version" are optional.
         If "start_time" is supplied, then "version" is required.
-       "trigger_source" is the source of the file that triggered the batch starter
+       "trigger_type" is the source of the file that triggered the batch starter
 
     context : dict
         Context dictionary.
@@ -793,12 +795,12 @@ def lambda_handler(event, context):
                 "body": "Version not found. If 'start_date' is supplied, 'version' is"
                 " required.",
             }
-        trigger_source = query_params.get("trigger_source")
-        if not trigger_source:
+        trigger_type = query_params.get("trigger_type")
+        if not trigger_type:
             return {
                 "statusCode": 400,  # Client error
-                "body": "trigger_source not found. If 'start_date' is supplied, "
-                "'trigger_source' is required.",
+                "body": "trigger_type not found. If 'start_date' is supplied, "
+                "'trigger_type' is required.",
             }
 
         # Get and convert end_date in one line if it exists
@@ -810,7 +812,7 @@ def lambda_handler(event, context):
         # TODO this only works for upstream deps right now. Do we need to ever get files
         # for downstream?
         dependencies_output = get_dependency_processing_input(
-            query_params, dependencies, start_date, version, trigger_source, end_date
+            query_params, dependencies, start_date, version, trigger_type, end_date
         )
 
         dependencies_output = dependencies_output.serialize()

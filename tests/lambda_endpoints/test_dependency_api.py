@@ -66,7 +66,7 @@ def test_lambda_handler_invalid_dependency_type(mock_get_dependencies):
 def test_missing_dependency(session):
     """Test that 206 error is returned."""
     event = create_dependency_api_event(
-        "swe", "l1b", start_date="20240104", version="v001", trigger_source="ancillary"
+        "swe", "l1b", start_date="20240104", version="v001", trigger_type="ancillary"
     )
     dependency_response = dependency.lambda_handler(event, None)
 
@@ -90,8 +90,8 @@ def test_missing_required_params():
     dependency_response = dependency.lambda_handler(event, None)
     assert dependency_response["statusCode"] == 400
     assert dependency_response["body"] == (
-        "trigger_source not found. If 'start_date' is"
-        " supplied, 'trigger_source' is required."
+        "trigger_type not found. If 'start_date' is"
+        " supplied, 'trigger_type' is required."
     )
     event["queryStringParameters"].pop("version")
     dependency_response = dependency.lambda_handler(event, None)
@@ -152,7 +152,7 @@ def test_get_upstream_ancillary_trigger(session, caplog):
         dep_type="UPSTREAM",
         start_date="20231230",
         version="v001",
-        trigger_source="ancillary",
+        trigger_type="ancillary",
     )
     dependency_response = dependency.lambda_handler(event, None)
     dependencies = dependency_response["body"]
@@ -189,7 +189,7 @@ def test_get_upstream_science_trigger(session):
         dep_type="UPSTREAM",
         start_date="20240103",
         version="v001",
-        trigger_source="l1a",
+        trigger_type="l1a",
     )
     dependency_response = dependency.lambda_handler(event, None)
     dependencies = dependency_response["body"]
