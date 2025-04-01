@@ -11,7 +11,9 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
-from sds_data_manager.lambda_code.SDSCode.database.models import ScienceFiles
+from sds_data_manager.lambda_code.SDSCode.database.models import (
+    ScienceFiles,
+)
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
 from tests.lambda_endpoints.conftest import (

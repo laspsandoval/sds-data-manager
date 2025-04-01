@@ -292,6 +292,43 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
         )
 
 
+def test_processing_soft_dependencies(session, caplog, mock_urlopen):
+    """Test that the correct soft dependencies are returned."""
+    # Add mag l1b job as PROGRESS
+    record = ProcessingJob(
+        status=models.Status.INPROGRESS,
+        instrument="mag",
+        data_level="l1b",
+        descriptor="burst-mago",
+        start_date=datetime(2024, 1, 1),
+        version="v001",
+    )
+    session.add(record)
+    session.commit()
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_mag_l1b_norm-mago_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(events, context)
+        # Since there is a soft dependency that is currently being processed,
+        # The handler call should NOT submit a job.
+        mock_batch_client.assert_not_called()
+        assert (
+            "Soft dependency {'data_source': 'mag', 'data_type': 'l1b', "
+            "'descriptor': 'burst-mago'} is currently processing. Job will be "
+            "triggered when dependency processing completes and file is available "
+            "in S3."
+        ) in caplog.text
+
+
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
     """Tests ``lambda_handler`` when there are no dependencies for the file."""
     _populate_file_catalog(session)

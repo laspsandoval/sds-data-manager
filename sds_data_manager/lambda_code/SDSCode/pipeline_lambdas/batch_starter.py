@@ -16,7 +16,6 @@ import boto3
 import imap_data_access
 from imap_data_access import (
     SPICEFilePath,
-    processing_input,
 )
 from imap_data_access.processing_input import ProcessingInputCollection
 from sqlalchemy import select
@@ -164,8 +163,8 @@ def is_job_in_processing_table(
     # for this instrument, data level, version, and descriptor
     query = select(models.ProcessingJob.__table__).where(
         models.ProcessingJob.instrument == instrument,
-        models.ProcessingJob.descriptor == descriptor,
         models.ProcessingJob.data_level == data_level,
+        models.ProcessingJob.descriptor == descriptor,
         models.ProcessingJob.start_date == start_date,
         models.ProcessingJob.version == version,
         status_clause,
@@ -297,10 +296,10 @@ def try_to_submit_job(
 def submit_all_jobs(
     session: db.Session,
     job: dict,
-    start_date: datetime,
+    start_date: str,
     version: str,
     trigger_type: str,
-    end_date: Optional[datetime] = None,
+    end_date: Optional[str] = None,
 ):
     """Submit downstream jobs for each upstream primary science dependency file.
 
@@ -310,13 +309,13 @@ def submit_all_jobs(
         Database session.
     job : dict
         Job information containing data_source, data_type, and descriptor.
-    start_date : datetime
+    start_date : str
         The trigger file start date.
     version : str
         The trigger file version.
     trigger_type : str
         The data_source of the file that triggered the batch starter.
-    end_date : datetime, optional
+    end_date : str, optional
         The trigger file end date, by default None.
 
     Returns
@@ -350,28 +349,26 @@ def submit_all_jobs(
     # Get soft dependencies if they are available
     base_event_msg["relationship"] = "SOFT"
     all_soft_upstream_dependencies = _get_dependencies(base_event_msg)
-    # For each missing soft dependency, check if it is currently processing.
+    # Check if any soft dependencies are currently processing.
     # If a job is in progress, then return and let that file trigger batch starter
     # When it is done processing.
     for dep in all_soft_upstream_dependencies:
         # Check only science
-        if valid_science(dep["data_type"]):
-            if is_job_in_processing_table(
-                session,
-                dep["data_source"],
-                dep["descriptor"],
-                # TODO fix start_date and version check
-                dep["data_type"],
-                start_date,
-                version,
-                in_progress_only=True,
-            ):
-                logger.info(
-                    f"Soft dependency {dep} is currently processing. Job will be"
-                    " triggered when dependency processing completes and file is "
-                    "available in S3."
-                )
-                return
+        if valid_science(dep["data_type"]) and is_job_in_processing_table(
+            session,
+            dep["data_source"],
+            dep["data_type"],
+            dep["descriptor"],
+            datetime.strptime(start_date, "%Y%m%d"),
+            version,
+            in_progress_only=True,
+        ):
+            logger.info(
+                f"Soft dependency {dep} is currently processing. Job will be"
+                " triggered when dependency processing completes and file is "
+                "available in S3."
+            )
+            return
 
     dependency_event_msg["relationship"] = "SOFT"
     existing_soft_upstream_dependencies = _get_dependencies(dependency_event_msg)
@@ -379,9 +376,7 @@ def submit_all_jobs(
     upstream_dependencies.add(existing_soft_upstream_dependencies.processing_input)
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_inputs():
-        if job["data_source"] == dep.source and isinstance(
-            dep, processing_input.ScienceInput
-        ):
+        if job["data_source"] == dep.source:
             # Try to start a downstream science job with the start_date from the
             # upstream science dependency
             # E.g.:
