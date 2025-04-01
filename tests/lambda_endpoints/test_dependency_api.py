@@ -11,6 +11,7 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
+from sds_data_manager.lambda_code.SDSCode.database.models import ScienceFiles
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
 from tests.lambda_endpoints.conftest import (
@@ -75,7 +76,7 @@ def test_missing_dependency(session):
 
 
 def test_soft_dependencies(session):
-    """Test that correct soft dependencies are returned."""
+    """Test that the correct soft dependencies are returned."""
     _populate_file_catalog(session)
     event = create_dependency_api_event(
         "mag",
@@ -95,6 +96,45 @@ def test_soft_dependencies(session):
     expected_processing_input = ProcessingInputCollection(
         ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf"),
         ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
+    )
+    assert dependencies == expected_processing_input.serialize()
+
+
+def test_missing_soft_dependencies(session):
+    """Test that the correct soft dependencies are returned."""
+    session.add(
+        ScienceFiles(
+            file_path="/path/to/imap_mag_l1b_norm-mago_20240101_v001.cdf",
+            instrument="mag",
+            data_level="l1b",
+            descriptor="norm-mago",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+    )
+    session.commit()
+
+    event = create_dependency_api_event(
+        "mag",
+        "l1c",
+        descriptor="norm-mago",
+        start_date="20240101",
+        version="v001",
+        trigger_source="l1b",
+        relationship="SOFT",
+        dep_type="UPSTREAM",
+    )
+    dependency_response = dependency.lambda_handler(event, None)
+    dependencies = dependency_response["body"]
+    # There should be one science input: one for mag_l1b_norm-mago
+    # Even though burst-mago is missing.
+    # Expect ancillary dependencies and science dependencies
+    expected_processing_input = ProcessingInputCollection(
+        ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf")
     )
     assert dependencies == expected_processing_input.serialize()
 
