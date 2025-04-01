@@ -250,7 +250,6 @@ def test_lambda_handler_ancillary_event(
 def test_lambda_handler_soft_dependencies(session, mock_urlopen):
     """Tests ``lambda_handler`` when there are soft upstream dependencies."""
     _populate_file_catalog(session)
-    # Test Multiple Events:
     events = {
         "Records": [
             {
