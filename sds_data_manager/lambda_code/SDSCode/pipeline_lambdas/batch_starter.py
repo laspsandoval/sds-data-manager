@@ -433,6 +433,10 @@ def lambda_handler(events: dict, context):
         # which are the downstream dependencies.
         potential_jobs = _get_dependencies(dependency_event_msg)
 
+        if not potential_jobs:
+            logger.info(f"Found no dependencies for {dependency_event_msg}.")
+            return
+
         with db.Session() as session:
             for job in potential_jobs:
                 submit_all_jobs(session, job, start_date, version, data_type, end_date)

@@ -505,7 +505,7 @@ def get_dependency_processing_input(
                 return dependency_inputs
 
             filenames = [basename(record.file_path) for record in records]
-            logger.debug(f"Found filenames: {filenames}. Adding to collection.")
+            logger.info(f"Found filenames: {filenames}. Adding to collection.")
             # If this is a primary science dependency, filter files for ones that have a
             # downstream counterpart that needs to be processed.
             # E.g. if imap_mag_l1d-sci_0250105.cdf file triggers batch starter,
@@ -818,6 +818,8 @@ def lambda_handler(event, context):
         dependencies_output = dependencies_output.serialize()
     else:
         dependencies_output = json.dumps(dependencies)
+
+    logger.info(f"Found dependencies: {dependencies} for {query_params}.")
 
     # TODO: add reprocessing dependencies are handled here
     return {
