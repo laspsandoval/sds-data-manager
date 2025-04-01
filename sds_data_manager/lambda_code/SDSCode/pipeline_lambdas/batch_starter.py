@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..database import database as db
 from ..database import models
+from .dependency import valid_science
 
 # import dependency
 
@@ -126,7 +127,7 @@ def is_job_in_processing_table(
     descriptor: str,
     start_date: datetime,
     version: str,
-    only_in_progress: bool = False,
+    in_progress_only: bool = False,
 ):
     """Check if the job is already running.
 
@@ -144,7 +145,7 @@ def is_job_in_processing_table(
         Start date.
     version : str
         Data version.
-    only_in_progress : str
+    in_progress_only : str
         Check only jobs that are in progress.
 
     Returns
@@ -152,12 +153,13 @@ def is_job_in_processing_table(
     bool
         True if a duplicate job is found, False otherwise.
     """
-    if only_in_progress:
+    # If in_progress_only is True, only check for jobs that are currently processing
+    if in_progress_only:
+        status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
+    else:
         status_clause = models.ProcessingJob.status.in_(
             [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
         )
-    else:
-        status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
     # check in the processing table if the job is already in progress
     # for this instrument, data level, version, and descriptor
     query = select(models.ProcessingJob.__table__).where(
@@ -339,21 +341,21 @@ def submit_all_jobs(
 
     upstream_dependencies = _get_dependencies(dependency_event_msg)
 
-    # If neither soft nor hard dependencies are found, return.
+    # If soft nor hard dependencies are found, return.
     if not upstream_dependencies:
         logger.info(f"Upstream dependency not found for: {dependency_event_msg}")
         return
 
     logger.info(f"All required dependencies found for the job: {job}")
     # Get soft dependencies if they are available
-    dependency_event_msg["relationship"] = "SOFT"
     base_event_msg["relationship"] = "SOFT"
     all_soft_upstream_dependencies = _get_dependencies(base_event_msg)
     # For each missing soft dependency, check if it is currently processing.
-    # If the job has been submitted, then return and let that file trigger the job.
+    # If a job is in progress, then return and let that file trigger batch starter
+    # When it is done processing.
     for dep in all_soft_upstream_dependencies:
         # Check only science
-        if dep["data_type"] not in ["spice", "ancillary"]:
+        if valid_science(dep["data_type"]):
             if is_job_in_processing_table(
                 session,
                 dep["data_source"],
@@ -362,7 +364,7 @@ def submit_all_jobs(
                 dep["data_type"],
                 start_date,
                 version,
-                only_in_progress=True,
+                in_progress_only=True,
             ):
                 logger.info(
                     f"Soft dependency {dep} is currently processing. Job will be"
@@ -371,6 +373,7 @@ def submit_all_jobs(
                 )
                 return
 
+    dependency_event_msg["relationship"] = "SOFT"
     existing_soft_upstream_dependencies = _get_dependencies(dependency_event_msg)
     # Combine soft and hard dependencies
     upstream_dependencies.add(existing_soft_upstream_dependencies.processing_input)
