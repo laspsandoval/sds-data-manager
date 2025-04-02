@@ -43,8 +43,6 @@ hi, l1b, 45sensor-de, hi, l1c, 45sensor-pset, HARD, DOWNSTREAM
 hi, l1a, 90sensor-de, hi, l1b, 90sensor-de, HARD, DOWNSTREAM
 hi, l1b, 90sensor-de, hi, l1c, 90sensor-pset, HARD, DOWNSTREAM
 
-# TODO: add IMAP-Hi 90 sensor data products
-
 # <---- HIT Dependencies ---->
 
 hit, l0, raw, hit, l1a, all, HARD, DOWNSTREAM
