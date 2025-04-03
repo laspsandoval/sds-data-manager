@@ -668,31 +668,31 @@ def get_files(
         table.descriptor == dependency["descriptor"],
         *type_specific_conditions,
     ]
-    # TODO check if version is supplied - otherwise get latest.
+    # TODO check if version is supplied - otherwise get max version.
     # Create a subquery that makes a column with the max version
     max_version_query = session.query(
         table.start_date, func.max(table.version).label("latest_version")
     ).filter(*filter_conditions)
     # Only group by start date if return_latest_ancillary is false.
     # If true, this means the files are ancillary files, and we only want to return one
-    # with the most recent start date, otherwise we want to return the max version for
-    # each start_date.
+    # file with the most recent start date and greatest version number, otherwise we
+    # want to return the max version for each start_date.
     if return_latest_ancillary:
         subquery = max_version_query.subquery()
-        join = table.version == subquery.c.latest_version
+        joiner = table.version == subquery.c.latest_version
     else:
         # Group by start_date
         max_version_query = max_version_query.group_by(table.start_date)
         subquery = max_version_query.subquery()
-        join = (table.start_date == subquery.c.start_date) & (
+        joiner = (table.start_date == subquery.c.start_date) & (
             table.version == subquery.c.latest_version
         )
-    # Join subquery and select only the files with the latest version per grouping
+    # Query records
     records = (
         session.query(table)
         .join(
             subquery,
-            join,
+            joiner,
         )
         .filter(*filter_conditions)
         .all()
