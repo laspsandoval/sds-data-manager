@@ -338,10 +338,10 @@ def submit_all_jobs(
     if end_date:
         dependency_event_msg["end_date"] = end_date
 
-    upstream_dependencies = _get_dependencies(dependency_event_msg)
+    existing_hard_upstream_dependenices = _get_dependencies(dependency_event_msg)
 
     # If soft nor hard dependencies are found, return.
-    if not upstream_dependencies:
+    if not existing_hard_upstream_dependenices:
         logger.info(f"Upstream dependency not found for: {dependency_event_msg}")
         return
 
@@ -373,7 +373,10 @@ def submit_all_jobs(
     dependency_event_msg["relationship"] = "SOFT"
     existing_soft_upstream_dependencies = _get_dependencies(dependency_event_msg)
     # Combine soft and hard dependencies
-    upstream_dependencies.add(existing_soft_upstream_dependencies.processing_input)
+    upstream_dependencies = ProcessingInputCollection(
+        existing_soft_upstream_dependencies.processing_input,
+        existing_hard_upstream_dependenices.processing_input,
+    )
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_inputs():
         if job["data_source"] == dep.source:
