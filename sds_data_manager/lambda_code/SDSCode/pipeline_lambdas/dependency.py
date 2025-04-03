@@ -674,9 +674,9 @@ def get_files(
         table.start_date, func.max(table.version).label("latest_version")
     ).filter(*filter_conditions)
     # Only group by start date if return_latest_ancillary is false.
-    # If true, this means the files are ancillary files, and we only want to return one
-    # file with the most recent start date and greatest version number, otherwise we
-    # want to return the max version for each start_date.
+    # If true, we only want to return one ancillary file (including science files of
+    # another instrument) with the most recent start date and greatest version number,
+    # otherwise we want to return the max version for each start_date.
     if return_latest_ancillary:
         subquery = max_version_query.subquery()
         joiner = table.version == subquery.c.latest_version
