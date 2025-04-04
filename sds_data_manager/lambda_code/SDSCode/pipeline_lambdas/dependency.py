@@ -372,6 +372,7 @@ def filter_primary_science_dependencies(
         Upstream primary source filenames that have downstream dependencies that need
         to be processed.
     """
+    # TODO create a downstream dependency instead of combining the query and records.
     files = []
     for record in records:
         # check in the science table if the upstream primary source dependency
