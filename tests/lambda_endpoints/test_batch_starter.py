@@ -264,6 +264,31 @@ def test_lambda_handler_no_dependencies(session, mock_urlopen):
         assert mock_submit.call_count == 0
 
 
+def test_lambda_handler_no_dependencies_multiple_files(session, mock_urlopen):
+    """Tests ``lambda_handler`` when there are no dependencies for the file."""
+    _populate_file_catalog(session)
+    # Test Multiple Events:
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_ultra_l2_sci_20000101_v001.cdf"}}'
+                "}"
+            },
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_swe_l1a_sci_20240101_v001.cdf"}}'
+                "}"
+            },
+        ]
+    }
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        # Verify the function was not called
+        assert mock_submit.call_count == 1
+
+
 def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplog):
     """Tests ``lambda_handler`` when there are no dependencies for the file."""
     _populate_file_catalog(session)

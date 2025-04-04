@@ -437,7 +437,7 @@ def lambda_handler(events: dict, context):
 
         if not potential_jobs:
             logger.info(f"Found no dependencies for {dependency_event_msg}.")
-            return
+            continue
 
         with db.Session() as session:
             for job in potential_jobs:
