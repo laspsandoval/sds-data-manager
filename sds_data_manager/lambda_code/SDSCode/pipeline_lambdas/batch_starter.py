@@ -328,7 +328,7 @@ def submit_all_jobs(
     upstream_dependencies = _get_dependencies(dependency_event_msg)
     if not upstream_dependencies.processing_input:
         logger.info(
-            f"Upstream dependency not found, or downstream dependency"
+            f"Upstream dependency not found, or downstream dependency "
             f"already exists for: {dependency_event_msg}"
         )
         return
