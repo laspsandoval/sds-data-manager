@@ -30,7 +30,7 @@ repos:
     hooks:
       - id: generate_requirements_files
         name: generate_requirements_files
-        entry: generate_requirements_files.sh
+        entry: lambda_layer/generate_requirements_files.sh
         language: script
         pass_filenames: false
         verbose: true
