@@ -9,4 +9,6 @@ poetry export -f requirements.txt --with layer-processing -o lambda_layer/proces
 echo "Generating spice requirements file"
 poetry export -f requirements.txt --with layer-spice -o lambda_layer/spice/requirements.txt --without-urls
 
+touch test.txt
+
 echo "Requirements files generated successfully."
