@@ -33,5 +33,5 @@ repos:
         entry: generate_requirements_files.sh
         language: script
         pass_filenames: false
-
+        verbose: true
 
