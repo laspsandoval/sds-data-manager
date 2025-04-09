@@ -321,7 +321,7 @@ def test_spice_file():
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_yyyy_doy_yyyy_doy.spin.csv"}}'
+                '{"object": {"key": "imap_1000_100_1000_100_10.spin.csv"}}'
                 "}"
             }
         ]
@@ -333,8 +333,8 @@ def test_spice_file():
     # TODO: undo this and add correct tests when it's implemented.
     with pytest.raises(
         ValueError,
-        match="Invalid file type for imap_yyyy_doy_yyyy_doy.spin.csv. "
-        "It does not matchSpice, Science or Ancillary file formats",
+        match="Batch starter handling for spice file: "
+        "imap_1000_100_1000_100_10.spin.csv is not implemented yet",
     ):
         lambda_handler(events, context)
 

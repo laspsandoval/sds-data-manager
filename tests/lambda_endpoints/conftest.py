@@ -21,7 +21,7 @@ BUCKET_NAME = "test-data-bucket"
 
 
 @pytest.fixture(autouse=True)
-def _set_env(monkeypatch):
+def _set_env(monkeypatch, tmpdir):
     """Set global environment variables."""
     monkeypatch.setenv("S3_BUCKET", BUCKET_NAME)
     # Mock AWS Credentials for moto
@@ -33,6 +33,7 @@ def _set_env(monkeypatch):
     # Mock the api gateway url
     # This is used in batch_starter.py
     monkeypatch.setenv("IMAP_DATA_ACCESS_URL", "https://test.url")
+    monkeypatch.setenv("EFS_SPICE_MOUNT_PATH", str(tmpdir))
 
 
 @pytest.fixture(scope="module")
@@ -50,7 +51,7 @@ def science_file():
 @pytest.fixture(scope="module")
 def spice_file():
     """Path to a valid spice file."""
-    return "imap_mag_l1a_20210101_v001.cdf"
+    return "spice/ck/imap_2025_032_2025_034_003.ah.bc"
 
 
 @pytest.fixture(scope="module")
