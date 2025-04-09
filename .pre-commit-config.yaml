@@ -1,7 +1,7 @@
 ci:
   autofix_prs: false
   autoupdate_schedule: 'quarterly'
-  skip: [poetry-lock, poetry-export]
+  skip: [poetry-lock, generate-requirements-files]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -28,8 +28,8 @@ repos:
         args: [--no-update]
   - repo: local
     hooks:
-      - id: generate_requirements_files
-        name: generate_requirements_files
+      - id: generate-requirements-files
+        name: generate-requirements-files
         entry: lambda_layer/generate_requirements_files.sh
         language: script
         pass_filenames: false
