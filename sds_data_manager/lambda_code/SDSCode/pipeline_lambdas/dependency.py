@@ -511,9 +511,7 @@ def get_dependency_processing_input(
             )
 
             if not records and relationship == Relationship.HARD:
-                logger.info(
-                    "No records found for dependency. Returning empty collection."
-                )
+                logger.info("No records found for dependency. Returning None.")
                 return None
             elif not records:
                 continue
@@ -556,7 +554,8 @@ def get_files(
     start_date : datetime
         Start date of the event data.
     version : str, optional
-        Version of the event data.
+        Version of the event data. If not supplied, the most recent version will be
+        returned.
     end_date: datetime, optional
         End date of the event data.
     primary_sci_trigger: bool, optional

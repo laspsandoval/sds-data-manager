@@ -134,16 +134,18 @@ def bump_version_number(version: str):
     return f"v{int(version[1:]) + 1:03d}"
 
 
-def is_duplicate():
-    """Check if there was a duplicate job already processed.
+def is_runnable():
+    """Check if the job should be submitted.
+
+    Calculate the CRID to assert that an identical job has not been run yet and that
+    we are not waiting on any upstream jobs to finish.
 
     Returns
     -------
     bool
-       True if the job has already been processed with the exact upstream
-       dependencies, otherwise False.
+       True if the job should be submitted, otherwise False.
     """
-    # TODO calculate CRID and check if if it already exists in the processing table
+    # TODO calculate CRID and check if it already exists in the processing table
     return False
 
 
@@ -154,7 +156,7 @@ def determine_job_version(
     descriptor: str,
     start_date: datetime,
 ):
-    """Return the version of the current job.
+    """Return the version of the job to run.
 
     Parameters
     ----------
@@ -172,7 +174,7 @@ def determine_job_version(
     Returns
     -------
      str
-        The highest version number bumped by 1 if the file has been processed,
+        The highest version number bumped by 1 if the file has been already processed,
         otherwise "v000".
     """
     # TODO should I be making a separate call to the scienceFilesTable for the
@@ -233,8 +235,11 @@ def try_to_submit_job(
 
     logger.info("Checking for job in progress.")
 
-    if is_duplicate():
-        logger.info("Exact job is already in processing table.")
+    if not is_runnable():
+        logger.info(
+            "Exact job has already been processed or waiting on an upstream"
+            "job to complete."
+        )
         return
 
     version = determine_job_version(

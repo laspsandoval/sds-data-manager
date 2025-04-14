@@ -127,9 +127,9 @@ def test_lambda_handler(
     context = {"context": "sample_context"}
     target = (
         "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
-        "batch_starter.is_duplicate"
+        "batch_starter.is_runnable"
     )
-    # Mock is_duplicate function to return False then True.
+    # Mock is_runnable function to return False then True.
     # TODO remove this patch once CRID calculation is complete
     with (
         patch(target, side_effect=[False, True]),
@@ -252,9 +252,9 @@ def test_lambda_handler_ancillary_event(
         mock_batch_client.submit_job.call_count = 0
         target = (
             "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
-            "batch_starter.is_duplicate"
+            "batch_starter.is_runnable"
         )
-        # Mock is_duplicate function to return True.
+        # Mock is_runnable function to return True.
         # TODO remove this patch once CRID calculation is complete
         with patch(target, return_value=True):
             lambda_handler(events, context)
