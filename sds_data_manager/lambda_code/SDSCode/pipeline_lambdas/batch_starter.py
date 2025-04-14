@@ -18,12 +18,11 @@ from imap_data_access import (
     SPICEFilePath,
 )
 from imap_data_access.processing_input import ProcessingInputCollection
-from sqlalchemy import select
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from ..database import database as db
 from ..database import models
-from .dependency import valid_science
 
 # import dependency
 
@@ -119,16 +118,43 @@ def _get_dependencies(dependency_events: dict):
     return dependencies
 
 
-def is_job_in_processing_table(
+def bump_version_number(version: str):
+    """Increase version number by 1.
+
+    Parameters
+    ----------
+    version : str
+        Current version number.
+
+    Returns
+    -------
+    str
+        Version increased by 1.
+    """
+    return f"v{int(version[1:]) + 1:03d}"
+
+
+def is_duplicate():
+    """Check if there was a duplicate job already processed.
+
+    Returns
+    -------
+    bool
+       True if the job has already been processed with the exact upstream
+       dependencies, otherwise False.
+    """
+    # TODO calculate CRID and check if if it already exists in the processing table
+    return False
+
+
+def determine_job_version(
     session: db.Session,
     instrument: str,
     data_level: str,
     descriptor: str,
     start_date: datetime,
-    version: str,
-    in_progress_only: bool = False,
 ):
-    """Check if the job is already running.
+    """Return the version of the current job.
 
     Parameters
     ----------
@@ -142,46 +168,39 @@ def is_job_in_processing_table(
         Data descriptor.
     start_date : datetime
         Start date.
-    version : str
-        Data version.
-    in_progress_only : str
-        Check only jobs that are in progress.
 
     Returns
     -------
-    bool
-        True if a duplicate job is found, False otherwise.
+     str
+        The highest version number bumped by 1 if the file has been processed,
+        otherwise "v000".
     """
-    # If in_progress_only is True, only check for jobs that are currently processing
-    if in_progress_only:
-        status_clause = models.ProcessingJob.status == models.Status.INPROGRESS.value
-    else:
-        status_clause = models.ProcessingJob.status.in_(
-            [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
-        )
-    # check in the processing table if the job is already in progress
-    # for this instrument, data level, version, and descriptor
-    query = select(models.ProcessingJob.__table__).where(
+    # TODO should I be making a separate call to the scienceFilesTable for the
+    # latest version?
+    filter_conditions = [
         models.ProcessingJob.instrument == instrument,
         models.ProcessingJob.data_level == data_level,
         models.ProcessingJob.descriptor == descriptor,
         models.ProcessingJob.start_date == start_date,
-        models.ProcessingJob.version == version,
-        status_clause,
-    )
+        models.ProcessingJob.status.in_(
+            [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
+        ),
+    ]
+    # Determine the maximum version for the file if any
+    max_version = (
+        session.query(
+            func.max(models.ProcessingJob.version).label("latest_version")
+        ).filter(*filter_conditions)
+    ).scalar()
 
-    results = session.execute(query).all()
-
-    if results:
-        return True
-    return False
+    job_version = bump_version_number(max_version) if max_version else "v000"
+    return job_version
 
 
 def try_to_submit_job(
     session: db.Session,
     job_info: dict,
     start_date: datetime,
-    version: str,
     upstream_dependencies: ProcessingInputCollection,
 ):
     """Try to submit a batch job with the given job information.
@@ -198,8 +217,6 @@ def try_to_submit_job(
         Dictionary containing components with dates and versions appended.
     start_date : datetime
         Start date of the data.
-    version : str
-        Version of the data.
     upstream_dependencies : ProcessingInputCollection
         Input collection of upstream dependencies.
 
@@ -216,20 +233,27 @@ def try_to_submit_job(
 
     logger.info("Checking for job in progress.")
 
-    if is_job_in_processing_table(
+    if is_duplicate():
+        logger.info("Exact job is already in processing table.")
+        return
+
+    version = determine_job_version(
         session=session,
         instrument=instrument,
         descriptor=descriptor,
         start_date=start_date,
-        version=version,
         data_level=data_level,
-    ):
+    )
+    if version == "v000":
         logger.info(
-            f"Job already in progress for {instrument}, {data_level}, "
-            f"{descriptor}, {start_date_str}, {version}"
+            f"PROCESSING {instrument}, {data_level}, "
+            f"{descriptor}, {start_date_str} with version: {version}"
         )
-        return
-
+    else:
+        logger.info(
+            f"REPROCESSING {instrument}, {data_level}, "
+            f"{descriptor}, {start_date_str} with new version: {version}"
+        )
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
     # If this job already exists, then we will get an integrity error
@@ -242,7 +266,6 @@ def try_to_submit_job(
         start_date=start_date,
         version=version,
     )
-
     try:
         session.add(processing_job)
         session.commit()
@@ -274,7 +297,7 @@ def try_to_submit_job(
     ]
 
     # NOTE: The batch job name should contain only alphanumeric characters and hyphens
-    # Eg. "codice-l1a-sci-job-1"
+    # E.g. "codice-l1a-sci-job-1"
     # The `processing_job.id` is used later for updating the job processing table
     job_name = f"{instrument}-{data_level}-{descriptor}-job-{processing_job.id}"
     # Get the necessary AWS information
@@ -346,35 +369,19 @@ def submit_all_jobs(
         return
 
     logger.info(f"All required dependencies found for the job: {job}")
-    # Get soft dependencies if they are available
-    base_event_msg["relationship"] = "SOFT"
-    all_soft_upstream_dependencies = _get_dependencies(base_event_msg)
-    # Check if any soft dependencies are currently processing.
-    # If a job is in progress, then return and let that file trigger batch starter
-    # When it is done processing.
-    for dep in all_soft_upstream_dependencies:
-        # Check only science
-        if valid_science(dep["data_type"]) and is_job_in_processing_table(
-            session,
-            dep["data_source"],
-            dep["data_type"],
-            dep["descriptor"],
-            datetime.strptime(start_date, "%Y%m%d"),
-            version,
-            in_progress_only=True,
-        ):
-            logger.info(
-                f"Soft dependency {dep} is currently processing. Job will be"
-                " triggered when dependency processing completes and file is "
-                "available in S3."
-            )
-            return
 
-    dependency_event_msg["relationship"] = "SOFT"
-    existing_soft_upstream_dependencies = _get_dependencies(dependency_event_msg)
+    dependency_event_msg["relationship"] = "SOFT_TRIGGER"
+    existing_soft_trigger_upstream_dependencies = _get_dependencies(
+        dependency_event_msg
+    )
+    dependency_event_msg["relationship"] = "SOFT_NO_TRIGGER"
+    existing_soft_no_trigger_upstream_dependencies = _get_dependencies(
+        dependency_event_msg
+    )
     # Combine soft and hard dependencies
     upstream_dependencies = ProcessingInputCollection(
-        existing_soft_upstream_dependencies.processing_input,
+        existing_soft_trigger_upstream_dependencies.processing_input,
+        existing_soft_no_trigger_upstream_dependencies.processing_input,
         existing_hard_upstream_dependenices.processing_input,
     )
     # Find science processingInputs that have the same source as the potential job
@@ -396,11 +403,9 @@ def submit_all_jobs(
                 dep.imap_file_paths = [upstream_file]
                 dep.filename_list = [str(upstream_file.filename)]
                 job_start_date = datetime.strptime(upstream_file.start_date, "%Y%m%d")
-                job_version = upstream_file.version
-                # TODO when do we bump version?
-                try_to_submit_job(
-                    session, job, job_start_date, job_version, upstream_dependencies
-                )
+                try_to_submit_job(session, job, job_start_date, upstream_dependencies)
+        # Break out of the loop because we found an upstream science dep.
+        break
 
 
 def lambda_handler(events: dict, context):
@@ -476,8 +481,8 @@ def lambda_handler(events: dict, context):
         # which are the downstream dependencies.
         potential_jobs = _get_dependencies(dependency_event_msg)
 
-        # SOFT dependencies will try to set off processing
-        dependency_event_msg["relationship"] = "SOFT"
+        # SOFT_TRIGGER dependencies will try to set off processing
+        dependency_event_msg["relationship"] = "SOFT_TRIGGER"
         potential_soft_jobs = _get_dependencies(dependency_event_msg)
 
         with db.Session() as session:

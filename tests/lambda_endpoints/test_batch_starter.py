@@ -27,7 +27,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
     IMAPDependencyFinderError,
     _get_dependencies,
-    is_job_in_processing_table,
+    determine_job_version,
     lambda_handler,
 )
 
@@ -125,13 +125,16 @@ def test_lambda_handler(
         '[{"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]}]'
     )
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
-        lambda_handler(events, context)
-        mock_batch_client.submit_job.assert_called_once()
-
-        # Submit a second job with the same file as input which will try to kick
-        # off a duplicate job. We expect the submit_job method to not be called
-        # so make sure it is still only called once from our previous iteration.
+    target = (
+        "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
+        "batch_starter.is_duplicate"
+    )
+    # Mock is_duplicate function to return False then True.
+    # TODO remove this patch once CRID calculation is complete
+    with (
+        patch(target, side_effect=[False, True]),
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+    ):
         lambda_handler(events, context)
         mock_batch_client.submit_job.assert_called_once()
         mock_batch_client.submit_job.assert_called_with(
@@ -149,13 +152,18 @@ def test_lambda_handler(
                     "--start-date",
                     "20240110",
                     "--version",
-                    "v001",
+                    "v000",
                     "--dependency",
                     serialized_processing_input,
                     "--upload-to-sdc",
                 ]
             },
         )
+        # Submit a second job with the same file as input which will try to kick
+        # off a duplicate job. We expect the submit_job method to not be called
+        # so make sure it is still only called once from our previous iteration.
+        lambda_handler(events, context)
+        mock_batch_client.submit_job.assert_called_once()
 
 
 def test_lambda_handler_multiple_events(session, mock_urlopen):
@@ -202,8 +210,8 @@ def test_lambda_handler_ancillary_event(
     context = {"context": "sample_context"}
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
-        # There should be two different jobs submitted for one swe l1b ancillary file
-        assert mock_batch_client.submit_job.call_count == 2
+        # There should be three different jobs submitted for one swe l1b ancillary file
+        assert mock_batch_client.submit_job.call_count == 3
         # Assert_called_with only works on the last call
         # Check that the last call is what we expect with the correct dependencies
 
@@ -218,7 +226,7 @@ def test_lambda_handler_ancillary_event(
         )
         dependencies = ProcessingInputCollection(science_in, ancillary_in)
         mock_batch_client.submit_job.assert_called_with(
-            jobName="swe-l1b-sci-job-2",
+            jobName="swe-l1b-sci-job-3",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-swe",
             containerOverrides={
@@ -232,7 +240,7 @@ def test_lambda_handler_ancillary_event(
                     "--start-date",
                     "20240103",
                     "--version",
-                    "v001",
+                    "v000",
                     "--dependency",
                     dependencies.serialize(),
                     "--upload-to-sdc",
@@ -240,11 +248,17 @@ def test_lambda_handler_ancillary_event(
             },
         )
         # Submit a second job with the same file as input which will try to kick
-        # off a duplicate job. We expect the submit_job method to not be called
-        # so make sure it is still only called two times from our previous iteration.
+        # off a duplicate job. We expect the submit_job method to not be called.
         mock_batch_client.submit_job.call_count = 0
-        lambda_handler(events, context)
-        assert mock_batch_client.submit_job.call_count == 0
+        target = (
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
+            "batch_starter.is_duplicate"
+        )
+        # Mock is_duplicate function to return True.
+        # TODO remove this patch once CRID calculation is complete
+        with patch(target, return_value=True):
+            lambda_handler(events, context)
+            assert mock_batch_client.submit_job.call_count == 0
 
 
 def test_lambda_handler_soft_dependencies(session, mock_urlopen):
@@ -282,50 +296,13 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
                     "--start-date",
                     "20240101",
                     "--version",
-                    "v001",
+                    "v000",
                     "--dependency",
                     expected_processing_input.serialize(),
                     "--upload-to-sdc",
                 ]
             },
         )
-
-
-def test_processing_soft_dependencies(session, caplog, mock_urlopen):
-    """Test that the correct soft dependencies are returned."""
-    # Add mag l1b job as PROGRESS
-    record = ProcessingJob(
-        status=models.Status.INPROGRESS,
-        instrument="mag",
-        data_level="l1b",
-        descriptor="burst-mago",
-        start_date=datetime(2024, 1, 1),
-        version="v001",
-    )
-    session.add(record)
-    session.commit()
-    _populate_file_catalog(session)
-    events = {
-        "Records": [
-            {
-                "body": '{"detail": '
-                '{"object": {"key": "imap_mag_l1b_norm-mago_20240101_v001.cdf"}}'
-                "}"
-            }
-        ]
-    }
-    context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
-        lambda_handler(events, context)
-        # Since there is a soft dependency that is currently being processed,
-        # The handler call should NOT submit a job.
-        mock_batch_client.assert_not_called()
-        assert (
-            "Soft dependency {'data_source': 'mag', 'data_type': 'l1b', "
-            "'descriptor': 'burst-mago'} is currently processing. Job will be "
-            "triggered when dependency processing completes and file is available "
-            "in S3."
-        ) in caplog.text
 
 
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
@@ -423,30 +400,29 @@ def test_spice_file():
         lambda_handler(events, context)
 
 
-def test_is_job_in_status_table(session):
+def test_determine_max_version(session):
     """Test the ``is_job_in_status_table`` function."""
     _populate_processing_table(session)
-    # query the processing table if this job is already in progress
-    result = is_job_in_processing_table(
+    # query the processing table and get the bumped version
+    result = determine_job_version(
         session=session,
         instrument="lo",
         data_level="l1b",
         descriptor="de",
         start_date=datetime(2010, 1, 1),
-        version="v001",
     )
 
-    assert result
+    assert result == "v002"
 
-    result = is_job_in_processing_table(
+    # Assert that the version returned is "v000" when the job has not been processed.
+    result = determine_job_version(
         session=session,
         instrument="swapi",
         data_level="l1b",
         descriptor="sci",
         start_date=datetime(2010, 1, 1),
-        version="v001",
     )
-    assert not result
+    assert result == "v000"
 
 
 @pytest.mark.skipif(
@@ -472,6 +448,8 @@ def test_duplicate_job(session, first_status, second_status):
                 descriptor="de",
                 start_date=datetime(2010, 1, 1),
                 version="v001",
+                dependencies='[{"type": "ancillary", "files": '
+                '["imap_mag_l1b-cal_20250101_v001.cdf"]}]',
             )
         )
     session.commit()

@@ -87,7 +87,7 @@ def test_soft_dependencies(session):
         start_date="20240101",
         version="v001",
         trigger_type="l1b",
-        relationship="SOFT",
+        relationship="SOFT_TRIGGER",
         dep_type="UPSTREAM",
     )
     dependency_response = dependency.lambda_handler(event, None)
@@ -127,7 +127,7 @@ def test_missing_soft_dependencies(session):
         start_date="20240101",
         version="v001",
         trigger_type="l1b",
-        relationship="SOFT",
+        relationship="SOFT_TRIGGER",
         dep_type="UPSTREAM",
     )
     dependency_response = dependency.lambda_handler(event, None)
@@ -243,11 +243,10 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     )
     dependency_response = dependency.lambda_handler(event, None)
     dependencies = dependency_response["body"]
-    # There are three swe l1a records before 20240104, but one of them was filtered
-    # out because the swe l1b downstream dependency for that date and version
-    # was already processed, so it is not included in the output.
+    # There are three swe l1a records before 20240104.
     science_in = ScienceInput(
-        "imap_swe_l1a_sci_20240101_v010.cdf",
+        "imap_swe_l1a_sci_20240101_v001.cdf",
+        "imap_swe_l1a_sci_20240102_v001.cdf",
         "imap_swe_l1a_sci_20240103_v001.cdf",
     )
     ancillary_in = AncillaryInput("imap_swe_l1b-in-flight-cal_20230101_v001.cdf")
@@ -467,7 +466,6 @@ def test_get_files_max_version_ancillary(session):
         session,
         dependency=dep,
         start_date=datetime(2010, 1, 2),
-        version="v001",
         primary_sci_trigger=False,
     )
 
