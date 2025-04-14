@@ -166,6 +166,6 @@ spiceypy==6.0.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:70cda5b057d1b83dd8a4ecd9d4d2823b2f9c263b85fcdcc0df0370ca5b94c74f \
     --hash=sha256:a7da6cdb0eaa1e1a27a2198be58404262c0def0216ad62de7183223461e35aa0 \
     --hash=sha256:ac27096a12b795898c3a6d1fa1f12a7e4485f480acd2e59fbd3a986cb0ade2be
-urllib3==2.3.0 ; python_version >= "3.10" and python_version < "4" \
-    --hash=sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df \
-    --hash=sha256:f8c5449b3cf0861679ce7e0503c7b44b5ec981bec0d1d3795a07f1ba96f0204d
+urllib3==2.4.0 ; python_version >= "3.10" and python_version < "4" \
+    --hash=sha256:414bc6535b787febd7567804cc015fee39daab8ad86268f1310a9250697de466 \
+    --hash=sha256:4e16665048960a0900c702d4a66415956a584919c03361cac9f1df5c5dd7e813
