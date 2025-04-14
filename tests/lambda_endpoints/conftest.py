@@ -165,11 +165,11 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
-            instrument="mag",
-            data_level="l1b",
-            descriptor="burst-mago",
-            start_date=datetime(2024, 1, 1),
+            file_path="/path/to/imap_swe_l0_raw_20240110_v001.pkts",
+            instrument="swe",
+            data_level="l0",
+            descriptor="raw",
+            start_date=datetime(2024, 1, 10),
             version="v001",
             extension="cdf",
             ingestion_date=datetime.strptime(
@@ -177,13 +177,13 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
-            instrument="swe",
-            data_level="l0",
-            descriptor="raw",
+            file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
+            instrument="mag",
+            data_level="l1b",
+            descriptor="burst-mago",
             start_date=datetime(2024, 1, 1),
             version="v001",
-            extension="pkts",
+            extension="cdf",
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),

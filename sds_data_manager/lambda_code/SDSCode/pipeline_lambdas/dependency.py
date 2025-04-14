@@ -520,35 +520,6 @@ def get_dependency_processing_input(
 
             filenames = [basename(record.file_path) for record in records]
             logger.info(f"Found filenames: {filenames}. Adding to collection.")
-            # If this is a primary science dependency, filter files for ones that have a
-            # downstream counterpart that needs to be processed.
-            # E.g. if imap_mag_l1d-sci_0250105.cdf file triggers batch starter,
-            # This could potentially trigger multiple swe l1b files that have been
-            # waiting. E.g.,
-            #    - imap_swe_l1b_sci_20250102.cdf
-            #    - imap_swe_l1b_sci_20250103.cdf
-            #    - imap_swe_l1b_sci_20250104.cdf
-            # Swe l1a is an upstream for swe l1b and get_files() will return all swe l1a
-            # records with start dates before 0250105.
-            # This list can be narrowed by calling filter_primary_science_dependencies()
-            # It will look for each l1a file's l1b counter-part in the science files
-            # table. If the file already exists, the l1a file is ignored.
-            if primary_sci_dep and relationship == Relationship.SOFT_NO_TRIGGER:
-                filenames = filter_primary_science_dependencies(
-                    session,
-                    records,
-                    query_params["data_type"],
-                    query_params["descriptor"],
-                )
-
-                if not filenames and relationship == Relationship.HARD:
-                    logger.info(
-                        "Primary dependency files already processed. Returning empty "
-                        "collection."
-                    )
-                    return None
-                elif not filenames:
-                    continue
 
             # Create a processingInput instance and add it to the collection
             if dep["data_type"] == DataType.ANCILLARY:
