@@ -132,7 +132,7 @@ def test_lambda_handler(
     # Mock is_runnable function to return False then True.
     # TODO remove this patch once CRID calculation is complete
     with (
-        patch(target, side_effect=[False, True]),
+        patch(target, side_effect=[True, False]),
         patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
     ):
         lambda_handler(events, context)
@@ -254,9 +254,9 @@ def test_lambda_handler_ancillary_event(
             "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
             "batch_starter.is_runnable"
         )
-        # Mock is_runnable function to return True.
+        # Mock is_runnable function to return FALSE.
         # TODO remove this patch once CRID calculation is complete
-        with patch(target, return_value=True):
+        with patch(target, return_value=False):
             lambda_handler(events, context)
             assert mock_batch_client.submit_job.call_count == 0
 

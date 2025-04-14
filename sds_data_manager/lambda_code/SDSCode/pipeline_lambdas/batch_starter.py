@@ -146,7 +146,7 @@ def is_runnable():
        True if the job should be submitted, otherwise False.
     """
     # TODO calculate CRID and check if it already exists in the processing table
-    return False
+    return True
 
 
 def determine_job_version(
