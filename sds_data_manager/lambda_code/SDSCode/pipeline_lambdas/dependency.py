@@ -678,10 +678,30 @@ def get_files(
     # another instrument) with the most recent start date and greatest version number,
     # otherwise we want to return the max version for each start_date.
     if return_latest_ancillary:
+        # We are querying for swe_l1b-in-flight-calibration ancillary files with start
+        # dates less than or equal to 20250102 and want to run swe l1b.
+        # The following swe files are found:
+        #    - swe_l1b_in-flight-cal_20240511_v001
+        #    - swe_l1a_in-flight-cal_20240511_v002
+        #    - swe_l1a_in-flight-cal_20240512_v001
+        #    - swe_l1a_in-flight-cal_20240512_v004
+        # We only want to return the most recent start date with the max version
+        #    - swe_l1a_sci_20240512_v004
         subquery = max_version_query.subquery()
         joiner = table.version == subquery.c.latest_version
     else:
         # Group by start_date
+        # E.g.,
+        # We are querying for swe l1a science files with start dates greater than or
+        # equal to 20240510 and want to run swe l1b sci jobs.
+        # The following swe files are found:
+        #    - swe_l1a_sci_20240511_v001
+        #    - swe_l1a_sci_20240511_v002
+        #    - swe_l1a_sci_20240512_v001
+        #    - swe_l1a_sci_20240512_v004
+        # We only want to return the latest versions per start date
+        #    - swe_l1a_sci_20240511_v002
+        #    - swe_l1a_sci_20240512_v004
         max_version_query = max_version_query.group_by(table.start_date)
         subquery = max_version_query.subquery()
         joiner = (table.start_date == subquery.c.start_date) & (
