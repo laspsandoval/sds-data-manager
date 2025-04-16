@@ -125,16 +125,8 @@ def test_lambda_handler(
         '[{"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]}]'
     )
     context = {"context": "sample_context"}
-    target = (
-        "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
-        "batch_starter.is_runnable"
-    )
-    # Mock is_runnable function to return False then True.
-    # TODO remove this patch once CRID calculation is complete
-    with (
-        patch(target, side_effect=[True, False]),
-        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
-    ):
+
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
         mock_batch_client.submit_job.assert_called_once()
         mock_batch_client.submit_job.assert_called_with(
@@ -250,15 +242,8 @@ def test_lambda_handler_ancillary_event(
         # Submit a second job with the same file as input which will try to kick
         # off a duplicate job. We expect the submit_job method to not be called.
         mock_batch_client.submit_job.call_count = 0
-        target = (
-            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas."
-            "batch_starter.is_runnable"
-        )
-        # Mock is_runnable function to return FALSE.
-        # TODO remove this patch once CRID calculation is complete
-        with patch(target, return_value=False):
-            lambda_handler(events, context)
-            assert mock_batch_client.submit_job.call_count == 0
+        lambda_handler(events, context)
+        assert mock_batch_client.submit_job.call_count == 0
 
 
 def test_lambda_handler_soft_dependencies(session, mock_urlopen):
