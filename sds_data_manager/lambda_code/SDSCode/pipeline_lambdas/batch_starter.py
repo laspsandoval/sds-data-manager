@@ -134,21 +134,6 @@ def bump_version_number(version: str):
     return f"v{int(version[1:]) + 1:03d}"
 
 
-def is_runnable():
-    """Check if the job should be submitted.
-
-    Calculate the CRID to assert that an identical job has not been run yet and that
-    we are not waiting on any upstream jobs to finish.
-
-    Returns
-    -------
-    bool
-       True if the job should be submitted, otherwise False.
-    """
-    # TODO calculate CRID and check if it already exists in the processing table
-    return True
-
-
 def determine_job_version(
     session: db.Session,
     instrument: str,
@@ -234,13 +219,6 @@ def try_to_submit_job(
     start_date_str = datetime.strftime(start_date, "%Y%m%d")
 
     logger.info("Checking for job in progress.")
-
-    if not is_runnable():
-        logger.info(
-            "Exact job has already been processed or waiting on an upstream"
-            "job to complete."
-        )
-        return
 
     version = determine_job_version(
         session=session,
