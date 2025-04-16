@@ -225,7 +225,7 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     dependencies = dependency_response["body"]
     # There are three swe l1a records before 20240104.
     science_in = ScienceInput(
-        "imap_swe_l1a_sci_20240101_v001.cdf",
+        "imap_swe_l1a_sci_20240101_v010.cdf",
         "imap_swe_l1a_sci_20240102_v001.cdf",
         "imap_swe_l1a_sci_20240103_v001.cdf",
     )
@@ -466,7 +466,6 @@ def test_get_files_science(session):
         session,
         dependency=dep,
         start_date=datetime(2010, 1, 2),
-        version="v001",
         primary_sci_trigger=False,
         primary_sci_dep=True,
     )
