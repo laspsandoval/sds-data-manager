@@ -101,7 +101,7 @@ def _get_dependencies(dependency_events: dict):
         dependency_response = response.read().decode("utf-8")
         # Check for a 206 status code
         if response.status == 206:
-            logger.info(f"Partial content received: {dependency_response}")
+            logger.info(f"Dependency API response: {dependency_response}")
             return None
         logger.debug(f"Received dependencies: {dependency_response}")
     # The API returns different output formats depending on the query parameters:

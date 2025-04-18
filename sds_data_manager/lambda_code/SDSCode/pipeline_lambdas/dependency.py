@@ -149,7 +149,7 @@ class Relationship:
         1. HARD - the data is required for the pipeline to run
         2. SOFT_TRIGGER - the data is optional for the pipeline to run. A new file will
             trigger processing.
-        2. SOFT_NO_TRIGGER - the data is optional for the pipeline to run. A new file
+        3. SOFT_NO_TRIGGER - the data is optional for the pipeline to run. A new file
             will not trigger processing.
     """
 
