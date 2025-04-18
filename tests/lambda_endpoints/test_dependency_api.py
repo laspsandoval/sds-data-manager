@@ -11,9 +11,7 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
-from sds_data_manager.lambda_code.SDSCode.database.models import (
-    ScienceFiles,
-)
+from sds_data_manager.lambda_code.SDSCode.database.models import ScienceFiles
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
 from tests.lambda_endpoints.conftest import (
@@ -268,6 +266,9 @@ def test_get_upstream_science_trigger(session):
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
 
     assert dependencies == expected_processing_input.serialize()
+    # Assert the science file has a crid associated with it now.
+    record = session.get(ScienceFiles, "/path/to/imap_swe_l1a_sci_20240103_v001.cdf")
+    assert record.crid
 
 
 @patch.object(dependency.DependencyConfig, "_load_dependencies")
@@ -291,10 +292,10 @@ def test_get_primary_science_files(session):
     """Tests the get_file function for science files."""
     _populate_file_catalog(session)
 
-    dep = {"data_source": "mag", "data_type": "l1b", "descriptor": "burst-mago"}
+    dep = ("mag", "l1b", "burst-mago")
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2024, 1, 1),
         version="v001",
         primary_sci_dep=True,
@@ -309,7 +310,7 @@ def test_get_primary_science_files(session):
     # Non-existent record should return an empty list
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2009, 1, 5),
         version="v001",
     )
@@ -321,10 +322,10 @@ def test_get_science_files_date_range(session):
     _populate_file_catalog(session)
     # Test with end date
     # It should return two swe records
-    dep = {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"}
+    dep = ("swe", "l1a", "sci")
     records_1 = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2024, 1, 2),
         version="v001",
         end_date=datetime(2024, 1, 3),
@@ -337,7 +338,7 @@ def test_get_science_files_date_range(session):
     # It should return three swe records
     records_2 = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2024, 1, 1),
         version="v001",
         primary_sci_trigger=False,
@@ -350,14 +351,10 @@ def test_get_ancillary_files(session):
     """Tests the get_file function."""
     _populate_file_catalog(session)
 
-    dep = {
-        "data_source": "swe",
-        "data_type": "ancillary",
-        "descriptor": "l1b-in-flight-cal",
-    }
+    dep = ("swe", "ancillary", "l1b-in-flight-cal")
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2023, 1, 1),
         version="v001",
     )[0]
@@ -369,15 +366,11 @@ def test_get_ancillary_files(session):
     # Get ancillary file covering range.
     # There are two ancillary files valid for this range, but the one with the most
     # recent start_date should be returned
-    dep = {
-        "data_source": "swe",
-        "data_type": "ancillary",
-        "descriptor": "l1b-in-flight-cal",
-    }
+
     start_date = datetime(2024, 1, 2)
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=start_date,
         version="v001",
     )
@@ -391,7 +384,7 @@ def test_get_ancillary_files(session):
     # Non-existent record should an empty list
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2000, 1, 1),
         version="v001",
     )
@@ -402,10 +395,10 @@ def test_get_exact_date_science_files(session):
     """Tests the get_file function."""
     _populate_file_catalog(session)
 
-    dep = {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"}
+    dep = ("swe", "l1a", "sci")
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2024, 1, 1),
         version="v001",
         primary_sci_trigger=True,
@@ -421,10 +414,10 @@ def test_get_exact_date_science_files(session):
 def test_get_files_exact_version(session):
     """Test get_files returns the exact version."""
     _populate_file_catalog(session)
-    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
+    dep = ("lo", "l1a", "sci")
     record = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2010, 1, 1),
         version="v001",
         primary_sci_trigger=True,
@@ -441,10 +434,10 @@ def test_get_files_exact_version(session):
 def test_get_files_max_version_ancillary(session):
     """Test get_files returns the max version."""
     _populate_file_catalog(session)
-    dep = {"data_source": "lo", "data_type": "l1a", "descriptor": "sci"}
+    dep = ("lo", "l1a", "sci")
     records = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2010, 1, 2),
         primary_sci_trigger=False,
     )
@@ -461,10 +454,10 @@ def test_get_files_max_version_ancillary(session):
 def test_get_files_science(session):
     """Test get_files returns the max version."""
     _populate_file_catalog(session)
-    dep = {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"}
+    dep = ("swe", "l1a", "sci")
     records = get_files(
         session,
-        dependency=dep,
+        *dep,
         start_date=datetime(2010, 1, 2),
         primary_sci_trigger=False,
         primary_sci_dep=True,

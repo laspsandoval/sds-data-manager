@@ -1,5 +1,6 @@
 """Dependency tracking module."""
 
+import hashlib
 import json
 import logging
 from collections import defaultdict
@@ -15,6 +16,7 @@ from sqlalchemy import and_, func, or_, select
 
 from ..database import database as db
 from ..database import models
+from ..database.models import AncillaryFiles, SPICEFiles
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -432,6 +434,119 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     )
 
 
+def get_upstream_versions(session, record, relationship, primary_sci_dep, versions):
+    """Recursively retrieves all upstream versions for a given record.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles
+        The current record for which upstream versions are being retrieved.
+    relationship : str
+        The type of relationship. HARD or SOFT.
+    primary_sci_dep : bool
+        Indicates if the dependency is a primary science dependency.
+    versions : list
+        A list to store all of the upstream versions.
+
+    Returns
+    -------
+    list
+        A list of all upstream versions.
+    """
+    if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
+        # Ancillary and SPICE files have no upstream dependencies
+        versions.append(record.version)
+        return versions
+
+    dep_node = (
+        record.instrument,
+        record.data_level,
+        record.descriptor,
+    )
+    upstream_deps = get_dependencies(
+        dep_node,
+        "UPSTREAM",
+        relationship,
+    )
+    if not upstream_deps:
+        return versions
+    else:
+        for upstream_dep in upstream_deps:
+            upstream_records = get_files(
+                session,
+                upstream_dep["data_source"],
+                upstream_dep["data_type"],
+                upstream_dep["descriptor"],
+                record.start_date,
+                record.version,
+                primary_sci_dep=primary_sci_dep,
+            )
+            if not upstream_records:
+                # TODO: How to handle this case
+                logger.warning(
+                    f"Could not find upstream dep for {record} during CRID calculation."
+                )
+                return versions
+
+            for upstream_record in upstream_records:
+                # Add the record version to list
+                versions.append(upstream_record.version)
+                get_upstream_versions(
+                    session, upstream_record, relationship, primary_sci_dep, versions
+                )
+
+
+def expected_crids_exist(session, records, relationship, primary_sci_dep) -> bool:
+    """Check if the expected CRIDs exist for the given records.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    records : list[Union[models.ScienceFiles, models.AncillaryFiles, models.SPICEFiles]]
+        List of records to check for CRIDs.
+    relationship : str
+        The type of relationship (HARD or SOFT).
+    primary_sci_dep : bool
+        Indicates if the dependency is a primary science dependency.
+
+    Returns
+    -------
+    bool
+        True if all expected CRIDs exist or are successfully set, False otherwise.
+    """
+    for upstream_record in records:
+        if isinstance(upstream_record, AncillaryFiles):
+            # Ancillary files do not have CRIDs.
+            continue
+
+        upstream_versions = get_upstream_versions(
+            session, upstream_record, relationship, primary_sci_dep, []
+        )
+
+        # Calculate CRID
+        crid = hashlib.sha256(
+            f"{upstream_record.start_date}{upstream_record.version}{upstream_versions}".encode()
+        ).hexdigest()
+
+        existing_crid = upstream_record.crid
+        if existing_crid:
+            # Check if the CRID already exists in the database
+            if existing_crid == crid:
+                logger.info(f"Found expected CRID for {upstream_record}. Continuing...")
+            else:
+                logger.info(f"Found unexpected CRID for {upstream_record}.")
+                return False
+        else:
+            # If no existing CRID, insert CRID into the database for the record.
+            upstream_record.crid = crid
+            session.commit()
+            logger.info(f"Set CRID for {upstream_record}.")
+    return True
+
+
 def get_dependency_processing_input(
     query_params: dict,
     dependencies: list,
@@ -497,7 +612,9 @@ def get_dependency_processing_input(
             )
             records = get_files(
                 session,
-                dep,
+                dep["data_source"],
+                dep["data_type"],
+                dep["descriptor"],
                 start_date,
                 None,
                 end_date,
@@ -510,6 +627,9 @@ def get_dependency_processing_input(
                 return None
             elif not records:
                 continue
+
+            if trigger_type not in [DataType.ANCILLARY, DataType.SPICE]:
+                expected_crids_exist(session, records, relationship, primary_sci_dep)
 
             filenames = [basename(record.file_path) for record in records]
             logger.info(f"Found filenames: {filenames}. Adding to collection.")
@@ -525,7 +645,9 @@ def get_dependency_processing_input(
 
 def get_files(
     session: db.Session,
-    dependency: dict,
+    data_source: str,
+    data_type: str,
+    descriptor: str,
     start_date: datetime,
     version: Optional[str] = None,
     end_date: Optional[datetime] = None,
@@ -538,14 +660,12 @@ def get_files(
     ----------
     session : orm session
         Database session.
-    dependency : dict
-        dictionary containing:
-        data_source : str
-            Source name.
-        data_type : str
-            Data type.
-        descriptor : str
-            Data descriptor.
+    data_source : str
+        Source name.
+    data_type : str
+        Data type.
+    descriptor : str
+        Data descriptor.
     start_date : datetime
         Start date of the event data.
     version : str, optional
@@ -571,7 +691,7 @@ def get_files(
     """
     return_latest_ancillary = False
     type_specific_conditions = []
-    if dependency["data_type"] == DataType.ANCILLARY:
+    if data_type == DataType.ANCILLARY:
         table = models.AncillaryFiles
         # Query for ancillary files whose ranges cover the
         # start date.
@@ -587,7 +707,7 @@ def get_files(
         return_latest_ancillary = True
     else:
         table = models.ScienceFiles
-        type_specific_conditions.append(table.data_level == dependency["data_type"])
+        type_specific_conditions.append(table.data_level == data_type)
         if primary_sci_trigger:
             # Query for science files matching the start date
             # Example:
@@ -638,8 +758,8 @@ def get_files(
             return_latest_ancillary = True
 
     filter_conditions = [
-        table.instrument == dependency["data_source"],
-        table.descriptor == dependency["descriptor"],
+        table.instrument == data_source,
+        table.descriptor == descriptor,
         *type_specific_conditions,
     ]
     if version:
