@@ -151,12 +151,6 @@ def test_lambda_handler(
                 ]
             },
         )
-        # TODO uncomment this portion when the CRID check is implemented.
-        # # Submit a second job with the same file as input which will try to kick
-        # # off a duplicate job. We expect the submit_job method to not be called
-        # # so make sure it is still only called once from our previous iteration.
-        # lambda_handler(events, context)
-        # mock_batch_client.submit_job.assert_called_once()
 
 
 def test_lambda_handler_multiple_events(session, mock_urlopen):
@@ -240,12 +234,6 @@ def test_lambda_handler_ancillary_event(
                 ]
             },
         )
-        # TODO uncomment this portion when the CRID check is implemented.
-        # # Submit a second job with the same file as input which will try to kick
-        # # off a duplicate job. We expect the submit_job method to not be called.
-        # mock_batch_client.submit_job.call_count = 0
-        # lambda_handler(events, context)
-        # assert mock_batch_client.submit_job.call_count == 0
 
 
 def test_lambda_handler_soft_dependencies(session, mock_urlopen):
