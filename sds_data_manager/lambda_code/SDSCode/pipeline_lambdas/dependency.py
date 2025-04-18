@@ -441,7 +441,7 @@ def get_upstream_versions(session, record, relationship, primary_sci_dep, versio
     ----------
     session : db.Session
         Database session.
-    record : models.ScienceFiles
+    record : models.ScienceFiles, models.AncillaryFiles or models.SPICEFiles
         The current record for which upstream versions are being retrieved.
     relationship : str
         The type of relationship. HARD or SOFT.
@@ -492,6 +492,8 @@ def get_upstream_versions(session, record, relationship, primary_sci_dep, versio
 
             for upstream_record in upstream_records:
                 # Add the record version to list
+                # TODO - revisit this. Append {filename : version} so we can sort
+                #  alphabetically?
                 versions.append(upstream_record.version)
                 get_upstream_versions(
                     session, upstream_record, relationship, primary_sci_dep, versions
