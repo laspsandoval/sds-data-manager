@@ -218,7 +218,7 @@ def try_to_submit_job(
 
     start_date_str = datetime.strftime(start_date, "%Y%m%d")
 
-    logger.info("Checking for job in progress.")
+    logger.info("Checking existing job.")
 
     version = determine_job_version(
         session=session,
@@ -344,8 +344,8 @@ def submit_all_jobs(
     if end_date:
         dependency_event_msg["end_date"] = end_date
 
-    existing_hard_upstream_dependenices = _get_dependencies(dependency_event_msg)
-    if not existing_hard_upstream_dependenices:
+    existing_hard_upstream_dependencies = _get_dependencies(dependency_event_msg)
+    if not existing_hard_upstream_dependencies:
         logger.info(
             f"Upstream dependency not found, or downstream dependency "
             f"already exists for: {dependency_event_msg}"
@@ -366,7 +366,7 @@ def submit_all_jobs(
     upstream_dependencies = ProcessingInputCollection(
         existing_soft_trigger_upstream_dependencies.processing_input,
         existing_soft_no_trigger_upstream_dependencies.processing_input,
-        existing_hard_upstream_dependenices.processing_input,
+        existing_hard_upstream_dependencies.processing_input,
     )
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_inputs():
