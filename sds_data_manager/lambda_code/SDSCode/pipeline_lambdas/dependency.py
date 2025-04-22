@@ -434,7 +434,7 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     )
 
 
-def get_upstream_versions(session, record, relationship, primary_sci_dep, versions):
+def get_upstream_versions(session, record, versions):
     """Recursively retrieves all upstream versions for a given record.
 
     Parameters
@@ -443,10 +443,6 @@ def get_upstream_versions(session, record, relationship, primary_sci_dep, versio
         Database session.
     record : models.ScienceFiles, models.AncillaryFiles or models.SPICEFiles
         The current record for which upstream versions are being retrieved.
-    relationship : str
-        The type of relationship. HARD or SOFT.
-    primary_sci_dep : bool
-        Indicates if the dependency is a primary science dependency.
     versions : list
         A list to store all of the upstream versions.
 
@@ -460,20 +456,25 @@ def get_upstream_versions(session, record, relationship, primary_sci_dep, versio
         versions.append(record.version)
         return versions
 
-    dep_node = (
-        record.instrument,
-        record.data_level,
-        record.descriptor,
-    )
-    upstream_deps = get_dependencies(
-        dep_node,
-        "UPSTREAM",
-        relationship,
-    )
+    dep_node = {
+        "data_source": record.instrument,
+        "data_type": record.data_level,
+        "descriptor": record.descriptor,
+    }
+    upstream_deps = []
+    for relationship in Relationship().valid_relationship:
+        upstream_deps.extend(
+            get_dependencies(
+                tuple(dep_node.values()),
+                "UPSTREAM",
+                relationship,
+            )
+        )
     if not upstream_deps:
         return versions
     else:
         for upstream_dep in upstream_deps:
+            primary_sci_dep = primary_science_dep(upstream_dep, dep_node)
             upstream_records = get_files(
                 session,
                 upstream_dep["data_source"],
@@ -490,17 +491,41 @@ def get_upstream_versions(session, record, relationship, primary_sci_dep, versio
                 )
                 return versions
 
-            for upstream_record in upstream_records:
-                # Add the record version to list
-                # TODO - revisit this. Append {filename : version} so we can sort
-                #  alphabetically?
-                versions.append(upstream_record.version)
-                get_upstream_versions(
-                    session, upstream_record, relationship, primary_sci_dep, versions
-                )
+            # TODO if we have multiple records e.g. for a map file. Revisit
+            # for now take the most recent start date:
+            upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[
+                0
+            ]
+            # Add the record version to list
+            # TODO - revisit this. Append {filename : version} so we can sort
+            #  alphabetically?
+            versions.append(upstream_record.version)
+            get_upstream_versions(session, upstream_record, versions)
 
 
-def expected_crids_exist(session, records, relationship, primary_sci_dep) -> bool:
+def calculate_crid(session, record) -> str:
+    """Calculate the CRID for a given record and its upstream versions.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles, models.AncillaryFiles, or models.SPICEFiles
+        The record for which the CRID is being calculated.
+
+    Returns
+    -------
+    str
+        The calculated CRID as a SHA-256 hash.
+    """
+    upstream_versions = get_upstream_versions(session, record, [])
+    start_date = record.start_date.strftime("%Y%m%d")
+    return hashlib.sha256(
+        f"{start_date}{record.version}{upstream_versions}".encode()
+    ).hexdigest()
+
+
+def expected_crids_exist(session, records) -> bool:
     """Check if the expected CRIDs exist for the given records.
 
     Parameters
@@ -509,10 +534,6 @@ def expected_crids_exist(session, records, relationship, primary_sci_dep) -> boo
         Database session.
     records : list[Union[models.ScienceFiles, models.AncillaryFiles, models.SPICEFiles]]
         List of records to check for CRIDs.
-    relationship : str
-        The type of relationship (HARD or SOFT).
-    primary_sci_dep : bool
-        Indicates if the dependency is a primary science dependency.
 
     Returns
     -------
@@ -524,14 +545,8 @@ def expected_crids_exist(session, records, relationship, primary_sci_dep) -> boo
             # Ancillary files do not have CRIDs.
             continue
 
-        upstream_versions = get_upstream_versions(
-            session, upstream_record, relationship, primary_sci_dep, []
-        )
-
         # Calculate CRID
-        crid = hashlib.sha256(
-            f"{upstream_record.start_date}{upstream_record.version}{upstream_versions}".encode()
-        ).hexdigest()
+        crid = calculate_crid(session, upstream_record)
 
         existing_crid = upstream_record.crid
         if existing_crid:
@@ -546,6 +561,7 @@ def expected_crids_exist(session, records, relationship, primary_sci_dep) -> boo
             upstream_record.crid = crid
             session.commit()
             logger.info(f"Set CRID for {upstream_record}.")
+
     return True
 
 
@@ -606,11 +622,8 @@ def get_dependency_processing_input(
                 primary_sci_trigger = False
 
             logger.info(
-                f"Searching for files matching dep={dep}\n"
-                f"start_date={start_date}\n"
-                f"end_date={end_date}\n"
-                f"primary_sci_trigger={primary_sci_trigger}\n"
-                f"primary_sci_dep={primary_sci_dep}"
+                f"Searching for files matching {dep=}\n{start_date=}\n{version=}\n"
+                f"{end_date=}\n{primary_sci_trigger=}\n{primary_sci_dep=}"
             )
             records = get_files(
                 session,
@@ -631,7 +644,8 @@ def get_dependency_processing_input(
                 continue
 
             if trigger_type not in [DataType.ANCILLARY, DataType.SPICE]:
-                expected_crids_exist(session, records, relationship, primary_sci_dep)
+                if not expected_crids_exist(session, records):
+                    return dependency_inputs
 
             filenames = [basename(record.file_path) for record in records]
             logger.info(f"Found filenames: {filenames}. Adding to collection.")
@@ -956,12 +970,12 @@ def lambda_handler(event, context):
         # TODO this only works for upstream deps right now. Do we need to ever get files
         # for downstream?
         dependencies_output = get_dependency_processing_input(
-            query_params=query_params,
-            dependencies=dependencies,
-            start_date=start_date,
-            version=version,
-            trigger_type=trigger_type,
-            end_date=end_date,
+            query_params,
+            dependencies,
+            start_date,
+            version,
+            trigger_type,
+            end_date,
         )
         if not dependencies_output:
             return {

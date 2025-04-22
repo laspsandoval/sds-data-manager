@@ -77,7 +77,7 @@ class ProcessingJob(Base):
     id = Column(Integer, Identity(start=1, increment=1), primary_key=True)
     status = Column(STATUSES, nullable=False)
     instrument = Column(INSTRUMENTS, nullable=False)
-    data_level = Column(DATA_LEVELS, nullable=False)
+    data_level = Column(String, nullable=False)
     descriptor = Column(String, nullable=False)
     start_date = Column(DateTime, nullable=False)
     version = Column(String(8), nullable=False)

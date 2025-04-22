@@ -1,5 +1,6 @@
 """Test data dependency functions."""
 
+import hashlib
 import json
 from datetime import datetime
 from unittest.mock import patch
@@ -11,9 +12,13 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
+from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import ScienceFiles
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
-from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import (
+    calculate_crid,
+    get_files,
+)
 from tests.lambda_endpoints.conftest import (
     _populate_file_catalog,
     create_dependency_api_event,
@@ -477,3 +482,27 @@ def test_get_files_science(session):
 
     assert records[2].start_date == datetime(2024, 1, 3)
     assert records[2].version == "v001"
+
+
+#####################################
+# CRID TESTS
+#####################################
+
+
+def test_calculate_crid(session):
+    """Test CRID calculation."""
+    _populate_file_catalog(session)
+
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(
+            models.ScienceFiles.file_path
+            == "/path/to/imap_swe_l1b_sci_20240102_v001.cdf"
+        )
+        .first()
+    )
+
+    crid = calculate_crid(session, record)
+    crid_string = "v00120240102v002v001"
+    expected_crid = hashlib.sha256(crid_string.encode()).hexdigest()
+    assert expected_crid == crid
