@@ -144,7 +144,7 @@ def test_lambda_handler(
                     "--start-date",
                     "20240110",
                     "--version",
-                    "v000",
+                    "v001",
                     "--dependency",
                     serialized_processing_input,
                     "--upload-to-sdc",
@@ -227,7 +227,7 @@ def test_lambda_handler_ancillary_event(
                     "--start-date",
                     "20240103",
                     "--version",
-                    "v000",
+                    "v001",
                     "--dependency",
                     dependencies.serialize(),
                     "--upload-to-sdc",
@@ -271,7 +271,7 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
                     "--start-date",
                     "20240101",
                     "--version",
-                    "v000",
+                    "v001",
                     "--dependency",
                     expected_processing_input.serialize(),
                     "--upload-to-sdc",
@@ -397,7 +397,7 @@ def test_determine_max_version(session):
         descriptor="sci",
         start_date=datetime(2010, 1, 1),
     )
-    assert result == "v000"
+    assert result == "v001"
 
 
 @pytest.mark.skipif(
