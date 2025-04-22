@@ -160,7 +160,7 @@ def determine_job_version(
     -------
      str
         The highest version number bumped by 1 if the file has been already processed,
-        otherwise "v000".
+        otherwise "v001".
     """
     # TODO should I be making a separate call to the scienceFilesTable for the
     # latest version?
@@ -180,7 +180,7 @@ def determine_job_version(
         ).filter(*filter_conditions)
     ).scalar()
 
-    job_version = bump_version_number(max_version) if max_version else "v000"
+    job_version = bump_version_number(max_version) if max_version else "v001"
     return job_version
 
 
@@ -227,7 +227,7 @@ def try_to_submit_job(
         start_date=start_date,
         data_level=data_level,
     )
-    if version == "v000":
+    if version == "v001":
         logger.info(
             f"PROCESSING {instrument}, {data_level}, "
             f"{descriptor}, {start_date_str} with version: {version}"
