@@ -437,7 +437,6 @@ def get_dependency_processing_input(
     dependencies: list,
     start_date: datetime,
     version: str,
-    relationship: str,
     trigger_type: str,
     end_date: Optional[datetime] = None,
 ):
@@ -459,11 +458,6 @@ def get_dependency_processing_input(
         Start date to find dependent files with.
     version : str
         Version to find dependent files with.
-    relationship : str
-        Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
-        HARD means data is required for pipeline and SOFT_TRIGGER and SOFT_NO_TRIGGER
-        means data is optional for pipeline. A SOFT_TRIGGER file will trigger processing
-        and reprocessing.
     trigger_type : str
         Data type of the file that triggered the batch starter.
     end_date : datetime, optional
@@ -487,6 +481,7 @@ def get_dependency_processing_input(
             # (including science files from a different source) or SPICE, the exact
             # start date cannot be used to find the science file because
             # the dates are not guaranteed to correspond.
+            relationship = query_params["relationship"]
             primary_sci_dep = primary_science_dep(query_params, dep)
             if primary_sci_dep and trigger_type == dep["data_type"]:
                 primary_sci_trigger = True
@@ -839,13 +834,12 @@ def lambda_handler(event, context):
         # TODO this only works for upstream deps right now. Do we need to ever get files
         # for downstream?
         dependencies_output = get_dependency_processing_input(
-            query_params,
-            dependencies,
-            start_date,
-            version,
-            query_params["relationship"],
-            trigger_type,
-            end_date,
+            query_params=query_params,
+            dependencies=dependencies,
+            start_date=start_date,
+            version=version,
+            trigger_type=trigger_type,
+            end_date=end_date,
         )
         if not dependencies_output:
             return {
