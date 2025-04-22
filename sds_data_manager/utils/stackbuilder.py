@@ -181,7 +181,7 @@ def build_sds(
     rds_construct.add_synchronizer(
         code=lambda_code,
         layers=[db_lambda_layer, spice_lambda_layer],
-        bucket_name=data_bucket.data_bucket.bucket_name,
+        data_bucket=data_bucket.data_bucket,
         vpc=networking.vpc,
     )
 
