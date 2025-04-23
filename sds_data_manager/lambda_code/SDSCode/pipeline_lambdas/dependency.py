@@ -418,7 +418,7 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     Returns
     -------
     bool
-        True if dependency is a primary science dependency, False otherwise
+        True if dependency is a primary science dependency, False otherwise.
 
     Examples
     --------
