@@ -468,6 +468,7 @@ def get_dependency_processing_input(
     ProcessingInputCollection
         Dependency files that can include Ancillary, SPICE, or Science inputs.
     """
+    relationship = query_params["relationship"]
     dependency_inputs = processing_input.ProcessingInputCollection()
     with db.Session() as session:
         for dep in dependencies:
@@ -481,7 +482,6 @@ def get_dependency_processing_input(
             # (including science files from a different source) or SPICE, the exact
             # start date cannot be used to find the science file because
             # the dates are not guaranteed to correspond.
-            relationship = query_params["relationship"]
             primary_sci_dep = primary_science_dep(query_params, dep)
             if primary_sci_dep and trigger_type == dep["data_type"]:
                 primary_sci_trigger = True
