@@ -434,7 +434,7 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     )
 
 
-def get_upstream_versions(session, record, versions):
+def get_upstream_versions(session, record, versions) -> dict:
     """Recursively retrieves all upstream versions for a given record.
 
     Parameters
@@ -448,12 +448,11 @@ def get_upstream_versions(session, record, versions):
 
     Returns
     -------
-    list
-        A list of all upstream versions.
+    dict
+        All upstream versions and their filenames.
     """
     if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
         # Ancillary and SPICE files have no upstream dependencies
-        versions.append(record.version)
         return versions
 
     dep_node = {
@@ -481,7 +480,6 @@ def get_upstream_versions(session, record, versions):
                 upstream_dep["data_type"],
                 upstream_dep["descriptor"],
                 record.start_date,
-                record.version,
                 primary_sci_dep=primary_sci_dep,
             )
             if not upstream_records:
@@ -496,15 +494,16 @@ def get_upstream_versions(session, record, versions):
             upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[
                 0
             ]
-            # Add the record version to list
-            # TODO - revisit this. Append {filename : version} so we can sort
-            #  alphabetically?
-            versions.append(upstream_record.version)
+            # Add the record version to the dicrionary.
+            versions[upstream_record.file_path] = upstream_record.version
             get_upstream_versions(session, upstream_record, versions)
 
 
 def calculate_crid(session, record) -> str:
-    """Calculate the CRID for a given record and its upstream versions.
+    """Calculate a CRID (Composite Release ID) for a file.
+
+    The CRID is calculated as a hash of the file name and the versions of all its
+    upstream dependency files. It is unique to a file.
 
     Parameters
     ----------
@@ -518,15 +517,27 @@ def calculate_crid(session, record) -> str:
     str
         The calculated CRID as a SHA-256 hash.
     """
-    upstream_versions = get_upstream_versions(session, record, [])
-    start_date = record.start_date.strftime("%Y%m%d")
+    upstream_versions = {}
+    get_upstream_versions(session, record, upstream_versions)
+    sorted_versions = [
+        v for path, v in sorted(upstream_versions.items(), key=lambda x: x[0])
+    ]
     return hashlib.sha256(
-        f"{start_date}{record.version}{upstream_versions}".encode()
+        f"{record.file_path}{''.join(sorted_versions)}".encode()
     ).hexdigest()
 
 
 def expected_crids_exist(session, records) -> bool:
     """Check if the expected CRIDs exist for the given records.
+
+    A difference between the expected CRID of an upstream dependency and the actual CRID
+    of the file retrieved for processing, indicates that a new version of that file is
+    expected based on the files in S3.
+
+    In the case above, Batch starter will skip processing the current job, as it
+    expects that the reprocessed upstream file will soon be uploaded to S3,
+    triggering a new batch job run (we want to avoid needless reprocessing).
+    If the CRID matches the calculated CRID, we will continue with processing.
 
     Parameters
     ----------
@@ -552,15 +563,21 @@ def expected_crids_exist(session, records) -> bool:
         if existing_crid:
             # Check if the CRID already exists in the database
             if existing_crid == crid:
-                logger.info(f"Found expected CRID for {upstream_record}. Continuing...")
+                logger.info(
+                    f"Found expected CRID for {upstream_record.file_path}. Continuing.."
+                )
             else:
-                logger.info(f"Found unexpected CRID for {upstream_record}.")
+                logger.info(
+                    f"Found unexpected CRID for {upstream_record.file_path}. "
+                    f"This indicates that we are expecting a reprocessing for"
+                    f" this file."
+                )
                 return False
         else:
             # If no existing CRID, insert CRID into the database for the record.
             upstream_record.crid = crid
             session.commit()
-            logger.info(f"Set CRID for {upstream_record}.")
+            logger.info(f"Set CRID for {upstream_record.file_path}.")
 
     return True
 
@@ -645,7 +662,7 @@ def get_dependency_processing_input(
 
             if trigger_type not in [DataType.ANCILLARY, DataType.SPICE]:
                 if not expected_crids_exist(session, records):
-                    return dependency_inputs
+                    return None
 
             filenames = [basename(record.file_path) for record in records]
             logger.info(f"Found filenames: {filenames}. Adding to collection.")
@@ -980,7 +997,8 @@ def lambda_handler(event, context):
         if not dependencies_output:
             return {
                 "statusCode": 206,  # Partial content
-                "body": "At least one dependency is missing.",
+                "body": "At least one dependency is missing or expecting a new upstream"
+                f" file for: {query_params}.",
             }
         dependencies_output = dependencies_output.serialize()
     else:

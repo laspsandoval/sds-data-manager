@@ -77,7 +77,13 @@ def test_missing_dependency(session):
     dependency_response = dependency.lambda_handler(event, None)
 
     assert dependency_response["statusCode"] == 206
-    assert dependency_response["body"] == "At least one dependency is missing."
+    assert (
+        dependency_response["body"]
+        == "At least one dependency is missing or expecting a new upstream file for:"
+        " {'dependency_type': 'DOWNSTREAM', 'relationship': 'HARD', 'data_source':"
+        " 'swe', 'data_type': 'l1b', 'descriptor': 'sci', 'start_date': '20240104', "
+        "'version': 'v001', 'trigger_type': 'ancillary'}."
+    )
 
 
 def test_soft_dependencies(session):
@@ -361,7 +367,6 @@ def test_get_ancillary_files(session):
         session,
         *dep,
         start_date=datetime(2023, 1, 1),
-        version="v001",
     )[0]
     assert record.instrument == "swe"
     assert record.descriptor == "l1b-in-flight-cal"
@@ -377,7 +382,6 @@ def test_get_ancillary_files(session):
         session,
         *dep,
         start_date=start_date,
-        version="v001",
     )
     assert len(record) == 1
     record = record[0]
@@ -385,7 +389,7 @@ def test_get_ancillary_files(session):
     assert record.descriptor == "l1b-in-flight-cal"
     assert record.start_date == datetime(2023, 12, 31)
     assert record.end_date == datetime(2024, 1, 2)
-    assert record.version == "v001"
+    assert record.version == "v002"
     # Non-existent record should an empty list
     record = get_files(
         session,
@@ -419,11 +423,11 @@ def test_get_exact_date_science_files(session):
 def test_get_files_exact_version(session):
     """Test get_files returns the exact version."""
     _populate_file_catalog(session)
-    dep = ("lo", "l1a", "sci")
+    dep = ("lo", "l1a", "de")
     record = get_files(
         session,
         *dep,
-        start_date=datetime(2010, 1, 1),
+        start_date=datetime(2024, 1, 1),
         version="v001",
         primary_sci_trigger=True,
     )
@@ -431,15 +435,15 @@ def test_get_files_exact_version(session):
     assert len(record) == 1
     record = record[0]
     assert record.instrument == "lo"
-    assert record.descriptor == "sci"
-    assert record.start_date == datetime(2010, 1, 1)
+    assert record.descriptor == "de"
+    assert record.start_date == datetime(2024, 1, 1)
     assert record.version == "v001"
 
 
 def test_get_files_max_version_ancillary(session):
     """Test get_files returns the max version."""
     _populate_file_catalog(session)
-    dep = ("lo", "l1a", "sci")
+    dep = ("lo", "l1a", "de")
     records = get_files(
         session,
         *dep,
@@ -450,7 +454,7 @@ def test_get_files_max_version_ancillary(session):
     assert len(records) == 1
     record = records[0]
     assert record.instrument == "lo"
-    assert record.descriptor == "sci"
+    assert record.descriptor == "de"
     # Make sure this ancillary file has the most recent start_date.
     assert record.start_date == datetime(2010, 1, 2)
     assert record.version == "v003"
@@ -501,8 +505,32 @@ def test_calculate_crid(session):
         )
         .first()
     )
-
     crid = calculate_crid(session, record)
-    crid_string = "v00120240102v002v001"
+    # The CRID associated with a file is made up of the filepath and the
+    # Upstream file versions sorted by the filename
+    # imap_swe_l1b_sci_20240102_v001.cdf has a total of 3 upstream dependency files:
+    #  - imap_swe_l0_sci_20240101_v001.cdf
+    #  - imap_swe_l1a_sci_20240101_v001.cdf
+    #  - imap_swe_l1b_in-flight-cal_20240101_v002.cdf
+    # the upstream versions should be in order of the filenames alphabetically
+    crid_string = f"{record.file_path}v001v001v002"
     expected_crid = hashlib.sha256(crid_string.encode()).hexdigest()
+    assert expected_crid == crid
+
+
+def test_calculate_crid_l0(session):
+    """Test CRID calculation."""
+    _populate_file_catalog(session)
+
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(
+            models.ScienceFiles.file_path
+            == "/path/to/imap_swe_l0_raw_20240110_v001.pkts"
+        )
+        .first()
+    )
+    crid = calculate_crid(session, record)
+    # L0 files have no upstream dependencies, so the crid is just a hash of the filepath
+    expected_crid = hashlib.sha256(record.file_path.encode()).hexdigest()
     assert expected_crid == crid

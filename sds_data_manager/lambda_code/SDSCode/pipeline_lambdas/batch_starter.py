@@ -345,11 +345,8 @@ def submit_all_jobs(
         dependency_event_msg["end_date"] = end_date
 
     existing_hard_upstream_dependencies = _get_dependencies(dependency_event_msg)
+
     if not existing_hard_upstream_dependencies:
-        logger.info(
-            f"Upstream dependency not found, or downstream dependency "
-            f"already exists for: {dependency_event_msg}"
-        )
         return
 
     logger.info(f"All required dependencies found for the job: {job}")

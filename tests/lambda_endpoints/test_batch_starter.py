@@ -350,7 +350,6 @@ def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
 def test_lambda_handler_no_dependencies(session, mock_urlopen):
     """Tests ``lambda_handler`` when there are no dependencies for the file."""
     _populate_file_catalog(session)
-    # Test Multiple Events:
     events = {
         "Records": [
             {
@@ -388,14 +387,13 @@ def test_lambda_handler_no_dependencies_multiple_files(session, mock_urlopen):
     context = {"context": "sample_context"}
     with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
         lambda_handler(events, context)
-        # Verify the function was not called
+        # Verify the function was only called once.
         assert mock_submit.call_count == 1
 
 
 def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplog):
     """Tests ``lambda_handler`` when there are no dependencies for the file."""
     _populate_file_catalog(session)
-    # Test Multiple Events:
     events = {
         "Records": [
             {
@@ -409,13 +407,42 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
     with caplog.at_level(logging.DEBUG):
         lambda_handler(events, context)
         log_str = (
-            "Upstream dependency not found, or downstream dependency already exists "
-            "for: {'data_source': 'swe', 'data_type': 'l2', 'descriptor': 'sci', "
-            "'dependency_type': 'UPSTREAM', 'relationship': 'HARD', 'start_date': "
-            "'20000101', 'version': 'v001', 'trigger_type': 'l1b'"
+            "Dependency API response: At least one dependency is missing or expecting a"
+            " new upstream file for: {'dependency_type': 'UPSTREAM', 'relationship': "
+            "'HARD', 'data_source': 'swe', 'data_type': 'l2', 'descriptor': 'sci', "
+            "'start_date': '20000101', 'version': 'v001', 'trigger_type': 'l1b'}."
         )
         # Verify the info statement was logged.
         assert log_str in caplog.text
+
+
+def test_lambda_unexpected_crid(session, mock_urlopen, caplog):
+    """Test that processing stops when the calculated CRID is unexpected.
+
+    This indicates that a new upstream file is expected.
+    """
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_lo_l1a_de_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with caplog.at_level(logging.DEBUG) and patch.object(
+        batch_starter, "try_to_submit_job"
+    ) as mock_submit:
+        lambda_handler(events, context)
+    log = (
+        "Found unexpected CRID for /path/to/imap_lo_l1a_de_20240101_v001.cdf. This"
+        " indicates that we are expecting a reprocessing for this file."
+    )
+    # Verify the job was skipped
+    assert log in caplog.text
+    assert mock_submit.call_count == 0
 
 
 def test_spice_file():
