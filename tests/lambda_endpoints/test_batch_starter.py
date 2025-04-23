@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
     ProcessingJob,
+    ScienceFiles,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
     batch_starter,
@@ -236,9 +237,23 @@ def test_lambda_handler_ancillary_event(
         )
 
 
-def test_lambda_handler_soft_dependencies(session, mock_urlopen):
-    """Tests ``lambda_handler`` when there are soft upstream dependencies."""
-    _populate_file_catalog(session)
+def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
+    """Tests ``lambda_handler` for unique mac l1c case."""
+    session.add(
+        ScienceFiles(
+            file_path="/path/to/imap_mag_l1b_norm-mago_20240101_v001.cdf",
+            instrument="mag",
+            data_level="l1b",
+            descriptor="norm-mago",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        )
+    )
+    session.commit()
     events = {
         "Records": [
             {
@@ -251,7 +266,6 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
     context = {"context": "sample_context"}
     expected_processing_input = ProcessingInputCollection(
         ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf"),
-        ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
     )
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
@@ -272,6 +286,59 @@ def test_lambda_handler_soft_dependencies(session, mock_urlopen):
                     "20240101",
                     "--version",
                     "v001",
+                    "--dependency",
+                    expected_processing_input.serialize(),
+                    "--upload-to-sdc",
+                ]
+            },
+        )
+
+        events = {
+            "Records": [
+                {
+                    "body": '{"detail": '
+                    '{"object": {"key": "imap_mag_l1b_burst-mago_20240101_v001.cdf"}}'
+                    "}"
+                }
+            ]
+        }
+        session.add(
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
+                instrument="mag",
+                data_level="l1b",
+                descriptor="burst-mago",
+                start_date=datetime(2024, 1, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+        )
+        session.commit()
+
+        expected_processing_input.add(
+            ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf")
+        )
+        lambda_handler(events, context)
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="mag-l1c-norm-mago-job-2",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-mag",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "mag",
+                    "--data-level",
+                    "l1c",
+                    "--descriptor",
+                    "norm-mago",
+                    "--start-date",
+                    "20240101",
+                    "--version",
+                    "v002",
                     "--dependency",
                     expected_processing_input.serialize(),
                     "--upload-to-sdc",
