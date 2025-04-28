@@ -175,20 +175,20 @@ def determine_job_version(
             conditions.append(table.status == models.Status.INPROGRESS)
         return conditions
 
-    # Get the max version for any jobs in progress
+    # First check to see if there are any jobs in progress and get the max version
     max_version = (
         session.query(func.max(models.ProcessingJob.version)).filter(
             *filter_conditions(models.ProcessingJob)
         )
     ).scalar()
-
+    # If no jobs are in progress, check the science files table for the max version.
     if not max_version:
         max_version = (
             session.query(func.max(models.ScienceFiles.version)).filter(
                 *filter_conditions(models.ScienceFiles)
             )
         ).scalar()
-
+    # Bump the version number. "V001" will be returned if max_version is None.
     return bump_version_number(max_version)
 
 
