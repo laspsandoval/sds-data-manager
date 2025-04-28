@@ -228,7 +228,7 @@ def test_lambda_handler_ancillary_event(
                     "--start-date",
                     "20240102",
                     "--version",
-                    "v001",
+                    "v002",
                     "--dependency",
                     dependencies.serialize(),
                     "--upload-to-sdc",
