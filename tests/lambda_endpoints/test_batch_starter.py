@@ -189,7 +189,7 @@ def test_lambda_handler_ancillary_event(
             {
                 "body": '{"detail": '
                 '{"object": {"key": '
-                '"imap_swe_l1b-in-flight-cal_20240101_v001.cdf"}}'
+                '"imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf"}}'
                 "}"
             }
         ]
@@ -198,8 +198,8 @@ def test_lambda_handler_ancillary_event(
     context = {"context": "sample_context"}
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
-        # There should be three different jobs submitted for one swe l1b ancillary file
-        assert mock_batch_client.submit_job.call_count == 3
+        # There should be 2 different jobs submitted for one swe l1b ancillary file
+        assert mock_batch_client.submit_job.call_count == 2
         # Assert_called_with only works on the last call
         # Check that the last call is what we expect with the correct dependencies
 
@@ -207,14 +207,14 @@ def test_lambda_handler_ancillary_event(
         # have valid dates, there should be only be the most recent one returned
         # as an upstream dep.
         ancillary_in = AncillaryInput(
-            "imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf",
+            "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
         )
         science_in = ScienceInput(
-            "imap_swe_l1a_sci_20240103_v001.cdf",
+            "imap_swe_l1a_sci_20240102_v001.cdf",
         )
         dependencies = ProcessingInputCollection(science_in, ancillary_in)
         mock_batch_client.submit_job.assert_called_with(
-            jobName="swe-l1b-sci-job-3",
+            jobName="swe-l1b-sci-job-2",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-swe",
             containerOverrides={
@@ -226,7 +226,7 @@ def test_lambda_handler_ancillary_event(
                     "--descriptor",
                     "sci",
                     "--start-date",
-                    "20240103",
+                    "20240102",
                     "--version",
                     "v001",
                     "--dependency",
@@ -412,8 +412,7 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
             "Dependency API response: No records found for dependency: "
             "dep={'data_source': 'swe', 'data_type': 'l1b', 'descriptor': 'sci',"
             " 'relationship': 'HARD'}\nstart_date=datetime.datetime(2000,"
-            " 1, 1, 0, 0)\nend_date=None\nprimary_sci_trigger"
-            "=True\nprimary_sci_dep=True"
+            " 1, 1, 0, 0)\nend_date=datetime.datetime(2000, 1, 1, 0, 0)"
         )
         # Verify the info statement was logged.
         assert log_str in caplog.text
@@ -626,8 +625,7 @@ def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMoc
         "dependency_type": "UPSTREAM",
         "relationship": "HARD",
         "start_date": "20000101",
-        "version": "v001",
-        "trigger_type": "swe",
+        "end_date": "20000101",
     }
     dependencies = _get_dependencies(dependency_event_msg)
     assert not dependencies

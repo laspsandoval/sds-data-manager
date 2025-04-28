@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 import boto3
 import imap_data_access
 from imap_data_access import (
+    ScienceFilePath,
     SPICEFilePath,
 )
 from imap_data_access.processing_input import ProcessingInputCollection
@@ -311,8 +312,6 @@ def submit_all_jobs(
     session: db.Session,
     job: dict,
     start_date: str,
-    version: str,
-    trigger_type: str,
     end_date: Optional[str] = None,
 ):
     """Submit downstream jobs for each upstream primary science dependency file.
@@ -325,10 +324,6 @@ def submit_all_jobs(
         Job information containing data_source, data_type, and descriptor.
     start_date : str
         The trigger file start date.
-    version : str
-        The trigger file version.
-    trigger_type : str
-        The data_source of the file that triggered the batch starter.
     end_date : str, optional
         The trigger file end date, by default None.
 
@@ -336,7 +331,6 @@ def submit_all_jobs(
     -------
     None
     """
-    # Find the files that this job depends on
     event_msg = {
         "data_source": job["data_source"],
         "data_type": job["data_type"],
@@ -344,13 +338,10 @@ def submit_all_jobs(
         "dependency_type": "UPSTREAM",
         "relationship": "ALL",
         "start_date": start_date,
-        "version": version,
-        "trigger_type": trigger_type,
+        "end_date": end_date,
     }
 
-    if end_date:
-        event_msg["end_date"] = end_date
-
+    # Find the files that this job depends on
     upstream_dependencies = _get_dependencies(event_msg)
     if not upstream_dependencies:
         return
@@ -436,7 +427,14 @@ def lambda_handler(events: dict, context):
 
         start_date = file_obj.start_date
         end_date = file_obj.end_date if hasattr(file_obj, "end_date") else None
-        version = file_obj.version
+
+        if not end_date:
+            if isinstance(file_obj, ScienceFilePath):
+                # Set end_date to start_date for science files
+                end_date = file_obj.start_date
+            else:
+                # Set end_date to today's date for ancillary or SPICE files
+                end_date = datetime.today().strftime("%Y%m%d")
 
         # TODO: handle spice once implemented
         data_type = (
@@ -460,4 +458,4 @@ def lambda_handler(events: dict, context):
 
         with db.Session() as session:
             for job in potential_jobs + potential_soft_jobs:
-                submit_all_jobs(session, job, start_date, version, data_type, end_date)
+                submit_all_jobs(session, job, start_date, end_date)
