@@ -11,7 +11,7 @@ from typing import Optional
 
 import imap_data_access
 from imap_data_access import processing_input
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_
 
 from ..database import database as db
 from ..database import models
@@ -326,10 +326,12 @@ def get_dependencies(node, dependency_type, relationship):
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
     relationship : str
+        relationship : str
         Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
         HARD means data is required for pipeline and SOFT_TRIGGER and SOFT_NO_TRIGGER
         means data is optional for pipeline. A SOFT_TRIGGER file will trigger processing
-        and reprocessing.
+        and reprocessing. If "ALL" is provided, dependencies for all valid relationships
+        (HARD, SOFT_TRIGGER, SOFT_NO_TRIGGER) will be returned.
 
     Returns
     -------
@@ -343,62 +345,28 @@ def get_dependencies(node, dependency_type, relationship):
         logger.error(f"Error loading dependencies: {e!s}")
         return None
 
-    dependencies = dependency_config.dependencies[relationship][dependency_type].get(
-        node, []
+    relationships = (
+        Relationship().valid_relationship if relationship == "ALL" else [relationship]
     )
-    # Add keys for a dict-like representation
-    dependencies = [
-        {"data_source": dep[0], "data_type": dep[1], "descriptor": dep[2]}
-        for dep in dependencies
-    ]
+
+    dependencies = []
+    for rel in relationships:
+        deps = dependency_config.dependencies[rel][dependency_type].get(node, [])
+
+        # Add keys for a dict-like representation
+        dependencies.extend(
+            [
+                {
+                    "data_source": dep[0],
+                    "data_type": dep[1],
+                    "descriptor": dep[2],
+                    "relationship": rel,
+                }
+                for dep in deps
+            ]
+        )
 
     return dependencies
-
-
-def filter_primary_science_dependencies(
-    session: db.Session, records: list, query_data_type: str, query_descriptor
-):
-    """Filter primary science dependencies for unprocessed downstream dependencies.
-
-    Parameters
-    ----------
-    session : orm session
-        Database session.
-    records : list[models.ScienceFiles]
-        Science file records.
-    query_data_type : str
-        The data_type of the dependency used to query the api.
-    query_descriptor
-        The descriptor of the dependency used to query the api.
-
-    Returns
-    -------
-    list[str]
-        Upstream primary source filenames that have downstream dependencies that need
-        to be processed.
-    """
-    # TODO create a downstream dependency instead of combining the query and records.
-    files = []
-    for record in records:
-        # check in the science table if the upstream primary source dependency
-        # already exists.
-        query = select(models.ScienceFiles.__table__).where(
-            models.ScienceFiles.instrument == record.instrument,
-            models.ScienceFiles.descriptor == query_descriptor,
-            # Use the query data type instead of the current record.
-            models.ScienceFiles.data_level == query_data_type,
-            models.ScienceFiles.start_date == record.start_date,
-            models.ScienceFiles.version == record.version,
-        )
-        # If the upstream primary source dependency does not exist, add it to the list
-        # of files to return.
-        # This indicates that the upstream primary source needs to be processed.
-        upstream_primary_source = session.execute(query).first()
-
-        if not upstream_primary_source:
-            files.append(basename(record.file_path))
-
-    return files
 
 
 def primary_science_dep(query_params: dict, dependency: dict) -> bool:
@@ -468,10 +436,10 @@ def get_dependency_processing_input(
     ProcessingInputCollection
         Dependency files that can include Ancillary, SPICE, or Science inputs.
     """
-    relationship = query_params["relationship"]
     dependency_inputs = processing_input.ProcessingInputCollection()
     with db.Session() as session:
         for dep in dependencies:
+            relationship = dep["relationship"]
             # Check if the dependency is a primary science dependency and if the file
             # source that triggered the batch stater is equal to the dependency source.
             # If true, we can find science files with the exact start date
@@ -488,13 +456,13 @@ def get_dependency_processing_input(
             else:
                 primary_sci_trigger = False
 
-            logger.info(
-                f"Searching for files matching dep={dep}\n"
-                f"start_date={start_date}\n"
-                f"end_date={end_date}\n"
-                f"primary_sci_trigger={primary_sci_trigger}\n"
-                f"primary_sci_dep={primary_sci_dep}"
+            dep_string = (
+                f"{dep=}\n{start_date=}\n{end_date=}\n"
+                f"{primary_sci_trigger=}\n{primary_sci_dep=}"
             )
+
+            logger.info(f"Searching for files matching dep={dep_string}")
+
             records = get_files(
                 session,
                 dep,
@@ -506,8 +474,10 @@ def get_dependency_processing_input(
             )
 
             if not records and relationship == Relationship.HARD:
-                logger.info("No records found for dependency. Returning None.")
-                return None
+                info = f"No records found for dependency: {dep_string}"
+                logger.info(dep_string)
+                return info
+
             elif not records:
                 continue
 
@@ -744,16 +714,19 @@ def lambda_handler(event, context):
                     "data_source": "hit",
                     "data_type": "l1a",
                     "descriptor": "all",
+                    "relationship": "HARD",
                 },
                 {
                     "data_source": "hit",
                     "data_type": "l1b",
                     "descriptor": "hk",
+                    "relationship": "HARD",
                 },
                 {
                     "data_source": "sc_attitude",
                     "data_type": "spice",
                     "descriptor": "historical",
+                    "relationship": "HARD",
                 },
             ]
         If "start_date" is supplied, "version" and "ancillary_trigger" are required and
@@ -831,8 +804,7 @@ def lambda_handler(event, context):
             if query_params.get("end_date")
             else None
         )
-        # TODO this only works for upstream deps right now. Do we need to ever get files
-        # for downstream?
+
         dependencies_output = get_dependency_processing_input(
             query_params=query_params,
             dependencies=dependencies,
@@ -841,10 +813,10 @@ def lambda_handler(event, context):
             trigger_type=trigger_type,
             end_date=end_date,
         )
-        if not dependencies_output:
+        if isinstance(dependencies_output, str):
             return {
                 "statusCode": 206,  # Partial content
-                "body": "At least one dependency is missing.",
+                "body": dependencies_output,
             }
         dependencies_output = dependencies_output.serialize()
     else:

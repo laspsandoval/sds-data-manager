@@ -103,6 +103,7 @@ def _get_dependencies(dependency_events: dict):
         if response.status == 206:
             logger.info(f"Dependency API response: {dependency_response}")
             return None
+
         logger.debug(f"Received dependencies: {dependency_response}")
     # The API returns different output formats depending on the query parameters:
     # Without "start_date": Returns a list of dependency dictionaries.
@@ -329,45 +330,26 @@ def submit_all_jobs(
     None
     """
     # Find the files that this job depends on
-    base_event_msg = {
+    event_msg = {
         "data_source": job["data_source"],
         "data_type": job["data_type"],
         "descriptor": job["descriptor"],
         "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
-    }
-    dependency_event_msg = base_event_msg | {
+        "relationship": "ALL",
         "start_date": start_date,
         "version": version,
         "trigger_type": trigger_type,
     }
-    if end_date:
-        dependency_event_msg["end_date"] = end_date
 
-    existing_hard_upstream_dependencies = _get_dependencies(dependency_event_msg)
-    if not existing_hard_upstream_dependencies:
-        logger.info(
-            f"Upstream dependency not found, or downstream dependency "
-            f"already exists for: {dependency_event_msg}"
-        )
+    if end_date:
+        event_msg["end_date"] = end_date
+
+    upstream_dependencies = _get_dependencies(event_msg)
+    if not upstream_dependencies:
         return
 
     logger.info(f"All required dependencies found for the job: {job}")
 
-    dependency_event_msg["relationship"] = "SOFT_TRIGGER"
-    existing_soft_trigger_upstream_dependencies = _get_dependencies(
-        dependency_event_msg
-    )
-    dependency_event_msg["relationship"] = "SOFT_NO_TRIGGER"
-    existing_soft_no_trigger_upstream_dependencies = _get_dependencies(
-        dependency_event_msg
-    )
-    # Combine soft and hard dependencies
-    upstream_dependencies = ProcessingInputCollection(
-        existing_soft_trigger_upstream_dependencies.processing_input,
-        existing_soft_no_trigger_upstream_dependencies.processing_input,
-        existing_hard_upstream_dependencies.processing_input,
-    )
     # Find science processingInputs that have the same source as the potential job
     for dep in upstream_dependencies.get_science_inputs():
         if job["data_source"] == dep.source:

@@ -74,7 +74,7 @@ def test_missing_dependency(session):
     dependency_response = dependency.lambda_handler(event, None)
 
     assert dependency_response["statusCode"] == 206
-    assert dependency_response["body"] == "At least one dependency is missing."
+    assert "No records found for dependency:" in dependency_response["body"]
 
 
 def test_soft_dependencies(session):
@@ -183,6 +183,7 @@ def test_get_downstream_dependencies():
             "data_source": "hit",
             "data_type": "l1b",
             "descriptor": "all",
+            "relationship": "HARD",
         }
     ]
     assert len(dependents) == 1
@@ -199,14 +200,35 @@ def test_get_downstream_dependencies():
             "data_source": "swe",
             "data_type": "l1a",
             "descriptor": "sci",
+            "relationship": "HARD",
         },
         {
             "data_source": "swe",
             "data_type": "ancillary",
             "descriptor": "l1b-in-flight-cal",
+            "relationship": "HARD",
         },
     ]
     assert len(dependents) == 2
+    assert dependents == expected_complete_dependent
+
+
+def test_get_all_downstream_dependencies():
+    """Add test for getting back ancillary dependencies."""
+    event = create_dependency_api_event(
+        "mag", "l1b", descriptor="norm-mago", relationship="ALL"
+    )
+    dependency_response = dependency.lambda_handler(event, None)
+    dependents = json.loads(dependency_response["body"])
+
+    expected_complete_dependent = [
+        {
+            "data_source": "mag",
+            "data_type": "l1c",
+            "descriptor": "norm-mago",
+            "relationship": "SOFT_TRIGGER",
+        },
+    ]
     assert dependents == expected_complete_dependent
 
 
