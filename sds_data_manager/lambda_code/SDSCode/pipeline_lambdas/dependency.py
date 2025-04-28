@@ -326,7 +326,6 @@ def get_dependencies(node, dependency_type, relationship):
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
     relationship : str
-        relationship : str
         Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
         HARD means data is required for pipeline and SOFT_TRIGGER and SOFT_NO_TRIGGER
         means data is optional for pipeline. A SOFT_TRIGGER file will trigger processing
