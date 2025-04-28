@@ -31,6 +31,10 @@ glows, l1a, de, glows, l1b, de, HARD, DOWNSTREAM
 glows, l1a, hist, glows, l1b, hist, HARD, DOWNSTREAM
 
 glows, l2, hist, glows, l3a, hist, HARD, DOWNSTREAM
+glows, ancillary, calibration-data, glows, l3a, hist, HARD, DOWNSTREAM
+glows, ancillary, time-dep-bckgrd, glows, l3a, hist, HARD, DOWNSTREAM
+glows, ancillary, map-of-extra-helio-bckgrd, glows, l3a, hist, HARD, DOWNSTREAM
+glows, ancillary, pipeline-settings, glows, l3a, hist, HARD, DOWNSTREAM
 
 glows, l3a, hist, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
 glows, ancillary, pipeline-settings-L3bc, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
@@ -65,7 +69,23 @@ hit, l1b, summed-rates, hit, l2, summed-intensity, HARD, DOWNSTREAM
 hit, l1b, sectored-rates, hit, l2, macropixel-intensity, HARD, DOWNSTREAM
 hit, l2, macropixel-intensity, hit, l3, macropixel, HARD, DOWNSTREAM
 mag, l1d, norm-mago, hit, l3, macropixel, HARD, DOWNSTREAM
+
 hit, l1a, direct-events, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-2A-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-3A-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-4A-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-2B-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-3B-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-4B-cosine-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, lo-gain-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, hi-gain-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-2A-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-3A-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-4A-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-2B-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-3B-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, range-4B-charge-fit-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
+hit, ancillary, hit-event-type-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
 
 # <---- IDEX Dependencies ---->
 
