@@ -409,10 +409,11 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
     with caplog.at_level(logging.DEBUG):
         lambda_handler(events, context)
         log_str = (
-            "Upstream dependency not found, or downstream dependency already exists "
-            "for: {'data_source': 'swe', 'data_type': 'l2', 'descriptor': 'sci', "
-            "'dependency_type': 'UPSTREAM', 'relationship': 'HARD', 'start_date': "
-            "'20000101', 'version': 'v001', 'trigger_type': 'l1b'"
+            "Dependency API response: No records found for dependency: "
+            "dep={'data_source': 'swe', 'data_type': 'l1b', 'descriptor': 'sci',"
+            " 'relationship': 'HARD'}\nstart_date=datetime.datetime(2000,"
+            " 1, 1, 0, 0)\nend_date=None\nprimary_sci_trigger"
+            "=True\nprimary_sci_dep=True"
         )
         # Verify the info statement was logged.
         assert log_str in caplog.text
@@ -585,7 +586,12 @@ def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
     }
     dependencies = _get_dependencies(dependency_event_msg)
     assert dependencies == [
-        {"data_source": "swe", "data_type": "l0", "descriptor": "raw"}
+        {
+            "data_source": "swe",
+            "data_type": "l0",
+            "descriptor": "raw",
+            "relationship": "HARD",
+        },
     ]
 
 
