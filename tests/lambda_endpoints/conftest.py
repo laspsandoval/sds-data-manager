@@ -322,6 +322,28 @@ def _populate_file_catalog(session):
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
         ),
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_esa-lut_20221231_v001.cdf",
+            instrument="swe",
+            descriptor="esa-lut",
+            start_date=datetime(2022, 12, 31),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_eu-conversion_20221231_v001.cdf",
+            instrument="swe",
+            descriptor="eu-conversion",
+            start_date=datetime(2022, 12, 31),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
     ]
     session.add_all(test_records)
     session.commit()

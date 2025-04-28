@@ -206,13 +206,18 @@ def test_lambda_handler_ancillary_event(
         # Even though there are two imap_swe_l1b-in-flight-cal ancillary files that
         # have valid dates, there should be only be the most recent one returned
         # as an upstream dep.
-        ancillary_in = AncillaryInput(
-            "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
-        )
+        ancillary_in = [
+            AncillaryInput(
+                "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
+            ),
+            AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
+            AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
+        ]
+
         science_in = ScienceInput(
             "imap_swe_l1a_sci_20240102_v001.cdf",
         )
-        dependencies = ProcessingInputCollection(science_in, ancillary_in)
+        dependencies = ProcessingInputCollection(science_in, *ancillary_in)
         mock_batch_client.submit_job.assert_called_with(
             jobName="swe-l1b-sci-job-2",
             jobQueue="ProcessingJobQueue",

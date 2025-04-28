@@ -201,8 +201,20 @@ def test_get_downstream_dependencies():
             "descriptor": "l1b-in-flight-cal",
             "relationship": "HARD",
         },
+        {
+            "data_source": "swe",
+            "data_type": "ancillary",
+            "descriptor": "esa-lut",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "swe",
+            "data_type": "ancillary",
+            "descriptor": "eu-conversion",
+            "relationship": "HARD",
+        },
     ]
-    assert len(dependents) == 2
+    assert len(dependents) == 4
     assert dependents == expected_complete_dependent
 
 
@@ -243,20 +255,28 @@ def test_get_upstream_ancillary_trigger(session, caplog):
         "imap_swe_l1a_sci_20240102_v001.cdf",
         "imap_swe_l1a_sci_20240103_v001.cdf",
     )
-    ancillary_in = AncillaryInput("imap_swe_l1b-in-flight-cal_20230101_v001.cdf")
+    ancillary_in = [
+        AncillaryInput("imap_swe_l1b-in-flight-cal_20230101_v001.cdf"),
+        AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
+        AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
+    ]
     # Expect ancillary dependencies and science dependencies
-    expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
+    expected_processing_input = ProcessingInputCollection(science_in, *ancillary_in)
 
     assert dependencies == expected_processing_input.serialize()
     # Move start_date forward by one day
-    # THere are now two valid ancillary files for this date, but the dependency lambda
+    # THere are now two valid ancillary in-flight-cal files for this date, but
+    # the dependency lambda
     # Should only return the most recent one.
     event["queryStringParameters"]["start_date"] = "20231231"
     dependency_response = dependency.lambda_handler(event, None)
     dependencies = dependency_response["body"]
-    ancillary_in = AncillaryInput(
-        "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
-    )
+    ancillary_in = [
+        AncillaryInput("imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf"),
+        AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
+        AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
+    ]
+
     expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
     assert dependencies == expected_processing_input.serialize()
 
