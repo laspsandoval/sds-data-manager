@@ -8,7 +8,6 @@ import logging
 import os
 import urllib
 from datetime import datetime
-from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
@@ -197,6 +196,7 @@ def try_to_submit_job(
     session: db.Session,
     job_info: dict,
     start_date: datetime,
+    version: str,
     upstream_dependencies: ProcessingInputCollection,
 ):
     """Try to submit a batch job with the given job information.
@@ -213,39 +213,16 @@ def try_to_submit_job(
         Dictionary containing components with dates and versions appended.
     start_date : datetime
         Start date of the data.
+    version : str
+        Version of the job.
     upstream_dependencies : ProcessingInputCollection
         Input collection of upstream dependencies.
-
-    Returns
-    -------
-    bool
-        Whether or not this job is ready to be processed.
     """
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-
     start_date_str = datetime.strftime(start_date, "%Y%m%d")
 
-    logger.info("Checking existing job.")
-
-    version = determine_job_version(
-        session=session,
-        instrument=instrument,
-        descriptor=descriptor,
-        start_date=start_date,
-        data_level=data_level,
-    )
-    if version == "v001":
-        logger.info(
-            f"PROCESSING {instrument}, {data_level}, "
-            f"{descriptor}, {start_date_str} with version: {version}"
-        )
-    else:
-        logger.info(
-            f"REPROCESSING {instrument}, {data_level}, "
-            f"{descriptor}, {start_date_str} with new version: {version}"
-        )
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
     # If this job already exists, then we will get an integrity error
@@ -308,103 +285,16 @@ def try_to_submit_job(
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_all_jobs(
-    session: db.Session,
-    job: dict,
-    start_date: str,
-    end_date: Optional[str] = None,
-):
-    """Submit downstream jobs for each upstream primary science dependency file.
+def s3_processing_event(session, events):
+    """Process SQS events that were triggered by S3 file arrivals.
 
     Parameters
     ----------
-    session: orm session
+    session : orm session
         Database session.
-    job : dict
-        Job information containing data_source, data_type, and descriptor.
-    start_date : str
-        The trigger file start date.
-    end_date : str, optional
-        The trigger file end date, by default None.
-
-    Returns
-    -------
-    None
-    """
-    event_msg = {
-        "data_source": job["data_source"],
-        "data_type": job["data_type"],
-        "descriptor": job["descriptor"],
-        "dependency_type": "UPSTREAM",
-        "relationship": "ALL",
-        "start_date": start_date,
-        "end_date": end_date,
-    }
-
-    # Find the files that this job depends on
-    upstream_dependencies = _get_dependencies(event_msg)
-    if not upstream_dependencies:
-        return
-
-    logger.info(f"All required dependencies found for the job: {job}")
-
-    # Find science processingInputs that have the same source as the potential job
-    for dep in upstream_dependencies.get_science_inputs():
-        if job["data_source"] == dep.source:
-            # Try to start a downstream science job with the start_date from the
-            # upstream science dependency
-            # E.g.:
-            # if "job" == {"data_source":"swe","data_type":"l1b","descriptor":"sci"}
-            # And there is a processingInput in the upstream_dependencies that is
-            # {"type": "science",
-            #     "files": [
-            #         "imap_swe_l1a_sci_20240312_v001.cdf",
-            #         "imap_swe_l1a_sci_20240313_v001.cdf" ]}
-            # That means we need to kick off two swe l1b jobs for dates: "20240312" and
-            # "20240313"
-            for upstream_file in dep.imap_file_paths:
-                # TODO add function to processingInput to filter for start_date.
-                dep.imap_file_paths = [upstream_file]
-                dep.filename_list = [str(upstream_file.filename)]
-                job_start_date = datetime.strptime(upstream_file.start_date, "%Y%m%d")
-                try_to_submit_job(session, job, job_start_date, upstream_dependencies)
-        # Break out of the loop because we found an upstream science dep.
-        break
-
-
-def lambda_handler(events: dict, context):
-    """Lambda handler.
-
-    This lambda is triggered by different events.
-    1. Event of a new science or ancillary file arrival from indexer lambda.
-        Example event:
-            {
-                "DetailType": "Processed File",
-                "Source": "imap.lambda",
-                "Detail": {
-                    "object": {
-                        "key": str,
-                        "instrument": str,
-                    }
-                }
-            }
-    2. Event of a new spice file arrival from spice indexer lambda.
-        TODO: This will be implemented in the future.
-    3. Event of a new science reprocessing.
-        TODO: This will be implemented in the future.
-    4. Event of bulk processing of science in normal processing.
-        TODO: This will be implemented in the future.
-
-    Parameters
-    ----------
     events : dict
-        Event input
-    context : LambdaContext
-        Lambda context object
+        SQS event input.
     """
-    logger.info(f"Events: {events}")
-    logger.info(f"Context: {context}")
-
     # Since the SQS events can be batched together, we need to loop through
     # each event. In this loop, "event" represents one file landing.
     for event in events["Records"]:
@@ -456,6 +346,120 @@ def lambda_handler(events: dict, context):
         dependency_event_msg["relationship"] = "SOFT_TRIGGER"
         potential_soft_jobs = _get_dependencies(dependency_event_msg)
 
-        with db.Session() as session:
-            for job in potential_jobs + potential_soft_jobs:
-                submit_all_jobs(session, job, start_date, end_date)
+        for job in potential_jobs + potential_soft_jobs:
+            # Submit downstream jobs for each upstream primary science dependency file.
+            event_msg = {
+                "data_source": job["data_source"],
+                "data_type": job["data_type"],
+                "descriptor": job["descriptor"],
+                "dependency_type": "UPSTREAM",
+                "relationship": "ALL",
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+
+            # Find the files that this job depends on
+            upstream_dependencies = _get_dependencies(event_msg)
+            if not upstream_dependencies:
+                return
+
+            logger.info(f"All required dependencies found for the job: {job}")
+            # TODO: Uncomment lines below when new release of imap-data-access is made
+            # primary_science = upstream_dependencies.get_science_inputs(
+            #     job["data_source"])
+            # for filepath in primary_science.imap_file_paths:
+            #     job_start_date = datetime.strptime(filepath.start_date,"%Y%m%d")
+            #     # Filter dependencies to get only files needed for this job
+            #     try_to_submit_job(session, job, job_start_date,
+            #     upstream_dependencies.deepcopy().get_valid_inputs_for_start_date(
+            #         job_start_date))
+
+            # Find science processingInputs that have the same source as the potential
+            # job
+            # TODO: Remove lines below when new release of imap-data-access is made
+            dep = upstream_dependencies.get_science_inputs()[0]
+            if job["data_source"] == dep.source:
+                # Try to start a downstream science job with the start_date from the
+                # upstream science dependency
+                # E.g.:
+                # if "job" == {"data_source":"swe","data_type":"l1b","descriptor":"sci"}
+                # And there is a processingInput in the upstream_dependencies that is
+                # {"type": "science",
+                #     "files": [
+                #         "imap_swe_l1a_sci_20240312_v001.cdf",
+                #         "imap_swe_l1a_sci_20240313_v001.cdf" ]}
+                # That means we need to kick off two swe l1b jobs for dates: "20240312"
+                # and "20240313"
+                for upstream_file in dep.imap_file_paths:
+                    dep.imap_file_paths = [upstream_file]
+                    dep.filename_list = [str(upstream_file.filename)]
+                    job_start_date = datetime.strptime(
+                        upstream_file.start_date, "%Y%m%d"
+                    )
+
+                    job_version = determine_job_version(
+                        session=session,
+                        instrument=job["data_source"],
+                        descriptor=job["descriptor"],
+                        start_date=job_start_date,
+                        data_level=job["data_type"],
+                    )
+                    try_to_submit_job(
+                        session, job, job_start_date, job_version, upstream_dependencies
+                    )
+
+
+def lambda_handler(events: dict, context):
+    """Lambda handler.
+
+    This lambda is triggered by different events.
+    1. Event of a new science or ancillary file arrival from indexer lambda.
+        Example event:
+            {
+                "Records": [
+                    {
+                        "body": '{"detail": '
+                        '{"object": {"key": '
+                        '"imap_swe_l1b-in-flight-cal_20240101_v001.cdf"}}'
+                        "}"
+                    }
+                ]
+            }
+    2. Event of a new science reprocessing.
+        Example event: see example above.
+    3. Event of a new spice file arrival from spice indexer lambda.
+        TODO: This will be implemented in the future.
+    4. Event of bulk reprocessing of science.
+        TODO: This will be implemented in the future.
+        Example event:
+            {
+                "reprocessing": True,
+                "start_date": <>,
+                "end_date": <>,
+                "instrument": None, optional,
+                "data_level": None, optional,
+                "data_descriptor": None, optional,
+            }
+    5. Event of a cron job cadence trigger.
+        TODO: This will be implemented in the future.
+        Example event:
+            {
+                "cadence": 3months or 7days,
+                "instrument": <>,
+                "data_level": <>,
+                "descriptor": <>
+            }
+
+    Parameters
+    ----------
+    events : dict
+        Event input
+    context : LambdaContext
+        Lambda context object
+    """
+    logger.info(f"Events: {events}")
+    logger.info(f"Context: {context}")
+
+    with db.Session() as session:
+        # handle s3 event from the SQS queue
+        s3_processing_event(session, events)

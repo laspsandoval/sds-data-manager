@@ -244,6 +244,9 @@ def test_lambda_handler_ancillary_event(
 
 def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
     """Tests ``lambda_handler` for unique mac l1c case."""
+    # Mock the situation where mag l1b files trigger batch starter back to back.
+    # We should expect the second job mag l1c to be submitted with a version bump and
+    # both mag l1b files.
     session.add(
         ScienceFiles(
             file_path="/path/to/imap_mag_l1b_norm-mago_20240101_v001.cdf",
@@ -307,29 +310,43 @@ def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
                 }
             ]
         }
-        session.add(
-            ScienceFiles(
-                file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
-                instrument="mag",
-                data_level="l1b",
-                descriptor="burst-mago",
-                start_date=datetime(2024, 1, 1),
-                version="v001",
-                extension="cdf",
-                ingestion_date=datetime.strptime(
-                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+        session.add_all(
+            [
+                ScienceFiles(
+                    file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
+                    instrument="mag",
+                    data_level="l1b",
+                    descriptor="burst-mago",
+                    start_date=datetime(2024, 1, 1),
+                    version="v001",
+                    extension="cdf",
+                    ingestion_date=datetime.strptime(
+                        "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                    ),
                 ),
-            )
+                ScienceFiles(
+                    file_path="/path/to/imap_mag_l1b_burst-magi_20240101_v003.cdf",
+                    instrument="mag",
+                    data_level="l1b",
+                    descriptor="burst-magi",
+                    start_date=datetime(2024, 1, 1),
+                    version="v003",
+                    extension="cdf",
+                    ingestion_date=datetime.strptime(
+                        "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                    ),
+                ),
+            ]
         )
         session.commit()
 
         expected_processing_input.add(
-            ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf")
+            [ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf")]
         )
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
-            jobName="mag-l1c-norm-mago-job-2",
+            jobName="mag-l1c-norm-mago-job-3",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-mag",
             containerOverrides={
@@ -423,7 +440,7 @@ def test_lambda_handler_missing_upstream_dependency(session, mock_urlopen, caplo
         assert log_str in caplog.text
 
 
-def test_spice_file():
+def test_spice_file(session):
     """Tests ``lambda_handler`` function with spice file."""
     events = {
         "Records": [
