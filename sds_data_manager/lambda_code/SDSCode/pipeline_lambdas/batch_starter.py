@@ -201,10 +201,6 @@ def try_to_submit_job(
 ):
     """Try to submit a batch job with the given job information.
 
-    Go through the job information to retrieve all necessary input files
-    (upstream dependencies). If any are missing, return. If we have
-    all the necessary input files, submit the job to the batch queue.
-
     Parameters
     ----------
     session : orm session
@@ -314,7 +310,6 @@ def s3_processing_event(session, events):
             )
 
         # TODO: How to handle repointing
-
         start_date = file_obj.start_date
         end_date = file_obj.end_date if hasattr(file_obj, "end_date") else None
 
