@@ -172,8 +172,8 @@ def determine_job_version(
                 *filter_conditions(models.ScienceFiles)
             )
         ).scalar()
-    # Bump the version number. "V001" will be returned if max_version is None.
-    return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
+    # Bump the version number. "V000" will be returned if max_version is None.
+    return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v000"
 
 
 def try_to_submit_job(
