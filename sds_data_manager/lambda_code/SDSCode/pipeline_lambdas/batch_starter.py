@@ -359,49 +359,30 @@ def s3_processing_event(session, events):
                 return
 
             logger.info(f"All required dependencies found for the job: {job}")
-            # TODO: Uncomment lines below when new release of imap-data-access is made
-            # primary_science = upstream_dependencies.get_science_inputs(
-            #     job["data_source"])
-            # for filepath in primary_science.imap_file_paths:
-            #     job_start_date = datetime.strptime(filepath.start_date,"%Y%m%d")
-            #     # Filter dependencies to get only files needed for this job
-            #     try_to_submit_job(session, job, job_start_date,
-            #     upstream_dependencies.deepcopy().get_valid_inputs_for_start_date(
-            #         job_start_date))
-
-            # Find science processingInputs that have the same source as the potential
-            # job
-            # TODO: Remove lines below when new release of imap-data-access is made
-            dep = upstream_dependencies.get_science_inputs()[0]
-            if job["data_source"] == dep.source:
-                # Try to start a downstream science job with the start_date from the
-                # upstream science dependency
-                # E.g.:
-                # if "job" == {"data_source":"swe","data_type":"l1b","descriptor":"sci"}
-                # And there is a processingInput in the upstream_dependencies that is
-                # {"type": "science",
-                #     "files": [
-                #         "imap_swe_l1a_sci_20240312_v001.cdf",
-                #         "imap_swe_l1a_sci_20240313_v001.cdf" ]}
-                # That means we need to kick off two swe l1b jobs for dates: "20240312"
-                # and "20240313"
-                for upstream_file in dep.imap_file_paths:
-                    dep.imap_file_paths = [upstream_file]
-                    dep.filename_list = [str(upstream_file.filename)]
-                    job_start_date = datetime.strptime(
-                        upstream_file.start_date, "%Y%m%d"
-                    )
-
-                    job_version = determine_job_version(
-                        session=session,
-                        instrument=job["data_source"],
-                        descriptor=job["descriptor"],
-                        start_date=job_start_date,
-                        data_level=job["data_type"],
-                    )
-                    try_to_submit_job(
-                        session, job, job_start_date, job_version, upstream_dependencies
-                    )
+            # Find the first science processingInput that has the same source as the
+            # potential job. Use this to determine the start date.
+            primary_science = upstream_dependencies.get_science_inputs(
+                job["data_source"]
+            )[0]
+            for filepath in primary_science.imap_file_paths:
+                job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
+                job_version = determine_job_version(
+                    session=session,
+                    instrument=job["data_source"],
+                    descriptor=job["descriptor"],
+                    start_date=job_start_date,
+                    data_level=job["data_type"],
+                )
+                # Filter dependencies to get only files needed for this job
+                try_to_submit_job(
+                    session,
+                    job,
+                    job_start_date,
+                    job_version,
+                    upstream_dependencies.get_valid_inputs_for_start_date(
+                        job_start_date
+                    ),
+                )
 
 
 def lambda_handler(events: dict, context):
