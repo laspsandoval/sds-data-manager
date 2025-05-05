@@ -399,8 +399,7 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     )
 
 
-def get_dependency_processing_input(
-    query_params: dict,
+def get_upstream_dependency_inputs(
     dependencies: list,
     start_date: datetime,
     end_date: Optional[datetime] = None,
@@ -413,9 +412,6 @@ def get_dependency_processing_input(
 
     Parameters
     ----------
-    query_params : dict
-        Query parameters received from the API call describing either an upstream or
-        downstream dependency.
     dependencies : list
         List of dependency dictionaries either downstream or upstream from the
         dependency in the query parameters.
@@ -654,35 +650,34 @@ def lambda_handler(event, context):
         if query_params.get("start_date")
         else None
     )
-    if start_date:
-        end_date = query_params.get("end_date")
-        if not end_date:
-            return {
-                "statusCode": 400,  # Client error
-                "body": "end_date not found. If 'start_date' is supplied, "
-                "'end_date' is required.",
-            }
-        end_date = datetime.strptime(end_date, "%Y%m%d")
+    if start_date is None:
+        return {
+            "statusCode": 200,  # Success
+            "body": json.dumps(dependencies),
+        }
+    end_date = query_params.get("end_date")
+    if not end_date:
+        return {
+            "statusCode": 400,  # Client error
+            "body": "end_date not found. If 'start_date' is supplied, "
+            "'end_date' is required.",
+        }
+    end_date = datetime.strptime(end_date, "%Y%m%d")
 
-        dependencies_output = get_dependency_processing_input(
-            query_params=query_params,
-            dependencies=dependencies,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        if isinstance(dependencies_output, str):
-            return {
-                "statusCode": 206,  # Partial content
-                "body": dependencies_output,
-            }
-        dependencies_output = dependencies_output.serialize()
+    upstream_dependencies_output = get_upstream_dependency_inputs(
+        dependencies=dependencies,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if isinstance(upstream_dependencies_output, str):
+        return {
+            "statusCode": 206,  # Partial content
+            "body": upstream_dependencies_output,
+        }
     else:
-        dependencies_output = json.dumps(dependencies)
-
-    logger.info(f"Found dependencies: {dependencies} for {query_params}.")
-
-    # TODO: add reprocessing dependencies are handled here
-    return {
-        "statusCode": 200,  # Success
-        "body": dependencies_output,
-    }
+        logger.info(f"Found dependencies: {dependencies} for {query_params}.")
+        upstream_dependencies_output = upstream_dependencies_output.serialize()
+        return {
+            "statusCode": 200,  # Success
+            "body": upstream_dependencies_output,
+        }
