@@ -119,22 +119,6 @@ def _get_dependencies(dependency_events: dict):
     return dependencies
 
 
-def bump_version_number(version: str):
-    """Increase version number by 1.
-
-    Parameters
-    ----------
-    version : str
-        Current version number.
-
-    Returns
-    -------
-    str
-        Version increased by 1. If the input version is None, return "v001".
-    """
-    return f"v{int(version[1:]) + 1:03d}" if version else "v001"
-
-
 def determine_job_version(
     session: db.Session,
     instrument: str,
@@ -189,7 +173,7 @@ def determine_job_version(
             )
         ).scalar()
     # Bump the version number. "V001" will be returned if max_version is None.
-    return bump_version_number(max_version)
+    return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
 
 def try_to_submit_job(
