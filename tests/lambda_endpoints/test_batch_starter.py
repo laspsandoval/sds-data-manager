@@ -476,7 +476,7 @@ def test_determine_max_version(session):
         start_date=datetime(2010, 1, 1),
     )
     assert result == "v002"
-    # Assert that the version returned is "v001" when the job has not been processed.
+    # Assert that the version returned is "v000" when the job has not been processed.
     result = determine_job_version(
         session=session,
         instrument="swapi",
