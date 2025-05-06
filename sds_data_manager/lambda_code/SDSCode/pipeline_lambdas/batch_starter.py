@@ -692,6 +692,7 @@ def cadence_processing_event(session, events):
     # TODO use dependency "all" for all maps cadences
 
 
+
 def lambda_handler(events: dict, context):
     """Lambda handler.
 
