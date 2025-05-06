@@ -145,7 +145,7 @@ def test_lambda_handler(
                     "--start-date",
                     "20240110",
                     "--version",
-                    "v000",
+                    "v001",
                     "--dependency",
                     serialized_processing_input,
                     "--upload-to-sdc",
@@ -293,7 +293,7 @@ def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
                     "--start-date",
                     "20240101",
                     "--version",
-                    "v000",
+                    "v001",
                     "--dependency",
                     expected_processing_input.serialize(),
                     "--upload-to-sdc",
@@ -360,7 +360,7 @@ def test_lambda_handler_mag_l1c_case(session, mock_urlopen):
                     "--start-date",
                     "20240101",
                     "--version",
-                    "v001",
+                    "v002",
                     "--dependency",
                     expected_processing_input.serialize(),
                     "--upload-to-sdc",
@@ -476,7 +476,7 @@ def test_determine_max_version(session):
         start_date=datetime(2010, 1, 1),
     )
     assert result == "v002"
-    # Assert that the version returned is "v000" when the job has not been processed.
+    # Assert that the version returned is "v001" when the job has not been processed.
     result = determine_job_version(
         session=session,
         instrument="swapi",
@@ -484,7 +484,7 @@ def test_determine_max_version(session):
         descriptor="sci",
         start_date=datetime(2010, 1, 1),
     )
-    assert result == "v000"
+    assert result == "v001"
 
 
 def test_determine_max_version_missing_processing_job(session):
