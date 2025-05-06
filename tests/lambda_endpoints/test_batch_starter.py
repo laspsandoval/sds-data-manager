@@ -378,6 +378,31 @@ def test_lambda_handler_missing_upstream_dependency(session, caplog):
         assert log_str in caplog.text
 
 
+###### BULK REPROCESSING TESTS #######
+def test_bulk_reprocessing_data_level(session, mock_urlopen, caplog):
+    """Tests ``lambda_handler`` when there is bulk reprocessing for a data level."""
+    _populate_file_catalog(session)
+    # Test with an invalid event first. If data_level is provided, then instrument and
+    # descriptor are required.
+    events = {
+        "reprocessing": True,
+        "start_date": 20100101,
+        "end_date": 20260101,
+        "data_level": "l1b",
+        "descriptor": "sci",
+    }
+    context = {"context": "sample_context"}
+    with pytest.raises(ValueError, match="instrument and descriptor are required"):
+        lambda_handler(events, context)
+    # Add instrument and try again
+    events["instrument"] = "swe"
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+
+    assert mock_submit.call_count == 3
+
+
+###### HELPER FUNCTION TESTS #######
 def test_determine_max_version(session):
     """Test the ``determine_job_version`` function."""
     _populate_processing_table(session)
@@ -421,7 +446,7 @@ def test_determine_max_version_missing_processing_job(session):
     _populate_processing_table(session)
     _populate_file_catalog(session)
     # Test when processingJob table is not updated, the function checks
-    # science_files table to get version
+    # science_files table to get the version
     result = determine_job_version(
         session=session,
         instrument="swe",

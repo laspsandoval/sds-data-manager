@@ -202,7 +202,7 @@ def test_get_downstream_dependencies():
     assert dependency_response == expected_complete_dependent
 
 
-def test_get_all_downstream_dependencies():
+def test_get_all_downstream_dependencies_for_relationship():
     """Add test for getting back ancillary dependencies."""
     dependency_response = dependency.get_jobs(
         data_source="mag",
@@ -221,6 +221,21 @@ def test_get_all_downstream_dependencies():
         },
     ]
     assert dependency_response == expected_complete_dependent
+
+
+def test_get_all_downstream_dependencies_for_instrument():
+    """Add test for getting back dependencies for all instruments."""
+    event = {
+        "queryStringParameters": {
+            "dependency_type": "DOWNSTREAM",
+            "data_type": "l0",
+            "relationship": "HARD",
+        }
+    }
+    dependency_response = dependency.lambda_handler(event, None)
+    dependents = json.loads(dependency_response["body"])
+    # There are 14 jobs that are HARD downstream dependencies from l0
+    assert len(dependents) == 14
 
 
 def test_get_upstream_ancillary_trigger(session, caplog):

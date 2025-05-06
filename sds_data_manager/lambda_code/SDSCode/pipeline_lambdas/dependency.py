@@ -343,10 +343,14 @@ def get_dependencies(query_node, dependency_type, relationship):
     for rel in relationships:
         all_deps_for_type = dependency_config.dependencies[rel][dependency_type]
         if None in query_node:
+            # If one of the node elements is missing, find nodes that match at the
+            # indices where the node is not None.
             deps = []
-            for dep1, dep2 in dict(all_deps_for_type).items():
-                if all(k == n for k, n in zip(dep1, query_node) if n is not None):
-                    deps.extend(dep2)
+            for key_node, val_node in dict(all_deps_for_type).items():
+                if all(
+                    kn == qn for kn, qn in zip(key_node, query_node) if qn is not None
+                ):
+                    deps.extend(val_node)
         else:
             # If the node contains all three elements:
             # (data_source, data_type, descriptor),

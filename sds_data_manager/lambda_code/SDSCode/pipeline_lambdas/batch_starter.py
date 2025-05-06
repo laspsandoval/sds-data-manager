@@ -151,7 +151,7 @@ def try_to_submit_job(
 
     # Reformat the upstream dependencies from dependency call to match
     # what batch job expects.
-
+    # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
     batch_command = [
         "--instrument",
         instrument,
@@ -187,6 +187,60 @@ def try_to_submit_job(
     )
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
+
+def submit_all_jobs(session, potential_jobs, start_date, end_date):
+    """Submit all jobs for the given job and upstream dependencies.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    potential_jobs : list[dict]
+        List of job node to run.
+    start_date : str
+        Start date to query the data.
+    end_date : str
+        Start date to query the data.
+    """
+    for job in potential_jobs:
+        # Submit downstream jobs for each upstream primary science dependency file.
+        # Find the files that this job depends on
+        upstream_dependencies = dependency.get_jobs(
+            data_source=job["data_source"],
+            data_type=job["data_type"],
+            descriptor=job["descriptor"],
+            dependency_type="UPSTREAM",
+            relationship="ALL",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not upstream_dependencies:
+            return
+
+        logger.info(f"All required dependencies found for the job: {job}")
+        # Find the first science processingInput that has the same source as the
+        # potential job. Use this to determine the start date.
+        primary_science = upstream_dependencies.get_science_inputs(job["data_source"])[
+            0
+        ]
+        for filepath in primary_science.imap_file_paths:
+            job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
+            job_version = determine_job_version(
+                session=session,
+                instrument=job["data_source"],
+                descriptor=job["descriptor"],
+                start_date=job_start_date,
+                data_level=job["data_type"],
+            )
+            # Filter dependencies to get only files needed for this job
+            try_to_submit_job(
+                session,
+                job,
+                job_start_date,
+                job_version,
+                upstream_dependencies.get_valid_inputs_for_start_date(job_start_date,
+                                                                      return_latest_ancillary=True),
+            )
 
 def s3_processing_event(session, events):
     """Process SQS events that were triggered by S3 file arrivals.
@@ -265,71 +319,64 @@ def s3_processing_event(session, events):
             f"{potential_soft_jobs}"
         )
 
-        for job in potential_jobs + potential_soft_jobs:
-            # Submit downstream jobs for each upstream primary science dependency file.
+        submit_all_jobs(
+            session, potential_jobs + potential_soft_jobs, start_date, end_date
+        )
 
-            # Find the files that this job depends on
-            upstream_dependencies = dependency.get_jobs(
-                data_source=job["data_source"],
-                data_type=job["data_type"],
-                descriptor=job["descriptor"],
-                dependency_type="UPSTREAM",
-                relationship="ALL",
-                start_date=start_date,
-                end_date=end_date,
-            )
 
-            if not upstream_dependencies:
-                continue
-
-            logger.info(f"All required dependencies found for the job: {job}")
-            submit_all_jobs(session, job, upstream_dependencies)
-
-def submit_all_jobs(session, job, upstream_dependencies):
-    """Submit all jobs for the given job and upstream dependencies.
+def bulk_reprocessing_event(session, events):
+    """Process bulk reprocessing event.
 
     Parameters
     ----------
     session : orm session
         Database session.
-    job : dict
-        Job node.
-    upstream_dependencies : ProcessingInputCollection
-        Input collection of upstream dependencies.
+    events : dict
+        Event input.
     """
-    # Find the first science processingInput that has the same source as the
-    # potential job. Use this to determine the start date.
-    primary_science = upstream_dependencies.get_science_inputs(
-        job["data_source"]
-    )[0]
-    for filepath in primary_science.imap_file_paths:
-        job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
-        job_version = determine_job_version(
-            session=session,
-            instrument=job["data_source"],
-            descriptor=job["descriptor"],
-            start_date=job_start_date,
-            data_level=job["data_type"],
+    # TODO: We need s3 tag or column in db to track bulk reprocessing
+    instrument = events.get("instrument")
+    data_level = events.get("data_level")
+    descriptor = events.get("descriptor")
+    start_date = events.get("start_date")
+    end_date = events.get("end_date")
+    if not end_date or not start_date:
+        raise ValueError(
+            "Start date and end date are required for a reprocessing Event."
         )
-        # Query for upstream files only needed for this job with using the
-        # start date of the primary science file.
-        upstream_deps_for_start_date = dependency.get_jobs(
-            data_source=job["data_source"],
-            data_type=job["data_type"],
-            descriptor=job["descriptor"],
-            dependency_type="UPSTREAM",
-            relationship="ALL",
-            start_date=filepath.start_date,
-            end_date=filepath.start_date,
-        )
-        try_to_submit_job(
-            session,
-            job,
-            job_start_date,
-            job_version,
-            upstream_deps_for_start_date,
-        )
+    if data_level:
+        # If data_level is provided, instrument and descriptor are required
+        if not instrument or not descriptor:
+            raise ValueError(
+                "If data_level is provided, instrument and descriptor are required."
+            )
+        # we need to find the upstream dependencies for this instrument, data level,
+        # and descriptor
+        potential_jobs = [
+            {
+                "data_source": instrument,
+                "descriptor": descriptor,
+                "data_type": data_level,
+            }
+        ]
+    else:
+        # If data_level is not provided, we need to reprocess all levels.
+        # To get potential jobs, first we query for jobs downstream from l0 raw files.
+        # This will create a cascading effect in which all downstream
+        event = {
+            "data_type": "l0",
+            "dependency_type": "DOWNSTREAM",
+            "relationship": "ALL",  # TODO reprocess all? Even SOFT_NO_TRIGGER?
+        }
+        # Add optional parameters to the event
+        if instrument:
+            event["data_source"] = instrument
+        if descriptor:
+            event["descriptor"] = descriptor
 
+        potential_jobs = _get_dependencies(event)
+
+    submit_all_jobs(session, potential_jobs, start_date, end_date)
 
 def lambda_handler(events: dict, context):
     """Lambda handler.
