@@ -303,7 +303,7 @@ class DependencyConfig:
         return True
 
 
-def get_dependencies(node, dependency_type, relationship):
+def get_dependencies(query_node, dependency_type, relationship):
     """Lookup the dependencies for the given ``node``.
 
     A ``node`` is an identifier of the data product, which can be an
@@ -312,7 +312,7 @@ def get_dependencies(node, dependency_type, relationship):
 
     Parameters
     ----------
-    node : tuple
+    query_node : tuple
         Quantities that uniquely identify a data product.
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
@@ -341,7 +341,17 @@ def get_dependencies(node, dependency_type, relationship):
 
     dependencies = []
     for rel in relationships:
-        deps = dependency_config.dependencies[rel][dependency_type].get(node, [])
+        all_deps_for_type = dependency_config.dependencies[rel][dependency_type]
+        if None in query_node:
+            deps = []
+            for dep1, dep2 in dict(all_deps_for_type).items():
+                if all(k == n for k, n in zip(dep1, query_node) if n is not None):
+                    deps.extend(dep2)
+        else:
+            # If the node contains all three elements:
+            # (data_source, data_type, descriptor),
+            # get the dependencies for that node
+            deps = all_deps_for_type.get(query_node, [])
 
         # Add keys for a dict-like representation
         dependencies.extend(
