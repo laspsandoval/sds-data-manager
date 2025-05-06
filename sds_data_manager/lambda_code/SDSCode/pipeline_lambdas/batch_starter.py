@@ -283,39 +283,52 @@ def s3_processing_event(session, events):
                 continue
 
             logger.info(f"All required dependencies found for the job: {job}")
+            submit_all_jobs(session, job, upstream_dependencies)
 
-            # Find the first science processingInput that has the same source as the
-            # potential job. Use this to determine the start date.
-            primary_science = upstream_dependencies.get_science_inputs(
-                job["data_source"]
-            )[0]
-            for filepath in primary_science.imap_file_paths:
-                job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
-                job_version = determine_job_version(
-                    session=session,
-                    instrument=job["data_source"],
-                    descriptor=job["descriptor"],
-                    start_date=job_start_date,
-                    data_level=job["data_type"],
-                )
-                # Query for upstream files only needed for this job with using the
-                # start date of the primary science file.
-                upstream_deps_for_start_date = dependency.get_jobs(
-                    data_source=job["data_source"],
-                    data_type=job["data_type"],
-                    descriptor=job["descriptor"],
-                    dependency_type="UPSTREAM",
-                    relationship="ALL",
-                    start_date=filepath.start_date,
-                    end_date=filepath.start_date,
-                )
-                try_to_submit_job(
-                    session,
-                    job,
-                    job_start_date,
-                    job_version,
-                    upstream_deps_for_start_date,
-                )
+def submit_all_jobs(session, job, upstream_dependencies):
+    """Submit all jobs for the given job and upstream dependencies.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    job : dict
+        Job node.
+    upstream_dependencies : ProcessingInputCollection
+        Input collection of upstream dependencies.
+    """
+    # Find the first science processingInput that has the same source as the
+    # potential job. Use this to determine the start date.
+    primary_science = upstream_dependencies.get_science_inputs(
+        job["data_source"]
+    )[0]
+    for filepath in primary_science.imap_file_paths:
+        job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
+        job_version = determine_job_version(
+            session=session,
+            instrument=job["data_source"],
+            descriptor=job["descriptor"],
+            start_date=job_start_date,
+            data_level=job["data_type"],
+        )
+        # Query for upstream files only needed for this job with using the
+        # start date of the primary science file.
+        upstream_deps_for_start_date = dependency.get_jobs(
+            data_source=job["data_source"],
+            data_type=job["data_type"],
+            descriptor=job["descriptor"],
+            dependency_type="UPSTREAM",
+            relationship="ALL",
+            start_date=filepath.start_date,
+            end_date=filepath.start_date,
+        )
+        try_to_submit_job(
+            session,
+            job,
+            job_start_date,
+            job_version,
+            upstream_deps_for_start_date,
+        )
 
 
 def lambda_handler(events: dict, context):
@@ -370,5 +383,9 @@ def lambda_handler(events: dict, context):
     logger.info(f"Context: {context}")
 
     with db.Session() as session:
-        # handle s3 event from the SQS queue
-        s3_processing_event(session, events)
+        if events.get("reprocessing"):
+            # handle reprocessing event
+            bulk_reprocessing_event(session, events)
+        else:
+            # handle s3 event from the SQS queue
+            s3_processing_event(session, events)
