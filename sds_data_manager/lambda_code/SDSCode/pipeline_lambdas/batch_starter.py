@@ -160,10 +160,9 @@ def determine_job_version(
                     [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
                 )
             )
-            if descriptor != "all":
-                # If the descriptor is not "all", filter by descriptor otherwise, look
-                # at all descriptors
-                conditions.append(table.descriptor == descriptor)
+        if descriptor != "all":
+            # If the descriptor is all we want to check for all descriptors
+            conditions.append(table.descriptor == descriptor)
 
         return conditions
 
