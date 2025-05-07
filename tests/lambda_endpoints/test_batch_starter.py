@@ -386,7 +386,7 @@ def test_bulk_reprocessing_data_level(session, mock_urlopen, caplog):
     # descriptor are required.
     events = {
         "reprocessing": True,
-        "start_date": 20100101,
+        "start_date": 20230101,
         "end_date": 20260101,
         "data_level": "l1b",
         "descriptor": "sci",
@@ -398,7 +398,7 @@ def test_bulk_reprocessing_data_level(session, mock_urlopen, caplog):
     events["instrument"] = "swe"
     with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
         lambda_handler(events, context)
-
+    # There should be three different jobs submitted for swe l1b
     assert mock_submit.call_count == 3
 
 
