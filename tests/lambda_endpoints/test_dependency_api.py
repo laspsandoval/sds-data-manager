@@ -264,15 +264,16 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     expected_processing_input = ProcessingInputCollection(science_in, *ancillary_in)
 
     assert dependencies == expected_processing_input.serialize()
-    # Move start_date forward by one day
-    # THere are now two valid ancillary in-flight-cal files for this date, but
-    # the dependency lambda
-    # Should only return the most recent one.
-    event["queryStringParameters"]["start_date"] = "20231231"
+    # Move end_date forward by one
+    # There are now two valid ancillary in-flight-cal files for this date.
+    event["queryStringParameters"]["end_date"] = "20240105"
     dependency_response = dependency.lambda_handler(event, None)
     dependencies = dependency_response["body"]
     ancillary_in = [
-        AncillaryInput("imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf"),
+        AncillaryInput(
+            "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
+            "imap_swe_l1b-in-flight-cal_20240105_20250104_v002.cdf",
+        ),
         AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
         AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
     ]
@@ -362,21 +363,17 @@ def test_get_ancillary_files(session):
     assert record.version == "v001"
 
     # Get ancillary file covering range.
-    # There are two ancillary files valid for this range, but the one with the most
-    # recent start_date should be returned
+    # There are two ancillary files valid for this range.
     record = get_files(
         session,
         dependency=dep,
         start_date=datetime(2024, 1, 2),
-        end_date=datetime(2024, 1, 3),
+        end_date=datetime(2024, 1, 10),
     )
-    assert len(record) == 1
-    record = record[0]
-    assert record.instrument == "swe"
-    assert record.descriptor == "l1b-in-flight-cal"
-    assert record.start_date == datetime(2023, 12, 31)
-    assert record.end_date == datetime(2024, 1, 4)
-    assert record.version == "v001"
+    assert len(record) == 2
+    for rec in record:
+        assert rec.instrument == "swe"
+        assert rec.descriptor == "l1b-in-flight-cal"
 
 
 def test_get_files_max_version(session):

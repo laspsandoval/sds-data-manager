@@ -370,6 +370,7 @@ def s3_processing_event(session, events):
                     job,
                     job_start_date,
                     job_version,
+                    # TODO add boolean return_latest_ancillary = True once implemented
                     upstream_dependencies.get_valid_inputs_for_start_date(
                         job_start_date
                     ),

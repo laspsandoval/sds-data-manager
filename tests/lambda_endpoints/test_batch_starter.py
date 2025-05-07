@@ -10,7 +10,6 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 from imap_data_access.processing_input import (
-    AncillaryInput,
     ProcessingInputCollection,
     ScienceInput,
 )
@@ -178,68 +177,70 @@ def test_lambda_handler_multiple_events(session, mock_urlopen):
         assert mock_batch_client.submit_job.call_count == 2
 
 
-def test_lambda_handler_ancillary_event(
-    session,
-    mock_urlopen: unittest.mock.MagicMock,
-):
-    """Tests ``lambda_handler`` function when triggerd by an ancillary file."""
-    _populate_file_catalog(session)
-    events = {
-        "Records": [
-            {
-                "body": '{"detail": '
-                '{"object": {"key": '
-                '"imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf"}}'
-                "}"
-            }
-        ]
-    }
-
-    context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
-        lambda_handler(events, context)
-        # There should be 2 different jobs submitted for one swe l1b ancillary file
-        assert mock_batch_client.submit_job.call_count == 2
-        # Assert_called_with only works on the last call
-        # Check that the last call is what we expect with the correct dependencies
-
-        # Even though there are two imap_swe_l1b-in-flight-cal ancillary files that
-        # have valid dates, there should be only be the most recent one returned
-        # as an upstream dep.
-        ancillary_in = [
-            AncillaryInput(
-                "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
-            ),
-            AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
-            AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
-        ]
-
-        science_in = ScienceInput(
-            "imap_swe_l1a_sci_20240102_v001.cdf",
-        )
-        dependencies = ProcessingInputCollection(science_in, *ancillary_in)
-        mock_batch_client.submit_job.assert_called_with(
-            jobName="swe-l1b-sci-job-2",
-            jobQueue="ProcessingJobQueue",
-            jobDefinition="ProcessingJob-swe",
-            containerOverrides={
-                "command": [
-                    "--instrument",
-                    "swe",
-                    "--data-level",
-                    "l1b",
-                    "--descriptor",
-                    "sci",
-                    "--start-date",
-                    "20240102",
-                    "--version",
-                    "v002",
-                    "--dependency",
-                    dependencies.serialize(),
-                    "--upload-to-sdc",
-                ]
-            },
-        )
+# TODO uncomment this test once imap-data-access is updated to include PR with
+#  "return_latest_ancillary" boolean
+# def test_lambda_handler_ancillary_event(
+#     session,
+#     mock_urlopen: unittest.mock.MagicMock,
+# ):
+#     """Tests ``lambda_handler`` function when triggerd by an ancillary file."""
+#     _populate_file_catalog(session)
+#     events = {
+#         "Records": [
+#             {
+#                 "body": '{"detail": '
+#                 '{"object": {"key": '
+#                 '"imap_swe_l1b-in-flight-cal_20231231_20240102_v002.cdf"}}'
+#                 "}"
+#             }
+#         ]
+#     }
+#
+#     context = {"context": "sample_context"}
+#     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+#         lambda_handler(events, context)
+#         # There should be 2 different jobs submitted for one swe l1b ancillary file
+#         assert mock_batch_client.submit_job.call_count == 2
+#         # Assert_called_with only works on the last call
+#         # Check that the last call is what we expect with the correct dependencies
+#
+#         # Even though there are two imap_swe_l1b-in-flight-cal ancillary files that
+#         # have valid dates, there should be only be the most recent one returned
+#         # as an upstream dep.
+#         ancillary_in = [
+#             AncillaryInput(
+#                 "imap_swe_l1b-in-flight-cal_20231231_20240104_v002.cdf",
+#             ),
+#             AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
+#             AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
+#         ]
+#
+#         science_in = ScienceInput(
+#             "imap_swe_l1a_sci_20240102_v001.cdf",
+#         )
+#         dependencies = ProcessingInputCollection(science_in, *ancillary_in)
+#         mock_batch_client.submit_job.assert_called_with(
+#             jobName="swe-l1b-sci-job-2",
+#             jobQueue="ProcessingJobQueue",
+#             jobDefinition="ProcessingJob-swe",
+#             containerOverrides={
+#                 "command": [
+#                     "--instrument",
+#                     "swe",
+#                     "--data-level",
+#                     "l1b",
+#                     "--descriptor",
+#                     "sci",
+#                     "--start-date",
+#                     "20240102",
+#                     "--version",
+#                     "v002",
+#                     "--dependency",
+#                     dependencies.serialize(),
+#                     "--upload-to-sdc",
+#                 ]
+#             },
+#         )
 
 
 def test_lambda_handler_mag_l1c_case(session, mock_urlopen):

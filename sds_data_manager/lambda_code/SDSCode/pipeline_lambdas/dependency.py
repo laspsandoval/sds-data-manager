@@ -485,10 +485,8 @@ def get_files(
     records : list[Union[models.ScienceFiles, models.AncillaryFiles]]
         The ScienceFiles or AncillaryFiles records matching the query criteria.
     """
-    ancillary = False
     type_specific_conditions = []
     if dependency["data_type"] == DataType.ANCILLARY:
-        ancillary = True
         table = models.AncillaryFiles
         # Query for ancillary files whose ranges cover the
         # start date and end date.
@@ -496,8 +494,8 @@ def get_files(
         # file with the date range ('20250101', '20250103')
         type_specific_conditions.append(
             and_(
-                table.start_date <= start_date,
-                or_(table.end_date >= end_date, table.end_date.is_(None)),
+                table.start_date <= end_date,
+                or_(table.end_date >= start_date, table.end_date.is_(None)),
             )
         )
     else:
@@ -543,10 +541,6 @@ def get_files(
         .filter(*filter_conditions)
         .all()
     )
-
-    # If the dependency is ancillary, only return the one with the latest start_date.
-    if ancillary:
-        records = sorted(records, key=lambda x: x.start_date, reverse=True)[0:1]
 
     return records
 
