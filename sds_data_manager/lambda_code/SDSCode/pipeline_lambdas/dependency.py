@@ -488,10 +488,11 @@ def get_files(
     type_specific_conditions = []
     if dependency["data_type"] == DataType.ANCILLARY:
         table = models.AncillaryFiles
-        # Query for ancillary files whose ranges cover the
-        # start date and end date.
-        # E.g., if the start date is '20250102', the query could return an ancillary
-        # file with the date range ('20250101', '20250103')
+        # Query for ancillary files where the start_date is less than or equal to
+        # the end_date, and the end_date is either greater than or equal to the
+        # start_date or is None. For example, if the start_date is '20250102' and
+        # the end_date is '20250103', the query could return an ancillary file with
+        # the date range ('20250101', '20250104').
         type_specific_conditions.append(
             and_(
                 table.start_date <= end_date,
