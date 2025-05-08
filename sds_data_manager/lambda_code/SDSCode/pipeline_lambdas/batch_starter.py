@@ -674,6 +674,31 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
+def cadence_processing_event(session, events):
+    """Process events triggerd by cron jobs.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    events : dict
+        Event input from a cron job.
+    """
+    cadence = events.get("cadence")
+    instrument = events.get("instrument")
+    data_level = events.get("data_level")
+    descriptor = events.get("descriptor")
+    if not any([instrument, data_level, descriptor, cadence]):
+        raise ValueError(
+            "Cadence event must include cadence, instrument, data_level, and"
+            " descriptor."
+        )
+    start_date, end_date = cadence_to_datetime_range(cadence)
+    # Get the list of all files that need to be processed
+
+    # TODO use dependency "all" for all maps cadences
+
+
 def lambda_handler(events: dict, context):
     """Lambda handler.
 
@@ -707,7 +732,6 @@ def lambda_handler(events: dict, context):
                 }
             }
     5. Event of a cron job cadence trigger.
-        TODO: This will be implemented in the future.
         Example event:
             {
                 "cadence": 3months or 7days,
@@ -730,6 +754,9 @@ def lambda_handler(events: dict, context):
         if api_event and api_event.get("reprocessing"):
             # handle reprocessing event
             bulk_reprocessing_event(session, api_event)
+        elif events.get("cadence"):
+            # Handle a cadence event
+            cadence_processing_event(session, events)
         else:
             # handle s3 event from the SQS queue
             s3_processing_event(session, events)

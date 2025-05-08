@@ -755,6 +755,23 @@ def test_lambda_handler_mag_l1c_case(session):
         )
 
 
+### TEST CADENCE EVENT
+def test_def_cadence_map_event(session, mock_urlopen):
+    """Test that a cadence event kicks off the right processing job."""
+    _populate_file_catalog(session)
+    cadence_event = {
+        "instrument": "ultra",
+        "data_type": "l2",
+        "descriptor": "u45-ena-h-hf-nsp-full-hae-6deg-6mo",
+        "cadence": "months6",
+    }
+
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(cadence_event, context)
+        # Verify the function was not called
+        assert mock_submit.call_count == 1
+
 ###### HELPER FUNCTION TESTS #######
 def test_determine_max_version(session):
     """Test the ``determine_job_version`` function."""
