@@ -276,7 +276,7 @@ def test_get_upstream_ancillary_trigger(session, caplog):
         AncillaryInput(
             "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
             "imap_swe_l1b-in-flight-cal_20230102_v001.cdf",
-            "imap_swe_l1b-in-flight-cal_20240105_20250104_v002.cdf",
+            "imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
         ),
         AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
         AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
