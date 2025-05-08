@@ -235,9 +235,11 @@ def submit_all_jobs(session, job, start_date, end_date):
             job,
             job_start_date,
             job_version,
-            upstream_dependencies.get_valid_inputs_for_start_date(job_start_date,
-                                                                  return_latest_ancillary=True),
+            upstream_dependencies.get_valid_inputs_for_start_date(
+                job_start_date, return_latest_ancillary=True
+            ),
         )
+
 
 def s3_processing_event(session, events):
     """Process SQS events that were triggered by S3 file arrivals.
@@ -357,14 +359,15 @@ def bulk_reprocessing_event(session, events):
         ]
     else:
         # If data_level is not provided, we need to reprocess all levels.
-        # To get potential jobs, first we query for jobs downstream from l0 raw files.
-        # This will create a cascading effect in which all downstream
+        # To get potential jobs, first we query for jobs directly downstream from l0 raw
+        # files. This will create a domino effect in which all downstream files get
+        # reprocessed.
         event = {
             "data_type": "l0",
             "dependency_type": "DOWNSTREAM",
-            "relationship": "ALL",  # TODO reprocess all? Even SOFT_NO_TRIGGER?
+            "relationship": "ALL",
         }
-        # Add optional parameters to the event
+        # Add optional parameters to the event data
         if instrument:
             event["data_source"] = instrument
         if descriptor:
@@ -374,7 +377,6 @@ def bulk_reprocessing_event(session, events):
     for job in potential_jobs:
         submit_all_jobs(session, job, start_date, end_date)
 
-    submit_all_jobs(session, potential_jobs, start_date, end_date)
 
 def lambda_handler(events: dict, context):
     """Lambda handler.
@@ -397,7 +399,6 @@ def lambda_handler(events: dict, context):
     3. Event of a new spice file arrival from spice indexer lambda.
         TODO: This will be implemented in the future.
     4. Event of bulk reprocessing of science.
-        TODO: This will be implemented in the future.
         Example event:
             {
                 "reprocessing": True,
