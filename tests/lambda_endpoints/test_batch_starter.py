@@ -491,7 +491,7 @@ def test_determine_job_version_descriptor_is_all(session):
     """Test the ``determine_job_version`` function."""
     _populate_file_catalog(session)
     # With the descriptor set to "all", the function should return the max version
-    # bumped of ALL of the files matching "mag" and "l1b" in the database.
+    # found in the processing job table and not the science files table.
     result = determine_job_version(
         session=session,
         instrument="mag",
@@ -499,7 +499,7 @@ def test_determine_job_version_descriptor_is_all(session):
         descriptor="all",
         start_date=datetime(2024, 1, 1),
     )
-    assert result == "v003"
+    assert result == "v001"
 
 
 def test_determine_max_version_missing_processing_job(session):
