@@ -200,7 +200,7 @@ def submit_all_jobs(session, job, start_date, end_date):
     start_date : str
         Start date to query the data.
     end_date : str
-        Start date to query the data.
+        End date to query the data.
     """
     # Submit downstream jobs for each upstream primary science dependency file.
     # Find the files that this job depends on
