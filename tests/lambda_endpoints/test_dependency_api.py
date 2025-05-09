@@ -1,6 +1,5 @@
 """Test data dependency functions."""
 
-import json
 from datetime import datetime
 from unittest.mock import patch
 
@@ -37,11 +36,8 @@ def test_lambda_handler_no_dependencies():
             "relationship": "HARD",
         }
     }
-
-    response = dependency.lambda_handler(event, None)
-
-    assert response["statusCode"] == 200
-    assert response["body"] == "[]"
+    with pytest.raises(KeyError):
+        dependency.lambda_handler(event)
 
 
 @patch(
@@ -60,10 +56,8 @@ def test_lambda_handler_invalid_dependency_type(mock_get_dependencies):
     }
     mock_get_dependencies.return_value = None
 
-    response = dependency.lambda_handler(event, None)
-
-    assert response["statusCode"] == 500
-    assert response["body"] == "Failed to load dependencies"
+    with pytest.raises(KeyError):
+        dependency.lambda_handler(event)
 
 
 def test_missing_dependency(session):
@@ -74,10 +68,8 @@ def test_missing_dependency(session):
         start_date="20240104",
         end_date="20241204",
     )
-    dependency_response = dependency.lambda_handler(event, None)
-
-    assert dependency_response["statusCode"] == 206
-    assert "No records found for dependency:" in dependency_response["body"]
+    result = dependency.lambda_handler(event)
+    assert not result
 
 
 def test_soft_dependencies(session):
@@ -92,8 +84,7 @@ def test_soft_dependencies(session):
         relationship="SOFT_TRIGGER",
         dep_type="UPSTREAM",
     )
-    dependency_response = dependency.lambda_handler(event, None)
-    dependencies = dependency_response["body"]
+    dependency_response = dependency.lambda_handler(event)
     # There should be two science inputs: one for mag_l1b_burst-mago and
     # mag_l1b_norm-mago
     # Expect ancillary dependencies and science dependencies
@@ -101,7 +92,7 @@ def test_soft_dependencies(session):
         ScienceInput("imap_mag_l1b_norm-mago_20240101_v002.cdf"),
         ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
     )
-    assert dependencies == expected_processing_input.serialize()
+    assert dependency_response.serialize() == expected_processing_input.serialize()
 
 
 def test_missing_soft_dependencies(session):
@@ -131,34 +122,32 @@ def test_missing_soft_dependencies(session):
         relationship="SOFT_TRIGGER",
         dep_type="UPSTREAM",
     )
-    dependency_response = dependency.lambda_handler(event, None)
-    dependencies = dependency_response["body"]
+    dependency_response = dependency.lambda_handler(event)
     # There should be one science input: one for mag_l1b_norm-mago
     # Even though burst-mago is missing.
     # Expect ancillary dependencies and science dependencies
     expected_processing_input = ProcessingInputCollection(
         ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf")
     )
-    assert dependencies == expected_processing_input.serialize()
+    assert dependency_response.serialize() == expected_processing_input.serialize()
 
 
 def test_missing_required_params():
     """Test that 400 error is returned."""
     event = {
-        "queryStringParameters": {
-            "dependency_type": "DOWNSTREAM",
-            "relationship": "HARD",
-            "data_source": "swe",
-            "data_type": "l1b",
-            "descriptor": "sci",
-            "start_date": "20240104",
-        }
+        "dependency_type": "DOWNSTREAM",
+        "relationship": "HARD",
+        "data_source": "swe",
+        "data_type": "l1b",
+        "descriptor": "sci",
+        "start_date": "20240104",
     }
-    dependency_response = dependency.lambda_handler(event, None)
-    assert dependency_response["statusCode"] == 400
-    assert dependency_response["body"] == (
-        "end_date not found. If 'start_date' is supplied, 'end_date' is required."
-    )
+    with pytest.raises(
+        ValueError,
+        match="end_date not found. If 'start_date' is "
+        "supplied, 'end_date' is required.",
+    ):
+        dependency.lambda_handler(event)
 
 
 #####################################
@@ -168,8 +157,7 @@ def test_get_downstream_dependencies():
     """Tests get_downstream_dependencies function."""
     event = create_dependency_api_event("hit", "l1a", "counts")
 
-    dependency_response = dependency.lambda_handler(event, None)
-    dependents = json.loads(dependency_response["body"])
+    dependency_response = dependency.lambda_handler(event)
 
     expected_complete_dependent = [
         {
@@ -179,14 +167,13 @@ def test_get_downstream_dependencies():
             "relationship": "HARD",
         }
     ]
-    assert len(dependents) == 1
+    assert len(dependency_response) == 1
 
-    assert dependents == expected_complete_dependent
+    assert dependency_response == expected_complete_dependent
 
     # Add test for getting back ancillary dependency
     event = create_dependency_api_event("swe", "l1b", dep_type="UPSTREAM")
-    dependency_response = dependency.lambda_handler(event, None)
-    dependents = json.loads(dependency_response["body"])
+    dependency_response = dependency.lambda_handler(event)
 
     expected_complete_dependent = [
         {
@@ -214,8 +201,8 @@ def test_get_downstream_dependencies():
             "relationship": "HARD",
         },
     ]
-    assert len(dependents) == 4
-    assert dependents == expected_complete_dependent
+    assert len(dependency_response) == 4
+    assert dependency_response == expected_complete_dependent
 
 
 def test_get_all_downstream_dependencies():
@@ -223,8 +210,7 @@ def test_get_all_downstream_dependencies():
     event = create_dependency_api_event(
         "mag", "l1b", descriptor="norm-mago", relationship="ALL"
     )
-    dependency_response = dependency.lambda_handler(event, None)
-    dependents = json.loads(dependency_response["body"])
+    dependency_response = dependency.lambda_handler(event)
 
     expected_complete_dependent = [
         {
@@ -234,7 +220,7 @@ def test_get_all_downstream_dependencies():
             "relationship": "SOFT_TRIGGER",
         },
     ]
-    assert dependents == expected_complete_dependent
+    assert dependency_response == expected_complete_dependent
 
 
 def test_get_upstream_ancillary_trigger(session, caplog):
@@ -247,8 +233,7 @@ def test_get_upstream_ancillary_trigger(session, caplog):
         start_date="20231230",
         end_date="20240104",
     )
-    dependency_response = dependency.lambda_handler(event, None)
-    dependencies = dependency_response["body"]
+    dependency_response = dependency.lambda_handler(event)
     # There are three swe l1a records before 20240104.
     science_in = ScienceInput(
         "imap_swe_l1a_sci_20240101_v010.cdf",
@@ -257,7 +242,6 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     )
     ancillary_in = [
         AncillaryInput(
-            "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
             "imap_swe_l1b-in-flight-cal_20230102_v001.cdf",
         ),
         AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
@@ -266,24 +250,22 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     # Expect ancillary dependencies and science dependencies
     expected_processing_input = ProcessingInputCollection(science_in, *ancillary_in)
 
-    assert dependencies == expected_processing_input.serialize()
+    assert dependency_response.serialize() == expected_processing_input.serialize()
     # Move end_date forward by one
-    # There are now three valid ancillary in-flight-cal files for this date.
-    event["queryStringParameters"]["end_date"] = "20240105"
-    dependency_response = dependency.lambda_handler(event, None)
-    dependencies = dependency_response["body"]
+    # There are now three valid ancillary in-flight-cal files for this date but the
+    # one with the latest start_date is returned.
+    event["end_date"] = "20240105"
+    dependency_response = dependency.lambda_handler(event)
     ancillary_in = [
         AncillaryInput(
-            "imap_swe_l1b-in-flight-cal_20230101_v001.cdf",
-            "imap_swe_l1b-in-flight-cal_20230102_v001.cdf",
             "imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
         ),
         AncillaryInput("imap_swe_esa-lut_20221231_v001.cdf"),
         AncillaryInput("imap_swe_eu-conversion_20221231_v001.cdf"),
     ]
 
-    expected_processing_input = ProcessingInputCollection(science_in, ancillary_in)
-    assert dependencies == expected_processing_input.serialize()
+    expected_processing_input = ProcessingInputCollection(science_in, *ancillary_in)
+    assert dependency_response.serialize() == expected_processing_input.serialize()
 
 
 @patch.object(dependency.DependencyConfig, "_load_dependencies")
@@ -374,10 +356,9 @@ def test_get_ancillary_files(session):
         start_date=datetime(2024, 1, 2),
         end_date=datetime(2024, 1, 10),
     )
-    assert len(record) == 3
-    for rec in record:
-        assert rec.instrument == "swe"
-        assert rec.descriptor == "l1b-in-flight-cal"
+    assert len(record) == 1
+    assert record[0].instrument == "swe"
+    assert record[0].descriptor == "l1b-in-flight-cal"
 
 
 def test_get_files_max_version(session):

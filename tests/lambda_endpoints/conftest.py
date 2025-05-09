@@ -127,14 +127,13 @@ def create_dependency_api_event(
 ):
     """Create event dictionaries for tests."""
     event = {
-        "queryStringParameters": {
-            "dependency_type": dep_type,
-            "relationship": relationship,
-            "data_source": source,
-            "data_type": data_type,
-            "descriptor": descriptor,
-        }
+        "dependency_type": dep_type,
+        "relationship": relationship,
+        "data_source": source,
+        "data_type": data_type,
+        "descriptor": descriptor,
     }
+
     optional_params = {
         "start_date": start_date,
         "end_date": end_date,
@@ -143,7 +142,7 @@ def create_dependency_api_event(
     }
     for param, value in optional_params.items():
         if value:
-            event["queryStringParameters"][param] = value
+            event[param] = value
 
     return event
 

@@ -1,6 +1,5 @@
 """Dependency tracking module."""
 
-import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
@@ -11,6 +10,7 @@ from typing import Optional
 
 import imap_data_access
 from imap_data_access import processing_input
+from imap_data_access.processing_input import ProcessingInputCollection
 from sqlalchemy import and_, func, or_
 
 from ..database import database as db
@@ -436,9 +436,8 @@ def get_upstream_dependency_inputs(
 
             records = get_files(session, dep, start_date, end_date)
             if not records and relationship == Relationship.HARD:
-                info = f"No records found for dependency: {dep_string}"
-                logger.info(dep_string)
-                return info
+                logger.info(f"No records found for dependency: {dep_string}")
+                return None
 
             elif not records:
                 continue
@@ -543,10 +542,14 @@ def get_files(
         .all()
     )
 
+    # If the dependency is ancillary, only return the one with the latest start_date.
+    if dependency["data_type"] == DataType.ANCILLARY:
+        records = sorted(records, key=lambda x: x.start_date, reverse=True)[0:1]
+
     return records
 
 
-def lambda_handler(event, context):
+def lambda_handler(event) -> list | ProcessingInputCollection | None:
     """Lambda handler for dependency tracking.
 
     Parameters
@@ -564,12 +567,9 @@ def lambda_handler(event, context):
             }
         "start_time", and "end_time", are optional.
 
-    context : dict
-        Context dictionary.
-
     Returns
     -------
-    dependencies : list or ProcessingInputCollection
+    dependencies : list or ProcessingInputCollection or None
         If "start_date" is not supplied return list of dictionaries:
         statusCode and body containing list of dictionary containing
         the dependencies information like this:
@@ -621,42 +621,35 @@ def lambda_handler(event, context):
 
     """
     logger.info(f"Event: {event}")
-    logger.info(f"Context: {context}")
 
-    query_params = event["queryStringParameters"]
     dependencies = get_dependencies(
         (
-            query_params["data_source"],
-            query_params["data_type"],
-            query_params["descriptor"],
+            event["data_source"],
+            event["data_type"],
+            event["descriptor"],
         ),
-        query_params["dependency_type"],
-        query_params["relationship"],
+        event["dependency_type"],
+        event["relationship"],
     )
 
     if dependencies is None:
-        return {
-            "statusCode": 500,
-            "body": "Failed to load dependencies",
-        }
+        logger.warning("Failed to load dependencies")
+        return None
+
     # If start_date is supplied, check for the version and end_date.
     start_date = (
-        datetime.strptime(query_params["start_date"], "%Y%m%d")
-        if query_params.get("start_date")
+        datetime.strptime(event["start_date"], "%Y%m%d")
+        if event.get("start_date")
         else None
     )
     if start_date is None:
-        return {
-            "statusCode": 200,  # Success
-            "body": json.dumps(dependencies),
-        }
-    end_date = query_params.get("end_date")
+        return dependencies
+
+    end_date = event.get("end_date")
     if not end_date:
-        return {
-            "statusCode": 400,  # Client error
-            "body": "end_date not found. If 'start_date' is supplied, "
-            "'end_date' is required.",
-        }
+        raise ValueError(
+            "end_date not found. If 'start_date' is supplied, 'end_date' is required."
+        )
     end_date = datetime.strptime(end_date, "%Y%m%d")
 
     upstream_dependencies_output = get_upstream_dependency_inputs(
@@ -664,15 +657,6 @@ def lambda_handler(event, context):
         start_date=start_date,
         end_date=end_date,
     )
-    if isinstance(upstream_dependencies_output, str):
-        return {
-            "statusCode": 206,  # Partial content
-            "body": upstream_dependencies_output,
-        }
-    else:
-        logger.info(f"Found dependencies: {dependencies} for {query_params}.")
-        upstream_dependencies_output = upstream_dependencies_output.serialize()
-        return {
-            "statusCode": 200,  # Success
-            "body": upstream_dependencies_output,
-        }
+
+    logger.info(f"Found dependencies: {dependencies} for {event}.")
+    return upstream_dependencies_output
