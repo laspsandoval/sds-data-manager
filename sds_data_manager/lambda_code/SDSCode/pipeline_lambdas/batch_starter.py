@@ -332,6 +332,8 @@ def bulk_reprocessing_event(session, events):
     events : dict
         Event input.
     """
+    # TODO remove spacecraft jobs
+    # TODO if no instrument no data_level or descriptor
     # TODO: We need s3 tag or column in db to track bulk reprocessing
     instrument = events.get("instrument")
     data_level = events.get("data_level")
@@ -342,9 +344,10 @@ def bulk_reprocessing_event(session, events):
         raise ValueError(
             "Start date and end date are required for a reprocessing Event."
         )
-    if data_level:
-        # If data_level is provided, instrument and descriptor are required
-        if not instrument or not descriptor:
+    if data_level or descriptor:
+        # If data_level or descriptor are provided, instrument, data_level and
+        # descriptor are required.
+        if not instrument or not descriptor or not data_level:
             raise ValueError(
                 "If data_level is provided, instrument and descriptor are required."
             )
@@ -358,6 +361,11 @@ def bulk_reprocessing_event(session, events):
             }
         ]
     else:
+        # If no instrument is provided, there should be no descriptor or data level.
+        if not instrument and descriptor:
+            raise ValueError(
+                "If no instrument is provided, descriptor must not be specified."
+            )
         # If data_level is not provided, we need to reprocess all levels.
         # To get potential jobs, first we query for jobs directly downstream from l0 raw
         # files. This will create a domino effect in which all downstream files get
@@ -374,6 +382,7 @@ def bulk_reprocessing_event(session, events):
             event["descriptor"] = descriptor
 
         potential_jobs = _get_dependencies(event)
+
     for job in potential_jobs:
         submit_all_jobs(session, job, start_date, end_date)
 
