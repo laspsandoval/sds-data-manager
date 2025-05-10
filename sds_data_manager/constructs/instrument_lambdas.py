@@ -1,6 +1,6 @@
 """Module containing constructs for instrumenting Lambda functions."""
 
-from aws_cdk import Duration, Environment
+from aws_cdk import Duration, Environment, aws_events, aws_events_targets
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
@@ -126,4 +126,42 @@ class BatchStarterLambda(Construct):
             route="/authorized/reprocess",
             http_method="POST",
             lambda_function=self.instrument_lambda,
+        )
+
+        # Set up eventBridge rules to trigger batch starter lambda.
+        # Many l2 jobs create maps and need 3-12 months worth of data to run.
+        # Create an eventBridge rule for 3, 6, and 12, month cadences.
+
+        self.month3job = aws_events.Rule(
+            scope=scope,
+            id="ProcessingCadenceJob3month",
+            rule_name="ProcessingCadenceJob3month",
+            description="Trigger processing jobs every 3 months (30 days)",
+            schedule=aws_events.Schedule.rate(Duration.days(30)),
+            target=aws_events_targets.LambdaFunction(
+                lambda_.IFunction(self.instrument_lambda),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "months3"}),
+            ),
+        )
+        self.month6job = aws_events.Rule(
+            scope=scope,
+            id="ProcessingCadenceJob6month",
+            rule_name="ProcessingCadenceJob6month",
+            description="Trigger processing jobs every 6 months (180 days)",
+            schedule=aws_events.Schedule.rate(Duration.days(180)),
+            target=aws_events_targets.LambdaFunction(
+                lambda_.IFunction(self.instrument_lambda),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "months6"}),
+            ),
+        )
+        self.year1job = aws_events.Rule(
+            scope=scope,
+            id="ProcessingCadenceJob1year",
+            rule_name="ProcessingCadenceJob1year",
+            description="Trigger processing jobs once a year (365 days)",
+            schedule=aws_events.Schedule.rate(Duration.days(365)),
+            target=aws_events_targets.LambdaFunction(
+                lambda_.IFunction(self.instrument_lambda),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "years1"}),
+            ),
         )

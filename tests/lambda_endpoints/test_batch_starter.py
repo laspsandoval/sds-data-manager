@@ -756,13 +756,10 @@ def test_lambda_handler_mag_l1c_case(session):
 
 
 ### TEST CADENCE EVENT
-def test_def_cadence_map_event(session, mock_urlopen):
+def test_def_cadence_map_event(session):
     """Test that a cadence event kicks off the right processing job."""
     _populate_file_catalog(session)
     cadence_event = {
-        "instrument": "ultra",
-        "data_type": "l2",
-        "descriptor": "u45-ena-h-hf-nsp-full-hae-6deg-6mo",
         "cadence": "months6",
     }
 
@@ -1079,7 +1076,6 @@ def test_spice_event(session, s3_client):
             ],
         },
     ]
-
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, None)
         mock_batch_client.submit_job.assert_called_once()

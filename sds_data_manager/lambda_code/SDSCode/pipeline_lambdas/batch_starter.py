@@ -685,17 +685,10 @@ def cadence_processing_event(session, events):
         Event input from a cron job.
     """
     cadence = events.get("cadence")
-    instrument = events.get("instrument")
-    data_level = events.get("data_level")
-    descriptor = events.get("descriptor")
-    if not any([instrument, data_level, descriptor, cadence]):
-        raise ValueError(
-            "Cadence event must include cadence, instrument, data_level, and"
-            " descriptor."
-        )
+    if not cadence:
+        raise ValueError("Cadence event must include 'cadence' key.")
     start_date, end_date = cadence_to_datetime_range(cadence)
     # Get the list of all files that need to be processed
-
     # TODO use dependency "all" for all maps cadences
 
 
@@ -735,9 +728,9 @@ def lambda_handler(events: dict, context):
         Example event:
             {
                 "cadence": 3months or 7days,
-                "instrument": <>,
-                "data_level": <>,
-                "descriptor": <>
+                "instrument": None, optional,
+                "data_level": None, optional,
+                "descriptor": None, optional,
             }
 
     Parameters
