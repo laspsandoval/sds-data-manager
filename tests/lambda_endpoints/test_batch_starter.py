@@ -425,7 +425,7 @@ def test_determine_job_version_descriptor_is_all(session):
     """Test the ``determine_job_version`` function."""
     _populate_file_catalog(session)
     # With the descriptor set to "all", the function should return the max version
-    # bumped of ALL of the files matching "mag" and "l1b" in the database.
+    # found in the processing job table and not the science files table.
     result = determine_job_version(
         session=session,
         instrument="mag",
@@ -433,7 +433,7 @@ def test_determine_job_version_descriptor_is_all(session):
         descriptor="all",
         start_date=datetime(2024, 1, 1),
     )
-    assert result == "v003"
+    assert result == "v001"
 
 
 def test_determine_max_version_missing_processing_job(session):
@@ -523,3 +523,146 @@ def test_duplicate_job(session, first_status, second_status):
     session.add(record)
     session.commit()
     assert session.query(ProcessingJob).count() == 5
+
+
+def test_api_request_error(mock_urlopen: unittest.mock.MagicMock):
+    """Test that invalid URLs raise an appropriate HTTPError or URLError.
+
+    Parameters
+    ----------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+    }
+    # Set up the mock to raise an HTTPError
+    mock_urlopen.side_effect = HTTPError(
+        url="http://example.com", code=404, msg="Not Found", hdrs={}, fp=BytesIO()
+    )
+    with pytest.raises(IMAPDependencyFinderError, match="HTTP Error"):
+        _get_dependencies(dependency_event_msg)
+
+    # Set up the mock to raise a URLError
+    mock_urlopen.side_effect = URLError(reason="Not Found")
+    with pytest.raises(IMAPDependencyFinderError, match="URL Error"):
+        _get_dependencies(dependency_event_msg)
+
+
+def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
+    """Test that _get_dependencies() returns the expected dependency result.
+
+    Parameters
+    ----------
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+    }
+    dependencies = _get_dependencies(dependency_event_msg)
+    assert dependencies == [
+        {
+            "data_source": "swe",
+            "data_type": "l0",
+            "descriptor": "raw",
+            "relationship": "HARD",
+        },
+    ]
+
+    # Check for SPICE upstream dependencies
+    idex_l1b = {
+        "data_source": "idex",
+        "data_type": "l1b",
+        "descriptor": "sci-1week",
+        "relationship": "HARD",
+        "dependency_type": "UPSTREAM",
+    }
+
+    dependencies = _get_dependencies(idex_l1b)
+    assert dependencies == [
+        {
+            "data_source": "idex",
+            "data_type": "l1a",
+            "descriptor": "sci-1week",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "spin",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "repoint",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "ephemeris_reconstructed",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "attitude_history",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+    ]
+
+    pointing_attitude = {
+        "data_source": "spacecraft",
+        "data_type": "l1a",
+        "descriptor": "pointing_attitude",
+        "relationship": "HARD",
+        "dependency_type": "UPSTREAM",
+    }
+    dependencies = _get_dependencies(pointing_attitude)
+    assert dependencies == [
+        {
+            "data_source": "attitude_history",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+        {
+            "data_source": "repoint",
+            "data_type": "spice",
+            "descriptor": "historical",
+            "relationship": "HARD",
+        },
+    ]
+
+
+def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMock):
+    """Test that _get_dependencies() returns the expected dependency result.
+
+    Parameters
+    ----------
+    session : orm session
+        Mock database session.
+    mock_urlopen : unittest.mock.MagicMock
+        Mock object for ``urlopen``
+    """
+    dependency_event_msg = {
+        "data_source": "swe",
+        "data_type": "l1a",
+        "descriptor": "sci",
+        "dependency_type": "UPSTREAM",
+        "relationship": "HARD",
+        "start_date": "20000101",
+        "end_date": "20000101",
+    }
+    dependencies = _get_dependencies(dependency_event_msg)
+    assert not dependencies

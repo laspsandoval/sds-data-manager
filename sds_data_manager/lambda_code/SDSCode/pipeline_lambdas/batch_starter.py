@@ -63,6 +63,7 @@ def determine_job_version(
         conditions = [
             table.instrument == instrument,
             table.data_level == data_level,
+            table.descriptor == descriptor,
             table.start_date == start_date,
         ]
         if table == models.ProcessingJob:
@@ -71,10 +72,6 @@ def determine_job_version(
                     [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
                 )
             )
-        if descriptor != "all":
-            # If the descriptor is all we want to check for all descriptors
-            conditions.append(table.descriptor == descriptor)
-
         return conditions
 
     # First check to see if there are any jobs in progress and get the max version
@@ -83,6 +80,11 @@ def determine_job_version(
             *filter_conditions(models.ProcessingJob)
         )
     ).scalar()
+    # If the descriptor is "all", we should only check the processing job table. The
+    # ScienceFiles table does not have descriptors of "all" since the products
+    # produced will have their own specific descriptors.
+    if descriptor == "all":
+        return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
     # If no jobs are in progress, check the science files table for the max version.
     if not max_version:
         max_version = (
