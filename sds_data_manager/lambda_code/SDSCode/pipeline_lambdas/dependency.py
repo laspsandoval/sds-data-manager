@@ -378,7 +378,7 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     Parameters
     ----------
     query_params : dict
-        Query parameters received from API calls.
+        Query parameters
     dependency : dict
        Upstream or downstream dependency from the query.
 
