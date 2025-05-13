@@ -230,7 +230,7 @@ def s3_processing_event(session, events):
 
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
-        potential_jobs = dependency.find_dependencies(
+        potential_jobs = dependency.get_jobs(
             data_source=file_obj.instrument,
             descriptor=file_obj.descriptor,
             data_type=data_type,
@@ -238,7 +238,7 @@ def s3_processing_event(session, events):
             relationship="HARD",
         )
         # SOFT_TRIGGER dependencies will try to set off processing
-        potential_soft_jobs = dependency.find_dependencies(
+        potential_soft_jobs = dependency.get_jobs(
             data_source=file_obj.instrument,
             descriptor=file_obj.descriptor,
             data_type=data_type,
@@ -250,7 +250,7 @@ def s3_processing_event(session, events):
             # Submit downstream jobs for each upstream primary science dependency file.
 
             # Find the files that this job depends on
-            upstream_dependencies = dependency.find_dependencies(
+            upstream_dependencies = dependency.get_jobs(
                 data_source=job["data_source"],
                 data_type=job["data_type"],
                 descriptor=job["descriptor"],
@@ -280,7 +280,7 @@ def s3_processing_event(session, events):
                 )
                 # Query for upstream files only needed for this job with using the
                 # start date of the primary science file.
-                upstream_deps_for_start_date = dependency.find_dependencies(
+                upstream_deps_for_start_date = dependency.get_jobs(
                     data_source=job["data_source"],
                     data_type=job["data_type"],
                     descriptor=job["descriptor"],

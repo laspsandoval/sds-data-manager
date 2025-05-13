@@ -26,7 +26,7 @@ from tests.lambda_endpoints.conftest import (
 
 def test_no_dependencies():
     """Test lambda_handler when no dependencies are found."""
-    deps = dependency.find_dependencies(
+    deps = dependency.get_jobs(
         data_source="nonexistent",
         data_type="l0",
         descriptor="raw",
@@ -39,7 +39,7 @@ def test_no_dependencies():
 def test_invalid_dependency_type():
     """Test lambda_handler when invalid dependency type is provided."""
     with pytest.raises(KeyError):
-        dependency.find_dependencies(
+        dependency.get_jobs(
             data_source="jim",
             data_type="l0",
             descriptor="raw",
@@ -50,7 +50,7 @@ def test_invalid_dependency_type():
 
 def test_missing_dependency(session):
     """Test that "None" is returned."""
-    result = dependency.find_dependencies(
+    result = dependency.get_jobs(
         data_source="swe",
         data_type="l1b",
         start_date="20240104",
@@ -65,7 +65,7 @@ def test_missing_dependency(session):
 def test_soft_dependencies(session):
     """Test that the correct soft dependencies are returned."""
     _populate_file_catalog(session)
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="mag",
         data_type="l1c",
         descriptor="norm-mago",
@@ -101,7 +101,7 @@ def test_missing_soft_dependencies(session):
         ),
     )
     session.commit()
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="mag",
         data_type="l1c",
         descriptor="norm-mago",
@@ -126,7 +126,7 @@ def test_missing_required_params():
         match="end_date not found. If 'start_date' is "
         "supplied, 'end_date' is required.",
     ):
-        dependency.find_dependencies(
+        dependency.get_jobs(
             dependency_type="DOWNSTREAM",
             relationship="HARD",
             data_source="swe",
@@ -141,7 +141,7 @@ def test_missing_required_params():
 #####################################
 def test_get_downstream_dependencies():
     """Tests get_downstream_dependencies function."""
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="hit",
         data_type="l1a",
         descriptor="counts",
@@ -162,7 +162,7 @@ def test_get_downstream_dependencies():
     assert dependency_response == expected_complete_dependent
 
     # Add test for getting back ancillary dependency
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="swe",
         data_type="l1b",
         descriptor="sci",
@@ -202,7 +202,7 @@ def test_get_downstream_dependencies():
 
 def test_get_all_downstream_dependencies():
     """Add test for getting back ancillary dependencies."""
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="mag",
         data_type="l1b",
         descriptor="norm-mago",
@@ -224,7 +224,7 @@ def test_get_all_downstream_dependencies():
 def test_get_upstream_ancillary_trigger(session, caplog):
     """Tests get upstream dependencies with an ancillary trigger source."""
     _populate_file_catalog(session)
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="swe",
         data_type="l1b",
         dependency_type="UPSTREAM",
@@ -253,7 +253,7 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     # Move end_date forward by one
     # There are now three valid ancillary in-flight-cal files for this date but the
     # one with the latest start_date is returned.
-    dependency_response = dependency.find_dependencies(
+    dependency_response = dependency.get_jobs(
         data_source="swe",
         data_type="l1b",
         dependency_type="UPSTREAM",

@@ -537,7 +537,7 @@ def get_files(
     return records
 
 
-def find_dependencies(
+def get_jobs(
     data_source: str,
     data_type: str,
     descriptor: str,

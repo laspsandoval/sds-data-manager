@@ -528,7 +528,7 @@ def test_duplicate_job(session, first_status, second_status):
 
 def test_dependency_success():
     """Test the handler returns the expected dependency result."""
-    dependencies = dependency.find_dependencies(
+    dependencies = dependency.get_jobs(
         data_source="swe",
         data_type="l1a",
         descriptor="sci",
@@ -545,7 +545,7 @@ def test_dependency_success():
     ]
 
     # Check for SPICE upstream dependencies
-    dependencies = dependency.find_dependencies(
+    dependencies = dependency.get_jobs(
         data_source="idex",
         data_type="l1b",
         descriptor="sci-1week",
@@ -585,7 +585,7 @@ def test_dependency_success():
         },
     ]
 
-    dependencies = dependency.find_dependencies(
+    dependencies = dependency.get_jobs(
         data_source="spacecraft",
         data_type="l1a",
         descriptor="pointing_attitude",
@@ -616,7 +616,7 @@ def test_dependency_success_empty(session):
     session : orm session
         Mock database session.
     """
-    dependencies = dependency.find_dependencies(
+    dependencies = dependency.get_jobs(
         data_source="swe",
         data_type="l1a",
         descriptor="sci",
