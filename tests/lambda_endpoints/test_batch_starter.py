@@ -528,14 +528,13 @@ def test_duplicate_job(session, first_status, second_status):
 
 def test_dependency_success():
     """Test the handler returns the expected dependency result."""
-    dependency_event_msg = {
-        "data_source": "swe",
-        "data_type": "l1a",
-        "descriptor": "sci",
-        "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
-    }
-    dependencies = dependency.lambda_handler(dependency_event_msg)
+    dependencies = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1a",
+        descriptor="sci",
+        dependency_type="UPSTREAM",
+        relationship="HARD",
+    )
     assert dependencies == [
         {
             "data_source": "swe",
@@ -546,15 +545,13 @@ def test_dependency_success():
     ]
 
     # Check for SPICE upstream dependencies
-    idex_l1b = {
-        "data_source": "idex",
-        "data_type": "l1b",
-        "descriptor": "sci-1week",
-        "relationship": "HARD",
-        "dependency_type": "UPSTREAM",
-    }
-
-    dependencies = dependency.lambda_handler(idex_l1b)
+    dependencies = dependency.find_dependencies(
+        data_source="idex",
+        data_type="l1b",
+        descriptor="sci-1week",
+        relationship="HARD",
+        dependency_type="UPSTREAM",
+    )
     assert dependencies == [
         {
             "data_source": "idex",
@@ -588,14 +585,13 @@ def test_dependency_success():
         },
     ]
 
-    pointing_attitude = {
-        "data_source": "spacecraft",
-        "data_type": "l1a",
-        "descriptor": "pointing_attitude",
-        "relationship": "HARD",
-        "dependency_type": "UPSTREAM",
-    }
-    dependencies = dependency.lambda_handler(pointing_attitude)
+    dependencies = dependency.find_dependencies(
+        data_source="spacecraft",
+        data_type="l1a",
+        descriptor="pointing_attitude",
+        relationship="HARD",
+        dependency_type="UPSTREAM",
+    )
     assert dependencies == [
         {
             "data_source": "attitude_history",
@@ -620,14 +616,13 @@ def test_dependency_success_empty(session):
     session : orm session
         Mock database session.
     """
-    dependency_event_msg = {
-        "data_source": "swe",
-        "data_type": "l1a",
-        "descriptor": "sci",
-        "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
-        "start_date": "20000101",
-        "end_date": "20000101",
-    }
-    dependencies = dependency.lambda_handler(dependency_event_msg)
+    dependencies = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1a",
+        descriptor="sci",
+        dependency_type="UPSTREAM",
+        relationship="HARD",
+        start_date="20000101",
+        end_date="20000101",
+    )
     assert not dependencies

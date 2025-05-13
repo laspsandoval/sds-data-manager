@@ -537,29 +537,41 @@ def get_files(
     return records
 
 
-def lambda_handler(event) -> list | ProcessingInputCollection | None:
-    """Lambda handler for dependency tracking.
+def find_dependencies(
+    data_source: str,
+    data_type: str,
+    descriptor: str,
+    dependency_type: str,
+    relationship: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> list | ProcessingInputCollection | None:
+    """Get dependencies for the given inputs.
 
     Parameters
     ----------
-    event : dict
-        If dependency is requested, event input will be:
-            {
-                "data_source": "hit",
-                "data_type": "l0",
-                "descriptor": "raw",
-                "dependency_type": "UPSTREAM",
-                "relationship": "HARD",
-                "start_time": "20250101", (optional)
-                "end_time": "20250102", (optional)
-            }
-        "start_time", and "end_time", are optional.
+    data_source : str
+        Source name of the data product.
+    data_type : str
+        Data type of the data product.
+    descriptor : str
+        Descriptor of the data product.
+    dependency_type : str
+        Whether it's UPSTREAM or DOWNSTREAM dependency.
+    relationship : str
+        Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
+        If "ALL" is provided, dependencies for all valid relationships
+        (HARD, SOFT_TRIGGER, SOFT_NO_TRIGGER) will be returned.
+    start_date : str, optional
+        Start date to find dependent files with, in YYYYMMDD format.
+    end_date : str, optional
+        End date to find dependent files with, in YYYYMMDD format. Required if
+        start_date is provided.
 
     Returns
     -------
     dependencies : list or ProcessingInputCollection or None
-        If "start_date" is not supplied return list of dictionaries:
-        statusCode and body containing list of dictionary containing
+        If "start_date" is not supplied return list of dictionaries containing
         the dependencies information like this:
             [
                 {
@@ -608,16 +620,15 @@ def lambda_handler(event) -> list | ProcessingInputCollection | None:
 
 
     """
-    logger.info(f"Event: {event}")
+    logger.info(
+        f"{data_source=}, {data_type=}, {descriptor=}, {dependency_type=},"
+        f" {relationship=}"
+    )
 
     dependencies = get_dependencies(
-        (
-            event["data_source"],
-            event["data_type"],
-            event["descriptor"],
-        ),
-        event["dependency_type"],
-        event["relationship"],
+        (data_source, data_type, descriptor),
+        dependency_type,
+        relationship,
     )
 
     if dependencies is None:
@@ -625,15 +636,10 @@ def lambda_handler(event) -> list | ProcessingInputCollection | None:
         return None
 
     # If start_date is supplied, check for the version and end_date.
-    start_date = (
-        datetime.strptime(event["start_date"], "%Y%m%d")
-        if event.get("start_date")
-        else None
-    )
+    start_date = datetime.strptime(start_date, "%Y%m%d") if start_date else None
     if start_date is None:
         return dependencies
 
-    end_date = event.get("end_date")
     if not end_date:
         raise ValueError(
             "end_date not found. If 'start_date' is supplied, 'end_date' is required."
@@ -646,5 +652,5 @@ def lambda_handler(event) -> list | ProcessingInputCollection | None:
         end_date=end_date,
     )
 
-    logger.info(f"Found dependencies: {dependencies} for {event}.")
+    logger.info(f"Found dependencies: {dependencies}.")
     return upstream_dependencies_output

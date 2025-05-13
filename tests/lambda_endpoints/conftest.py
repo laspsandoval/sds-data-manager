@@ -1,7 +1,6 @@
 """Setup testing environment to test lambda handler code."""
 
 from datetime import datetime
-from typing import Optional
 from unittest.mock import patch
 
 import boto3
@@ -112,39 +111,6 @@ def session():
             session.close()
             # Drop tables to ensure clean state for next test
             Base.metadata.drop_all(engine)
-
-
-def create_dependency_api_event(
-    source: str,
-    data_type: str,
-    descriptor="sci",
-    dep_type: str = "DOWNSTREAM",
-    relationship: str = "HARD",
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    version: Optional[str] = None,
-    trigger_type: Optional[str] = None,
-):
-    """Create event dictionaries for tests."""
-    event = {
-        "dependency_type": dep_type,
-        "relationship": relationship,
-        "data_source": source,
-        "data_type": data_type,
-        "descriptor": descriptor,
-    }
-
-    optional_params = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "version": version,
-        "trigger_type": trigger_type,
-    }
-    for param, value in optional_params.items():
-        if value:
-            event[param] = value
-
-    return event
 
 
 def _populate_file_catalog(session):

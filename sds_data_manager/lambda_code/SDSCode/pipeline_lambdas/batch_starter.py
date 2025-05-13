@@ -1,7 +1,5 @@
 """Functions for supporting the batch starter component of the architecture."""
 
-# ruff: noqa: S310
-# potentially unsafe usage of urlopen TODO: are we concerned here?
 import json
 import logging
 from datetime import datetime
@@ -230,35 +228,38 @@ def s3_processing_event(session, events):
             file_obj.data_level if hasattr(file_obj, "data_level") else "ancillary"
         )
 
-        dependency_event_msg = {
-            "data_source": file_obj.instrument,
-            "descriptor": file_obj.descriptor,
-            "data_type": data_type,
-            "dependency_type": "DOWNSTREAM",
-            "relationship": "HARD",
-        }
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
-        # potential_jobs = _get_dependencies(dependency_event_msg)
-        potential_jobs = dependency.lambda_handler(dependency_event_msg)
+        potential_jobs = dependency.find_dependencies(
+            data_source=file_obj.instrument,
+            descriptor=file_obj.descriptor,
+            data_type=data_type,
+            dependency_type="DOWNSTREAM",
+            relationship="HARD",
+        )
         # SOFT_TRIGGER dependencies will try to set off processing
-        dependency_event_msg["relationship"] = "SOFT_TRIGGER"
-        potential_soft_jobs = dependency.lambda_handler(dependency_event_msg)
+        potential_soft_jobs = dependency.find_dependencies(
+            data_source=file_obj.instrument,
+            descriptor=file_obj.descriptor,
+            data_type=data_type,
+            dependency_type="DOWNSTREAM",
+            relationship="SOFT_TRIGGER",
+        )
 
         for job in potential_jobs + potential_soft_jobs:
             # Submit downstream jobs for each upstream primary science dependency file.
-            event_msg = {
-                "data_source": job["data_source"],
-                "data_type": job["data_type"],
-                "descriptor": job["descriptor"],
-                "dependency_type": "UPSTREAM",
-                "relationship": "ALL",
-                "start_date": start_date,
-                "end_date": end_date,
-            }
 
             # Find the files that this job depends on
-            upstream_dependencies = dependency.lambda_handler(event_msg)
+            upstream_dependencies = dependency.find_dependencies(
+                data_source=job["data_source"],
+                data_type=job["data_type"],
+                descriptor=job["descriptor"],
+                dependency_type="UPSTREAM",
+                relationship="ALL",
+                start_date=start_date,
+                end_date=end_date,
+            )
+
             if not upstream_dependencies:
                 return
 
@@ -279,10 +280,15 @@ def s3_processing_event(session, events):
                 )
                 # Query for upstream files only needed for this job with using the
                 # start date of the primary science file.
-                # Update event start_date and end_date.
-                event_msg["start_date"] = filepath.start_date
-                event_msg["end_date"] = filepath.start_date
-                upstream_deps_for_start_date = dependency.lambda_handler(event_msg)
+                upstream_deps_for_start_date = dependency.find_dependencies(
+                    data_source=job["data_source"],
+                    data_type=job["data_type"],
+                    descriptor=job["descriptor"],
+                    dependency_type="UPSTREAM",
+                    relationship="ALL",
+                    start_date=filepath.start_date,
+                    end_date=filepath.start_date,
+                )
                 try_to_submit_job(
                     session,
                     job,

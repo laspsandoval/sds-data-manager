@@ -17,7 +17,6 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import get_files
 from tests.lambda_endpoints.conftest import (
     _populate_file_catalog,
-    create_dependency_api_event,
 )
 
 #####################################
@@ -25,66 +24,56 @@ from tests.lambda_endpoints.conftest import (
 #####################################
 
 
-def test_lambda_handler_no_dependencies():
+def test_no_dependencies():
     """Test lambda_handler when no dependencies are found."""
-    event = {
-        "queryStringParameters": {
-            "data_source": "nonexistent",
-            "data_type": "l0",
-            "descriptor": "raw",
-            "dependency_type": "UPSTREAM",
-            "relationship": "HARD",
-        }
-    }
-    with pytest.raises(KeyError):
-        dependency.lambda_handler(event)
+    deps = dependency.find_dependencies(
+        data_source="nonexistent",
+        data_type="l0",
+        descriptor="raw",
+        dependency_type="UPSTREAM",
+        relationship="HARD",
+    )
+    assert deps == []
 
 
-@patch(
-    "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency.get_dependencies"
-)
-def test_lambda_handler_invalid_dependency_type(mock_get_dependencies):
+def test_invalid_dependency_type():
     """Test lambda_handler when invalid dependency type is provided."""
-    event = {
-        "queryStringParameters": {
-            "data_source": "jim",
-            "data_type": "l0",
-            "descriptor": "raw",
-            "dependency_type": "INVALID",
-            "relationship": "HARD",
-        }
-    }
-    mock_get_dependencies.return_value = None
-
     with pytest.raises(KeyError):
-        dependency.lambda_handler(event)
+        dependency.find_dependencies(
+            data_source="jim",
+            data_type="l0",
+            descriptor="raw",
+            dependency_type="INVALID",
+            relationship="HARD",
+        )
 
 
 def test_missing_dependency(session):
-    """Test that 206 error is returned."""
-    event = create_dependency_api_event(
-        "swe",
-        "l1b",
+    """Test that "None" is returned."""
+    result = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1b",
         start_date="20240104",
         end_date="20241204",
+        descriptor="sci",
+        dependency_type="DOWNSTREAM",
+        relationship="HARD",
     )
-    result = dependency.lambda_handler(event)
     assert not result
 
 
 def test_soft_dependencies(session):
     """Test that the correct soft dependencies are returned."""
     _populate_file_catalog(session)
-    event = create_dependency_api_event(
-        "mag",
-        "l1c",
+    dependency_response = dependency.find_dependencies(
+        data_source="mag",
+        data_type="l1c",
         descriptor="norm-mago",
         start_date="20240101",
         end_date="20241201",
         relationship="SOFT_TRIGGER",
-        dep_type="UPSTREAM",
+        dependency_type="UPSTREAM",
     )
-    dependency_response = dependency.lambda_handler(event)
     # There should be two science inputs: one for mag_l1b_burst-mago and
     # mag_l1b_norm-mago
     # Expect ancillary dependencies and science dependencies
@@ -112,17 +101,15 @@ def test_missing_soft_dependencies(session):
         ),
     )
     session.commit()
-
-    event = create_dependency_api_event(
-        "mag",
-        "l1c",
+    dependency_response = dependency.find_dependencies(
+        data_source="mag",
+        data_type="l1c",
         descriptor="norm-mago",
         start_date="20240101",
         end_date="20241201",
         relationship="SOFT_TRIGGER",
-        dep_type="UPSTREAM",
+        dependency_type="UPSTREAM",
     )
-    dependency_response = dependency.lambda_handler(event)
     # There should be one science input: one for mag_l1b_norm-mago
     # Even though burst-mago is missing.
     # Expect ancillary dependencies and science dependencies
@@ -134,20 +121,19 @@ def test_missing_soft_dependencies(session):
 
 def test_missing_required_params():
     """Test that 400 error is returned."""
-    event = {
-        "dependency_type": "DOWNSTREAM",
-        "relationship": "HARD",
-        "data_source": "swe",
-        "data_type": "l1b",
-        "descriptor": "sci",
-        "start_date": "20240104",
-    }
     with pytest.raises(
         ValueError,
         match="end_date not found. If 'start_date' is "
         "supplied, 'end_date' is required.",
     ):
-        dependency.lambda_handler(event)
+        dependency.find_dependencies(
+            dependency_type="DOWNSTREAM",
+            relationship="HARD",
+            data_source="swe",
+            data_type="l1b",
+            descriptor="sci",
+            start_date="20240104",
+        )
 
 
 #####################################
@@ -155,9 +141,13 @@ def test_missing_required_params():
 #####################################
 def test_get_downstream_dependencies():
     """Tests get_downstream_dependencies function."""
-    event = create_dependency_api_event("hit", "l1a", "counts")
-
-    dependency_response = dependency.lambda_handler(event)
+    dependency_response = dependency.find_dependencies(
+        data_source="hit",
+        data_type="l1a",
+        descriptor="counts",
+        relationship="HARD",
+        dependency_type="DOWNSTREAM",
+    )
 
     expected_complete_dependent = [
         {
@@ -172,8 +162,13 @@ def test_get_downstream_dependencies():
     assert dependency_response == expected_complete_dependent
 
     # Add test for getting back ancillary dependency
-    event = create_dependency_api_event("swe", "l1b", dep_type="UPSTREAM")
-    dependency_response = dependency.lambda_handler(event)
+    dependency_response = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1b",
+        descriptor="sci",
+        relationship="HARD",
+        dependency_type="UPSTREAM",
+    )
 
     expected_complete_dependent = [
         {
@@ -207,10 +202,13 @@ def test_get_downstream_dependencies():
 
 def test_get_all_downstream_dependencies():
     """Add test for getting back ancillary dependencies."""
-    event = create_dependency_api_event(
-        "mag", "l1b", descriptor="norm-mago", relationship="ALL"
+    dependency_response = dependency.find_dependencies(
+        data_source="mag",
+        data_type="l1b",
+        descriptor="norm-mago",
+        relationship="ALL",
+        dependency_type="DOWNSTREAM",
     )
-    dependency_response = dependency.lambda_handler(event)
 
     expected_complete_dependent = [
         {
@@ -226,14 +224,15 @@ def test_get_all_downstream_dependencies():
 def test_get_upstream_ancillary_trigger(session, caplog):
     """Tests get upstream dependencies with an ancillary trigger source."""
     _populate_file_catalog(session)
-    event = create_dependency_api_event(
-        "swe",
-        "l1b",
-        dep_type="UPSTREAM",
+    dependency_response = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1b",
+        dependency_type="UPSTREAM",
         start_date="20231230",
         end_date="20240104",
+        descriptor="sci",
+        relationship="HARD",
     )
-    dependency_response = dependency.lambda_handler(event)
     # There are three swe l1a records before 20240104.
     science_in = ScienceInput(
         "imap_swe_l1a_sci_20240101_v010.cdf",
@@ -254,8 +253,15 @@ def test_get_upstream_ancillary_trigger(session, caplog):
     # Move end_date forward by one
     # There are now three valid ancillary in-flight-cal files for this date but the
     # one with the latest start_date is returned.
-    event["end_date"] = "20240105"
-    dependency_response = dependency.lambda_handler(event)
+    dependency_response = dependency.find_dependencies(
+        data_source="swe",
+        data_type="l1b",
+        dependency_type="UPSTREAM",
+        start_date="20231230",
+        end_date="20240105",
+        descriptor="sci",
+        relationship="HARD",
+    )
     ancillary_in = [
         AncillaryInput(
             "imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
