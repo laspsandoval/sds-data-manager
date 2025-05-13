@@ -68,8 +68,7 @@ class BatchStarterLambda(Construct):
             "ACCOUNT": f"{env.account}",
             "REGION": f"{env.region}",
         }
-        # Lambda should use private subnet with routes to NAT gateway to make
-        # calls to IMAP_DATA_ACCESS_URL and get back responses.
+        # Lambda should use private subnet
         subnet = ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
 
         self.instrument_lambda = lambda_.Function(
