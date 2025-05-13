@@ -15,7 +15,6 @@ from sds_data_manager.constructs import (
     backup_bucket_construct,
     data_bucket_construct,
     database_construct,
-    dependency_finder_construct,
     efs_construct,
     ialirt_api_manager_construct,
     ialirt_archive_construct,
@@ -230,18 +229,6 @@ def build_sds(
     # create EFS
     efs_instance = efs_construct.EFSConstruct(
         scope=sdc_stack, construct_id="EFSConstruct", vpc=networking.vpc
-    )
-
-    dependency_finder_construct.DependencyFinder(
-        scope=sdc_stack,
-        construct_id="DependencyFinder",
-        code=lambda_code,
-        layers=[db_lambda_layer, spice_lambda_layer],
-        vpc=networking.vpc,
-        rds_security_group=rds_construct.rds_security_group,
-        env=env,
-        db_secret_name=db_secret_name,
-        api=api,
     )
 
     # This valid instrument list is from imap-data-access package
