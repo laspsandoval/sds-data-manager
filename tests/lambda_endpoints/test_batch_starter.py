@@ -19,6 +19,7 @@ from sds_data_manager.lambda_code.SDSCode.database.models import (
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
     batch_starter,
+    dependency,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
     determine_job_version,
@@ -525,14 +526,8 @@ def test_duplicate_job(session, first_status, second_status):
     assert session.query(ProcessingJob).count() == 5
 
 
-def test_api_request_error(mock_urlopen: unittest.mock.MagicMock):
-    """Test that invalid URLs raise an appropriate HTTPError or URLError.
-
-    Parameters
-    ----------
-    mock_urlopen : unittest.mock.MagicMock
-        Mock object for ``urlopen``
-    """
+def test_dependency_success():
+    """Test the handler returns the expected dependency result."""
     dependency_event_msg = {
         "data_source": "swe",
         "data_type": "l1a",
@@ -540,35 +535,7 @@ def test_api_request_error(mock_urlopen: unittest.mock.MagicMock):
         "dependency_type": "UPSTREAM",
         "relationship": "HARD",
     }
-    # Set up the mock to raise an HTTPError
-    mock_urlopen.side_effect = HTTPError(
-        url="http://example.com", code=404, msg="Not Found", hdrs={}, fp=BytesIO()
-    )
-    with pytest.raises(IMAPDependencyFinderError, match="HTTP Error"):
-        _get_dependencies(dependency_event_msg)
-
-    # Set up the mock to raise a URLError
-    mock_urlopen.side_effect = URLError(reason="Not Found")
-    with pytest.raises(IMAPDependencyFinderError, match="URL Error"):
-        _get_dependencies(dependency_event_msg)
-
-
-def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
-    """Test that _get_dependencies() returns the expected dependency result.
-
-    Parameters
-    ----------
-    mock_urlopen : unittest.mock.MagicMock
-        Mock object for ``urlopen``
-    """
-    dependency_event_msg = {
-        "data_source": "swe",
-        "data_type": "l1a",
-        "descriptor": "sci",
-        "dependency_type": "UPSTREAM",
-        "relationship": "HARD",
-    }
-    dependencies = _get_dependencies(dependency_event_msg)
+    dependencies = dependency.lambda_handler(dependency_event_msg)
     assert dependencies == [
         {
             "data_source": "swe",
@@ -587,7 +554,7 @@ def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
         "dependency_type": "UPSTREAM",
     }
 
-    dependencies = _get_dependencies(idex_l1b)
+    dependencies = dependency.lambda_handler(idex_l1b)
     assert dependencies == [
         {
             "data_source": "idex",
@@ -628,7 +595,7 @@ def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
         "relationship": "HARD",
         "dependency_type": "UPSTREAM",
     }
-    dependencies = _get_dependencies(pointing_attitude)
+    dependencies = dependency.lambda_handler(pointing_attitude)
     assert dependencies == [
         {
             "data_source": "attitude_history",
@@ -645,15 +612,13 @@ def test_api_request_success(mock_urlopen: unittest.mock.MagicMock):
     ]
 
 
-def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMock):
-    """Test that _get_dependencies() returns the expected dependency result.
+def test_dependency_success_empty(session):
+    """Test that the handler returns the expected dependency result.
 
     Parameters
     ----------
     session : orm session
         Mock database session.
-    mock_urlopen : unittest.mock.MagicMock
-        Mock object for ``urlopen``
     """
     dependency_event_msg = {
         "data_source": "swe",
@@ -664,5 +629,5 @@ def test_api_request_success_empty(session, mock_urlopen: unittest.mock.MagicMoc
         "start_date": "20000101",
         "end_date": "20000101",
     }
-    dependencies = _get_dependencies(dependency_event_msg)
+    dependencies = dependency.lambda_handler(dependency_event_msg)
     assert not dependencies
