@@ -68,13 +68,15 @@ class ProcessingConstruct(Construct):
 
         self.volumes = volumes
 
-    def add_job(self, job_name: str):
+    def add_job(self, job_name: str, account_name: str):
         """Create an ECR repo and a job definition for the given job.
 
         Parameters
         ----------
         job_name : str
             Name of the job for which to create the job definition.
+        account_name : str
+            Name of the account (e.g., dev, prod).
         """
         # Create a registry for each job definition (swe-repo)
         container_repo = ecr.Repository(
@@ -98,7 +100,10 @@ class ProcessingConstruct(Construct):
                 ),
                 memory=cdk.Size.mebibytes(4096),
                 cpu=1,
-                environment={"DATA_DIR": "/mnt/data"},
+                environment={
+                    "IMAP_DATA_DIR": "/mnt/data",
+                    "IMAP_DATA_ACCESS_URL": f"https://api.{account_name}.imap-mission.com",
+                },
                 volumes=self.volumes,
                 # TODO: Do we need to explicitly specify architecture and OS family?
                 #       We are building containers in GitHub Actions and need to
