@@ -147,6 +147,8 @@ repoint, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 attitude_history, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 idex, l1b, sci-1week, idex, l2a, sci-1week, HARD, DOWNSTREAM
+idex, l2a, sci-1week, idex, l2b, sci-1week, HARD, DOWNSTREAM
+idex, l2b, sci-1week, idex, l2c, sci-1week, HARD, DOWNSTREAM
 
 # <---- LO Dependencies ---->
 lo, l0, raw, lo, l1a, all, HARD, DOWNSTREAM
@@ -175,7 +177,10 @@ mag, l1a, norm-mago, mag, l1b, norm-mago, HARD, DOWNSTREAM
 mag, l1a, norm-magi, mag, l1b, norm-magi, HARD, DOWNSTREAM
 mag, l1a, burst-mago, mag, l1b, burst-mago, HARD, DOWNSTREAM
 mag, l1a, burst-magi, mag, l1b, burst-magi, HARD, DOWNSTREAM
-mag, ancillary, l1b-calibration, mag, l1b, all, HARD, DOWNSTREAM
+mag, ancillary, l1b-calibration, mag, l1b, norm-mago, HARD, DOWNSTREAM
+mag, ancillary, l1b-calibration, mag, l1b, norm-magi, HARD, DOWNSTREAM
+mag, ancillary, l1b-calibration, mag, l1b, burst-mago, HARD, DOWNSTREAM
+mag, ancillary, l1b-calibration, mag, l1b, burst-magi, HARD, DOWNSTREAM
 
 # For L1C, we want to trigger on either burst or norm or both.
 mag, l1b, norm-mago, mag, l1c, norm-mago, SOFT_TRIGGER, DOWNSTREAM
@@ -187,7 +192,8 @@ mag, l1c, norm-mago, mag, l1d, norm, HARD, DOWNSTREAM
 mag, l1c, norm-magi, mag, l1d, norm, HARD, DOWNSTREAM
 mag, l1b, burst-mago, mag, l1d, burst, HARD, DOWNSTREAM
 mag, l1b, burst-magi, mag, l1d, burst, HARD, DOWNSTREAM
-mag, ancillary, l1d-calibration, mag, l1d, all, HARD, DOWNSTREAM
+mag, ancillary, l1d-calibration, mag, l1d, burst, HARD, DOWNSTREAM
+mag, ancillary, l1d-calibration, mag, l1d, norm, HARD, DOWNSTREAM
 
 # <---- Spacecraft Dependencies ---->
 
