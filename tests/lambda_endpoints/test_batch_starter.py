@@ -462,6 +462,24 @@ def test_bulk_reprocessing_all(session, mock_urlopen, caplog):
     assert mock_submit.call_count == 2
 
 
+def test_bulk_reprocessing_all_swe(session, caplog):
+    """Tests ``lambda_handler`` when there is bulk reprocessing for all instruments."""
+    _populate_file_catalog(session)
+    # leave instrument, data_level and descriptor blank
+    events = {
+        "reprocessing": True,
+        "start_date": "20230101",
+        "end_date": "20260101",
+        "instrument": "swe",
+    }
+    context = {"context": "sample_context"}
+    # Add instrument and try again
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+    # There should be one job submitted for swe
+    assert mock_submit.call_count == 1
+
+
 ###### HELPER FUNCTION TESTS #######
 def test_determine_max_version(session):
     """Test the ``determine_job_version`` function."""
