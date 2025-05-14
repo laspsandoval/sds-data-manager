@@ -318,8 +318,10 @@ class DependencyConfig:
         for relationship in [self.relationship.HARD, self.relationship.SOFT_TRIGGER]:
             # Get all the downstream dependencies for the l0 raw data
             dependencies = self.dependencies[relationship]["DOWNSTREAM"]
-            for node_up, nodes_down in dependencies.items():
-                if node_up[1] == "l0" and node_up[2] == "raw":
+            for parent_node, child_node in dependencies.items():
+                # If the parent dependency is l0 raw, add the child dependencies to the
+                # kick_off_jobs list.
+                if parent_node[1] == "l0" and parent_node[2] == "raw":
                     kick_off_jobs.extend(
                         [
                             {
@@ -327,7 +329,7 @@ class DependencyConfig:
                                 "data_type": node[1],
                                 "descriptor": node[2],
                             }
-                            for node in nodes_down
+                            for node in child_node
                         ]
                     )
         return kick_off_jobs

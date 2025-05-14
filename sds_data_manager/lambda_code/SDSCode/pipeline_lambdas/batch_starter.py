@@ -189,15 +189,15 @@ def try_to_submit_job(
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_all_jobs(session, job, start_date, end_date):
+def submit_all_jobs(session, job_node, start_date, end_date):
     """Submit all jobs for the given job and upstream dependencies.
 
     Parameters
     ----------
     session : orm session
         Database session.
-    job : dict
-        job node to run.
+    job_node : dict
+        job node to get the potential jobs from.
     start_date : str
         Start date to query the data.
     end_date : str
@@ -206,9 +206,9 @@ def submit_all_jobs(session, job, start_date, end_date):
     # Submit downstream jobs for each upstream primary science dependency file.
     # Find the files that this job depends on
     upstream_dependencies = dependency.get_jobs(
-        data_source=job["data_source"],
-        data_type=job["data_type"],
-        descriptor=job["descriptor"],
+        data_source=job_node["data_source"],
+        data_type=job_node["data_type"],
+        descriptor=job_node["descriptor"],
         dependency_type="UPSTREAM",
         relationship="ALL",
         start_date=start_date,
@@ -217,32 +217,41 @@ def submit_all_jobs(session, job, start_date, end_date):
     if not upstream_dependencies:
         return
 
-    logger.info(f"All required dependencies found for the job: {job}")
+    logger.info(f"All required dependencies found for the dependency: {job_node}")
     # Find the first science processingInput that has the same source as the
     # potential job. Use this to determine the start date.
-    primary_science = upstream_dependencies.get_science_inputs(job["data_source"])[0]
+    primary_science = upstream_dependencies.get_science_inputs(job_node["data_source"])[
+        0
+    ]
+    num_jobs = len(primary_science.imap_file_paths)
+    logger.info(f"Found {num_jobs} to process.")
     for filepath in primary_science.imap_file_paths:
         job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
-            instrument=job["data_source"],
-            descriptor=job["descriptor"],
+            instrument=job_node["data_source"],
+            descriptor=job_node["descriptor"],
             start_date=job_start_date,
-            data_level=job["data_type"],
+            data_level=job_node["data_type"],
         )
-        # Query for upstream files only needed for this job with using the
-        # start date of the primary science file.
-        upstream_deps_for_start_date = dependency.get_jobs(
-            data_source=job["data_source"],
-            data_type=job["data_type"],
-            descriptor=job["descriptor"],
-            dependency_type="UPSTREAM",
-            relationship="ALL",
-            start_date=filepath.start_date,
-            end_date=filepath.start_date,
-        )
+        # If there is only one file to process, then we can use upstream dependencies
+        # that have already been queried.
+        if num_jobs > 1:
+            # Query for upstream files only needed for this job with using the
+            # start date of the primary science file.
+            upstream_deps_for_job = dependency.get_jobs(
+                data_source=job_node["data_source"],
+                data_type=job_node["data_type"],
+                descriptor=job_node["descriptor"],
+                dependency_type="UPSTREAM",
+                relationship="ALL",
+                start_date=filepath.start_date,
+                end_date=filepath.start_date,
+            )
+        else:
+            upstream_deps_for_job = upstream_dependencies
         try_to_submit_job(
-            session, job, job_start_date, job_version, upstream_deps_for_start_date
+            session, job_node, job_start_date, job_version, upstream_deps_for_job
         )
 
 
