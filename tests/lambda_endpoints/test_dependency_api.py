@@ -225,15 +225,9 @@ def test_get_downstream_dependencies_for_all_relationships():
 
 def test_get_downstream_dependencies_for_all_instruments():
     """Add test for getting back dependencies for all instruments."""
-    event = {
-        "queryStringParameters": {
-            "dependency_type": "DOWNSTREAM",
-            "data_type": "l0",
-            "relationship": "HARD",
-        }
-    }
-    dependency_response = dependency.lambda_handler(event, None)
-    dependents = json.loads(dependency_response["body"])
+    dependents = dependency.get_jobs(
+        dependency_type="DOWNSTREAM", data_type="l0", relationship="HARD"
+    )
     # There are 14 jobs that are HARD downstream dependencies from l0
     assert len(dependents) == 14
     for dep in dependents:

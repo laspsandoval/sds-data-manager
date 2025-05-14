@@ -229,15 +229,19 @@ def submit_all_jobs(session, job, start_date, end_date):
             start_date=job_start_date,
             data_level=job["data_type"],
         )
-        # Filter dependencies to get only files needed for this job
+        # Query for upstream files only needed for this job with using the
+        # start date of the primary science file.
+        upstream_deps_for_start_date = dependency.get_jobs(
+            data_source=job["data_source"],
+            data_type=job["data_type"],
+            descriptor=job["descriptor"],
+            dependency_type="UPSTREAM",
+            relationship="ALL",
+            start_date=filepath.start_date,
+            end_date=filepath.start_date,
+        )
         try_to_submit_job(
-            session,
-            job,
-            job_start_date,
-            job_version,
-            upstream_dependencies.get_valid_inputs_for_start_date(
-                job_start_date, return_latest_ancillary=True
-            ),
+            session, job, job_start_date, job_version, upstream_deps_for_start_date
         )
 
 
@@ -332,8 +336,6 @@ def bulk_reprocessing_event(session, events):
     events : dict
         Event input.
     """
-    # TODO remove spacecraft jobs
-    # TODO if no instrument no data_level or descriptor
     # TODO: We need s3 tag or column in db to track bulk reprocessing
     instrument = events.get("instrument")
     data_level = events.get("data_level")
@@ -370,18 +372,21 @@ def bulk_reprocessing_event(session, events):
         # To get potential jobs, first we query for jobs directly downstream from l0 raw
         # files. This will create a domino effect in which all downstream files get
         # reprocessed.
-        event = {
-            "data_type": "l0",
-            "dependency_type": "DOWNSTREAM",
-            "relationship": "ALL",
-        }
-        # Add optional parameters to the event data
-        if instrument:
-            event["data_source"] = instrument
-        if descriptor:
-            event["descriptor"] = descriptor
-
-        potential_jobs = _get_dependencies(event)
+        # Only get Jobs for relationships that are HARD and SOFT_TRIGGER.
+        potential_jobs = dependency.get_jobs(
+            data_source=instrument,
+            data_type="l0",
+            dependency_type="DOWNSTREAM",
+            relationship="HARD",
+        )
+        potential_jobs.extend(
+            dependency.get_jobs(
+                data_source=instrument,
+                data_type="l0",
+                dependency_type="DOWNSTREAM",
+                relationship="SOFT_TRIGGER",
+            )
+        )
 
     for job in potential_jobs:
         submit_all_jobs(session, job, start_date, end_date)

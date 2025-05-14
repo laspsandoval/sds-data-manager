@@ -755,11 +755,11 @@ def get_files(
 
 
 def get_jobs(
-    data_source: str,
-    data_type: str,
-    descriptor: str,
     dependency_type: str,
     relationship: str,
+    data_source: Optional[str] = None,
+    data_type: Optional[str] = None,
+    descriptor: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> list | ProcessingInputCollection | None:
@@ -767,18 +767,18 @@ def get_jobs(
 
     Parameters
     ----------
-    data_source : str
-        Source name of the data product.
-    data_type : str
-        Data type of the data product.
-    descriptor : str
-        Descriptor of the data product.
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
     relationship : str
         Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
         If "ALL" is provided, dependencies for all valid relationships
         (HARD, SOFT_TRIGGER, SOFT_NO_TRIGGER) will be returned.
+    data_source : str, optional
+        Source name of the data product.
+    data_type : str, optional
+        Data type of the data product.
+    descriptor : str, optional
+        Descriptor of the data product.
     start_date : str, optional
         Start date to find dependent files with, in YYYYMMDD format.
     end_date : str, optional

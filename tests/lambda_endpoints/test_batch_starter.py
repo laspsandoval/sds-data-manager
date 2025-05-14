@@ -379,15 +379,15 @@ def test_lambda_handler_missing_upstream_dependency(session, caplog):
 
 
 ###### BULK REPROCESSING TESTS #######
-def test_bulk_reprocessing_data_level(session, mock_urlopen, caplog):
+def test_bulk_reprocessing_data_level(session, caplog):
     """Tests ``lambda_handler`` when there is bulk reprocessing for a data level."""
     _populate_file_catalog(session)
     # Test with an invalid event first. If data_level is provided, then instrument and
     # descriptor are required.
     events = {
         "reprocessing": True,
-        "start_date": 20230101,
-        "end_date": 20260101,
+        "start_date": "20230101",
+        "end_date": "20260101",
         "data_level": "l1b",
         "descriptor": "sci",
     }
@@ -402,11 +402,11 @@ def test_bulk_reprocessing_data_level(session, mock_urlopen, caplog):
     assert mock_submit.call_count == 3
 
 
-def test_bulk_reprocessing_all(session, mock_urlopen, caplog):
+def test_bulk_reprocessing_all(session, caplog):
     """Tests ``lambda_handler`` when there is bulk reprocessing for all instruments."""
     _populate_file_catalog(session)
     # leave instrument, data_level and descriptor blank
-    events = {"reprocessing": True, "start_date": 20230101, "end_date": 20260101}
+    events = {"reprocessing": True, "start_date": "20230101", "end_date": "20260101"}
     context = {"context": "sample_context"}
     # Add instrument and try again
     with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
