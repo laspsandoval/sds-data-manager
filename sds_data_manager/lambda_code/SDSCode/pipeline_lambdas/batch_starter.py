@@ -261,7 +261,7 @@ def s3_processing_event(session, events):
             )
 
             if not upstream_dependencies:
-                return
+                continue
 
             logger.info(f"All required dependencies found for the job: {job}")
             # Find the first science processingInput that has the same source as the
