@@ -268,7 +268,6 @@ def build_sds(
         vpc=networking.vpc,
         sqs_queue=instrument_sqs,
         layers=[db_lambda_layer, spice_lambda_layer],
-        api_domain=api.api_domain_name,
     )
 
     # Create lambda that mounts EFS and writes SPICE files to the EFS and the database
