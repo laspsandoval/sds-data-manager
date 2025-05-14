@@ -140,7 +140,7 @@ class BatchStarterLambda(Construct):
             schedule=aws_events.Schedule.rate(Duration.days(30)),
             target=aws_events_targets.LambdaFunction(
                 lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "months3"}),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "3mo"}),
             ),
         )
         self.month6job = aws_events.Rule(
@@ -151,7 +151,7 @@ class BatchStarterLambda(Construct):
             schedule=aws_events.Schedule.rate(Duration.days(180)),
             target=aws_events_targets.LambdaFunction(
                 lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "months6"}),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "6mo"}),
             ),
         )
         self.year1job = aws_events.Rule(
@@ -162,6 +162,6 @@ class BatchStarterLambda(Construct):
             schedule=aws_events.Schedule.rate(Duration.days(365)),
             target=aws_events_targets.LambdaFunction(
                 lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "years1"}),
+                event=aws_events.RuleTargetInput().from_object({"cadence": "1yr"}),
             ),
         )

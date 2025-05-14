@@ -756,11 +756,11 @@ def test_lambda_handler_mag_l1c_case(session):
 
 
 ### TEST CADENCE EVENT
-def test_def_cadence_map_event(session):
+def test_def_cadence_map_event(session, mock_urlopen):
     """Test that a cadence event kicks off the right processing job."""
     _populate_file_catalog(session)
     cadence_event = {
-        "cadence": "months6",
+        "cadence": "6mo",
     }
 
     context = {"context": "sample_context"}
@@ -768,6 +768,7 @@ def test_def_cadence_map_event(session):
         lambda_handler(cadence_event, context)
         # Verify the function was not called
         assert mock_submit.call_count == 1
+
 
 def test_bulk_reprocessing_all(session, mock_urlopen, caplog):
     """Tests ``lambda_handler`` when there is bulk reprocessing for all instruments."""

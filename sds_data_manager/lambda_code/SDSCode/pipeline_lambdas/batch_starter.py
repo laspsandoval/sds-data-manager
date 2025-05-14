@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime as dt
 
 import boto3
 import imap_data_access
@@ -95,6 +96,157 @@ class Cadence:
             Cadence values in days.
         """
         return {self.years1: 365, self.months3: 90, self.months6: 180}
+
+
+def cadence_to_datetime_range(
+    cadence: str, as_str: bool = False
+) -> tuple[datetime | str, datetime | str]:
+    """Convert the cadence to a datetime range.
+
+    Parameters
+    ----------
+    cadence : str
+        The cadence string (e.g. "3mo", "6mo", "1yr").
+    as_str : bool
+        If True, return the start and end dates as strings. Default is True.
+
+    Returns
+    -------
+    tuple(datetime, datetime)
+        The start date and end date of the cadence. The end_date is set to today
+    """
+    cadence_obj = Cadence()
+    if cadence not in cadence_obj.valid_source:
+        raise ValueError(
+            f"Invalid cadence: {cadence}. Valid cadences are:"
+            f" {cadence_obj.valid_source}"
+        )
+    end_date = datetime.today()
+    start_date = end_date - dt.timedelta(days=cadence_obj.days[cadence])
+    if as_str:
+        start_date = start_date.strftime("%Y%m%d")
+        end_date = end_date.strftime("%Y%m%d")
+
+    return start_date, end_date
+
+
+@dataclass
+class Cadence:
+    """Valid cadences for processing jobs triggered by cron jobs.
+
+    Valid cadences can be in either months or years
+    """
+
+    months3: str = "3mo"
+    months6: str = "6mo"
+    years1: str = "1yr"
+
+    @property
+    def valid_source(self) -> list[str]:
+        """Get all Cadences.
+
+        Returns
+        -------
+        list[str]
+            list of valid cadences.
+        """
+        return [self.years1, self.months3, self.months6]
+
+    @property
+    def days(self) -> dict:
+        """Cadence to days.
+
+        Returns
+        -------
+        dict
+            Cadence values in days.
+        """
+        return {self.years1: 365, self.months3: 90, self.months6: 180}
+
+
+class IMAPDependencyFinderError(Exception):
+    """Base class for exceptions in this module."""
+
+    pass
+
+
+@contextlib.contextmanager
+def _get_url_response(url: str):
+    """Get the response from a URL.
+
+    This is a helper function to make it easier to handle
+    the different types of errors that can occur when
+    opening a URL and write out the response body.
+
+    Parameters
+    ----------
+    url: str
+        The url string to query the api with.
+
+    Yields
+    ------
+    http.client.HTTPResponse
+        The response object received from the API.
+    """
+    try:
+        # Open the URL and yield the response
+        with urllib.request.urlopen(url) as response:
+            yield response
+    except HTTPError as e:
+        message = (
+            f"HTTP Error: {e.code} - {e.reason}\n"
+            f"Server Message: {e.read().decode('utf-8')}"
+        )
+        raise IMAPDependencyFinderError(message) from e
+
+    except URLError as e:
+        message = f"URL Error: {e.reason}"
+        raise IMAPDependencyFinderError(message) from e
+
+
+def _get_dependencies(dependency_events: dict):
+    """Return dependencies for the input dependency requirements.
+
+    Parameters
+    ----------
+    dependency_events : dict
+        Dependency information to be used as query parameters in the API request url.
+
+    Returns
+    -------
+    Union[list, ProcessingInputCollection, None]
+        - A list of dependency dictionaries if "start_date" is not in the
+            request url .
+        - ProcessingInputCollection if 'start_date' is in the request url.
+        - None If the API returns a 206 status code indicating missing dependencies.
+
+    """
+    base = f"{os.getenv('IMAP_DATA_ACCESS_URL')}/dependency?"
+    url = f"{base}{urlencode(dependency_events)}"
+
+    logger.info("Finding dependencies for %s with url %s", dependency_events, url)
+    with _get_url_response(url) as response:
+        # Retrieve the response as a list of dictionaries containing the dependency
+        # information
+        dependency_response = response.read().decode("utf-8")
+        # Check for a 206 status code
+        if response.status == 206:
+            logger.info(f"Dependency API response: {dependency_response}")
+            return None
+
+        logger.debug(f"Received dependencies: {dependency_response}")
+    # The API returns different output formats depending on the query parameters:
+    # Without "start_date": Returns a list of dependency dictionaries.
+    #      This functionality is used when searching for downstream dependencies
+    # With "start_date" (requires "version" and "trigger_type"; "end_date" optional):
+    # Returns a serialized ProcessingInputCollection of files from S3
+    if "start_date" in url:
+        dependencies = ProcessingInputCollection()
+        dependencies.deserialize(dependency_response)
+    else:
+        dependencies = json.loads(dependency_response)
+
+    return dependencies
 
 
 def determine_job_version(
@@ -684,12 +836,20 @@ def cadence_processing_event(session, events):
     events : dict
         Event input from a cron job.
     """
+    dep_config = DependencyConfig()
     cadence = events.get("cadence")
     if not cadence:
         raise ValueError("Cadence event must include 'cadence' key.")
-    start_date, end_date = cadence_to_datetime_range(cadence)
-    # Get the list of all files that need to be processed
-    # TODO use dependency "all" for all maps cadences
+    # Get jobs for specified cadence.
+    potential_jobs = dep_config.get_cadence_jobs(cadence)
+    start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
+    for job in potential_jobs:
+        j = {
+            "data_source": job[0],
+            "data_type": job[1],
+            "descriptor": job[2],
+        }
+        submit_all_jobs(session, j, start_date, end_date, cadence=True)
 
 
 
@@ -728,10 +888,7 @@ def lambda_handler(events: dict, context):
     5. Event of a cron job cadence trigger.
         Example event:
             {
-                "cadence": 3months or 7days,
-                "instrument": None, optional,
-                "data_level": None, optional,
-                "descriptor": None, optional,
+                "cadence": months3 or years1,
             }
 
     Parameters
