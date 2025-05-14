@@ -333,7 +333,7 @@ class DependencyConfig:
         return kick_off_jobs
 
 
-def get_dependencies(query_node, dependency_type, relationship):
+def get_dependencies(node, dependency_type, relationship):
     """Lookup the dependencies for the given ``node``.
 
     A ``node`` is an identifier of the data product, which can be an
@@ -342,7 +342,7 @@ def get_dependencies(query_node, dependency_type, relationship):
 
     Parameters
     ----------
-    query_node : tuple
+    node : tuple
         Quantities that uniquely identify a data product.
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
@@ -371,7 +371,7 @@ def get_dependencies(query_node, dependency_type, relationship):
 
     dependencies = []
     for rel in relationships:
-        deps = dependency_config.dependencies[rel][dependency_type].get(query_node, [])
+        deps = dependency_config.dependencies[rel][dependency_type].get(node, [])
         # Add keys for a dict-like representation
         dependencies.extend(
             [
