@@ -302,6 +302,36 @@ class DependencyConfig:
         # data descriptor.
         return True
 
+    def kickoff_pipeline_jobs(self) -> list:
+        """Return all the jobs that kick off each instrument pipeline.
+
+        These are nodes that are downstream from a node with the data_level equal to
+        "l0" and the descriptor equal to "raw".
+
+        Returns
+        -------
+        list
+            List of dictionaries containing the data source, data type, and descriptor
+            of the jobs that kick off each instrument pipeline.
+        """
+        kick_off_jobs = []
+        for relationship in [self.relationship.HARD, self.relationship.SOFT_TRIGGER]:
+            # Get all the downstream dependencies for the l0 raw data
+            dependencies = self.dependencies[relationship]["DOWNSTREAM"]
+            for node_up, nodes_down in dependencies.items():
+                if node_up[1] == "l0" and node_up[2] == "raw":
+                    kick_off_jobs.extend(
+                        [
+                            {
+                                "data_source": node[0],
+                                "data_type": node[1],
+                                "descriptor": node[2],
+                            }
+                            for node in nodes_down
+                        ]
+                    )
+        return kick_off_jobs
+
 
 def get_dependencies(query_node, dependency_type, relationship):
     """Lookup the dependencies for the given ``node``.
@@ -341,22 +371,7 @@ def get_dependencies(query_node, dependency_type, relationship):
 
     dependencies = []
     for rel in relationships:
-        all_deps_for_type = dependency_config.dependencies[rel][dependency_type]
-        if None in query_node:
-            # If one of the node elements is missing, find nodes that match at the
-            # indices where the node is not None.
-            deps = []
-            for key_node, val_node in dict(all_deps_for_type).items():
-                if all(
-                    kn == qn for kn, qn in zip(key_node, query_node) if qn is not None
-                ):
-                    deps.extend(val_node)
-        else:
-            # If the node contains all three elements:
-            # (data_source, data_type, descriptor),
-            # get the dependencies for that node
-            deps = all_deps_for_type.get(query_node, [])
-
+        deps = dependency_config.dependencies[rel][dependency_type].get(query_node, [])
         # Add keys for a dict-like representation
         dependencies.extend(
             [

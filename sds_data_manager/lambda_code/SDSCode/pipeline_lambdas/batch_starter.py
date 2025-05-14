@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from ..database import database as db
 from ..database import models
 from . import dependency
+from .dependency import DependencyConfig
 
 # import dependency
 
@@ -346,10 +347,9 @@ def bulk_reprocessing_event(session, events):
         raise ValueError(
             "Start date and end date are required for a reprocessing Event."
         )
-    if data_level or descriptor:
-        # If data_level or descriptor are provided, instrument, data_level and
-        # descriptor are required.
-        if not instrument or not descriptor or not data_level:
+    if data_level:
+        # If data_level is provided, instrument and descriptor are required.
+        if not instrument or not descriptor:
             raise ValueError(
                 "If data_level is provided, instrument and descriptor are required."
             )
@@ -366,27 +366,21 @@ def bulk_reprocessing_event(session, events):
         # If no instrument is provided, there should be no descriptor or data level.
         if not instrument and descriptor:
             raise ValueError(
-                "If no instrument is provided, descriptor must not be specified."
+                "If descriptor is provided, instrument must also be provided."
             )
         # If data_level is not provided, we need to reprocess all levels.
-        # To get potential jobs, first we query for jobs directly downstream from l0 raw
-        # files. This will create a domino effect in which all downstream files get
-        # reprocessed.
-        # Only get Jobs for relationships that are HARD and SOFT_TRIGGER.
-        potential_jobs = dependency.get_jobs(
-            data_source=instrument,
-            data_type="l0",
-            dependency_type="DOWNSTREAM",
-            relationship="HARD",
-        )
-        potential_jobs.extend(
-            dependency.get_jobs(
-                data_source=instrument,
-                data_type="l0",
-                dependency_type="DOWNSTREAM",
-                relationship="SOFT_TRIGGER",
+        # Get the jobs that kick of each pipeline, to trigger processing
+        # for all levels.
+        potential_jobs = DependencyConfig().kickoff_pipeline_jobs()
+        # filter the jobs by instrument and descriptor if provided
+        potential_jobs = [
+            job
+            for job in potential_jobs
+            if (
+                (job["data_source"] == instrument or not instrument)
+                and (job["descriptor"] == descriptor or not descriptor)
             )
-        )
+        ]
 
     for job in potential_jobs:
         submit_all_jobs(session, job, start_date, end_date)
