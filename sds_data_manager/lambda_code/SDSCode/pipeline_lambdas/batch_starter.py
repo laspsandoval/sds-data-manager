@@ -224,7 +224,7 @@ def submit_all_jobs(session, job_node, start_date, end_date):
         0
     ]
     num_jobs = len(primary_science.imap_file_paths)
-    logger.info(f"Found {num_jobs} to process.")
+    logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
         job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
@@ -418,12 +418,14 @@ def lambda_handler(events: dict, context):
     4. Event of bulk reprocessing of science.
         Example event:
             {
-                "reprocessing": True,
-                "start_date": <>,
-                "end_date": <>,
-                "instrument": None, optional,
-                "data_level": None, optional,
-                "data_descriptor": None, optional,
+                "queryStringParameters": {
+                    "reprocessing": True,
+                    "start_date": <>,
+                    "end_date": <>,
+                    "instrument": None, optional,
+                    "data_level": None, optional,
+                    "data_descriptor": None, optional,
+                }
             }
     5. Event of a cron job cadence trigger.
         TODO: This will be implemented in the future.
@@ -446,9 +448,10 @@ def lambda_handler(events: dict, context):
     logger.info(f"Context: {context}")
 
     with db.Session() as session:
-        if events.get("reprocessing"):
+        api_event = events.get("queryStringParameters")
+        if api_event and api_event.get("reprocessing"):
             # handle reprocessing event
-            bulk_reprocessing_event(session, events)
+            bulk_reprocessing_event(session, api_event)
         else:
             # handle s3 event from the SQS queue
             s3_processing_event(session, events)
