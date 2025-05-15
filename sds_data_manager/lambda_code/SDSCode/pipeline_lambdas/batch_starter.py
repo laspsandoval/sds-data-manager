@@ -331,7 +331,9 @@ def s3_processing_event(session, events):
             f"Potential jobs: {potential_jobs} and potential soft jobs: "
             f"{potential_soft_jobs}"
         )
-
+        if not potential_jobs and not potential_soft_jobs:
+            logger.info(f"No downstream dependencies found for the file: {filename}")
+            continue
         for job in potential_jobs + potential_soft_jobs:
             submit_all_jobs(session, job, start_date, end_date)
 

@@ -42,7 +42,8 @@ class DataSource:
         list[str]
             list of valid data sources.
         """
-        # TODO: import this from imap_data_access once it's defined.
+        # TODO: import this from imap_data_access once it's defined
+        # or transition this class to imap_data_access
         return [
             "spin",
             "repoint",
@@ -70,8 +71,11 @@ class DataType:
     and other data types related to SPICE and ancillary data.
     """
 
+    # TODO: transition these class to imap_data_access once it's defined.
     SPICE: str = "spice"
     ANCILLARY: str = "ancillary"
+    SPIN: str = "spin"
+    REPOINT: str = "repoint"
 
     @property
     def valid_type(self) -> list[str]:
@@ -85,6 +89,8 @@ class DataType:
         return [
             self.SPICE,
             self.ANCILLARY,
+            self.SPIN,
+            self.REPOINT,
             *imap_data_access.VALID_DATALEVELS,
         ]
 
@@ -108,6 +114,7 @@ class DataDescriptor:
                   if historical kernels are not available.
     """
 
+    # TODO: transition these class to imap_data_access once it's defined
     PREDICT: str = "predict"
     HISTORICAL: str = "historical"
     RECONSTRUCT: str = "reconstruct"
@@ -144,7 +151,9 @@ class Relationship:
             will not trigger processing.
     """
 
+    # TODO: transition these class to imap_data_access once it's defined
     HARD: str = "HARD"
+    HARD_NO_TRIGGER: str = "HARD_NO_TRIGGER"
     SOFT_TRIGGER: str = "SOFT_TRIGGER"
     SOFT_NO_TRIGGER: str = "SOFT_NO_TRIGGER"
 
@@ -157,7 +166,12 @@ class Relationship:
         list[str]
             list of valid data relationships.
         """
-        return [self.HARD, self.SOFT_TRIGGER, self.SOFT_NO_TRIGGER]
+        return [
+            self.HARD,
+            self.HARD_NO_TRIGGER,
+            self.SOFT_TRIGGER,
+            self.SOFT_NO_TRIGGER,
+        ]
 
 
 @dataclass
@@ -169,6 +183,7 @@ class DependencyType:
         2. DOWNSTREAM - future file that needs current file to start its process
     """
 
+    # TODO: transition these class to imap_data_access once it's defined
     UPSTREAM: str = "UPSTREAM"
     DOWNSTREAM: str = "DOWNSTREAM"
 
@@ -253,16 +268,11 @@ class DependencyConfig:
                 parent_node = tuple(contents[:3])
                 child_node = tuple(contents[3:6])
 
-                # validate node
-                if not self._validate_node(parent_node) or not self._validate_node(
-                    child_node
-                ):
-                    logger.debug(
-                        f"Parent node: {parent_node}, Child node: {child_node}"
-                    )
-                    raise ValueError(
-                        "Data product must have: (source, type, descriptor)"
-                    )
+                try:
+                    self._validate_node(parent_node)
+                    self._validate_node(child_node)
+                except ValueError as e:
+                    raise ValueError(f"Node validation failed with '{e}'") from e
 
                 hard_soft = contents[6]
                 # Downstream direction
@@ -283,24 +293,21 @@ class DependencyConfig:
         ----------
         node : tuple
             Node to validate.
-
-        Returns
-        -------
-        bool
-            True if node is valid, False otherwise.
         """
         if len(node) != 3:
-            logger.debug("Missing data source, data type, or descriptor")
-            return False
+            raise ValueError("Missing data source, data type, or descriptor")
         if node[0] not in self.data_source.valid_source:
-            logger.debug(f"Invalid data source: {node[0]}")
-            return False
+            raise ValueError(
+                f"Invalid data source: {node[0]}. "
+                f"Valid data sources: {self.data_source.valid_source}"
+            )
         if node[1] not in self.data_type.valid_type:
-            logger.debug(f"Invalid data type: {node[1]}")
-            return False
+            raise ValueError(
+                f"Invalid data type: {node[1]}. "
+                f"Valid data types: {self.data_type.valid_type}"
+            )
         # TODO: Add descriptor validation once we define all data product's
         # data descriptor.
-        return True
 
     def kickoff_pipeline_jobs(self) -> list:
         """Return all the jobs that kick off each instrument pipeline.
@@ -361,11 +368,7 @@ def get_dependencies(node, dependency_type, relationship):
         List of dictionary containing the dependency information.
     """
     # Load the dependencies
-    try:
-        dependency_config = DependencyConfig()
-    except Exception as e:
-        logger.error(f"Error loading dependencies: {e!s}")
-        return None
+    dependency_config = DependencyConfig()
 
     relationships = (
         Relationship().valid_relationship if relationship == "ALL" else [relationship]
@@ -474,8 +477,10 @@ def get_spin_files(
     records = (
         session.query(models.SpinTable)
         .filter(
-            models.SpinTable.start_date <= end_date,
-            models.SpinTable.end_date >= start_date,
+            and_(
+                models.SpinTable.start_date <= end_date,
+                models.SpinTable.end_date >= start_date,
+            )
         )
         .all()
     )
@@ -867,7 +872,7 @@ def get_jobs(
 
     if dependencies is None:
         logger.warning("Failed to load dependencies")
-        return None
+        raise ValueError("Failed to load dependencies")
 
     # If start_date is supplied, check for the version and end_date.
     start_date = datetime.strptime(start_date, "%Y%m%d") if start_date else None

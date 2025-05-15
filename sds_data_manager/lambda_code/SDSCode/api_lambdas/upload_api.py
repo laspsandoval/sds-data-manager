@@ -112,7 +112,6 @@ def lambda_handler(event, context):
 
     filename = os.path.basename(path_params)
     # Try to create a SPICE file first, if it fails, then science, then ancillary
-    invalid_file_error = None
     file_obj = None
     try:
         file_obj = imap_data_access.SPICEFilePath(filename)
@@ -131,21 +130,24 @@ def lambda_handler(event, context):
             except imap_data_access.AncillaryFilePath.InvalidAncillaryFileError as e:
                 # Did not match any file types
                 logger.info(str(e))
-                logger.warning(
+                logger.error(
                     f"Filename {filename} does not match ancillary, science, or SPICE."
                 )
-                logger.warning(
-                    f"Moving {filename} to staging directory for manual review."
-                )
-                invalid_file_error = True
-                s3_key_path_str = f"staging/{filename}"
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps(
+                        "error: file name does "
+                        "not match ancillary, "
+                        "science, or SPICE file "
+                        "naming convention."
+                    ),
+                }
 
-    if not invalid_file_error:
-        s3_key_path = file_obj.construct_path()
-        # Strip off the data directory to get the upload path + name
-        # Must be posix style for the URL
-        s3_key_path_str = str(
-            s3_key_path.relative_to(imap_data_access.config["DATA_DIR"]).as_posix()
-        )
+    s3_key_path = file_obj.construct_path()
+    # Strip off the data directory to get the upload path + name
+    # Must be posix style for the URL
+    s3_key_path_str = str(
+        s3_key_path.relative_to(imap_data_access.config["DATA_DIR"]).as_posix()
+    )
 
     return _generate_signed_upload_response(s3_key_path_str)

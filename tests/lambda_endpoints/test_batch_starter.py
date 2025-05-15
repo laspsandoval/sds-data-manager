@@ -63,9 +63,11 @@ def test_lambda_handler(session):
             }
         ]
     }
-    serialized_processing_input = (
-        '[{"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]}]'
-    )
+    serialized_processing_input = [
+        {"type": "spice", "files": ["naif0012.tls", "imap_sclk_0000.tsc"]},
+        {"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]},
+    ]
+
     context = {"context": "sample_context"}
 
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
@@ -88,7 +90,7 @@ def test_lambda_handler(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    serialized_processing_input,
+                    json.dumps(serialized_processing_input),
                     "--upload-to-sdc",
                 ]
             },
