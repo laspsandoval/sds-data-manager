@@ -33,15 +33,24 @@ def lambda_handler(event, context):
 
     logger.info("Received event: " + json.dumps(event, indent=2))
 
+    table_models = {
+        "science": models.ScienceFiles,
+        "ancillary": models.AncillaryFiles,
+        "SPICE": models.SPICEFiles,
+    }
+
     # add session, pick model like in indexer and add query to filter_as
     query_params = event["queryStringParameters"]
+    # get desired table for query
+    query_table = query_params.get("table")
+    model = table_models[query_table]
 
-    # select the science files table for the query
-    query = select(models.ScienceFiles.__table__)
+    # select the given table for the query
+    query = select(model.__table__)
     # get a list of all valid search parameters
     valid_parameters = [
         column.key
-        for column in models.ScienceFiles.__table__.columns
+        for column in model.__table__.columns
         if column.key not in ["id"]
     ]
     # Up until this point, valid_parameters are the same as the
@@ -54,6 +63,9 @@ def lambda_handler(event, context):
 
     # go through each query parameter to set up sqlalchemy query conditions
     for param, value in query_params.items():
+        # skip the table parameter
+        if param == "table":
+            continue
         # confirm that the query parameter is valid
         if param not in valid_parameters:
             response = {
@@ -76,35 +88,35 @@ def lambda_handler(event, context):
         # setup the correct "where" time condition
         if param == "start_date":
             query = query.where(
-                models.ScienceFiles.start_date
+                model.start_date
                 >= datetime.datetime.strptime(value, "%Y%m%d")
             )
         elif param == "end_date":
             # TODO: Need to discuss as a team how to handle date queries. For now,
             # the date queries will only look at the file start_date.
             query = query.where(
-                models.ScienceFiles.start_date
+                model.start_date
                 <= datetime.datetime.strptime(value, "%Y%m%d")
             )
         elif param == "ingestion_start_date":
             # filtering by ingestion date
             query = query.where(
-                func.date(models.ScienceFiles.ingestion_date)
+                func.date(model.ingestion_date)
                 >= datetime.datetime.strptime(value, "%Y%m%d").date()
             )
         elif param == "ingestion_end_date":
             query = query.where(
-                func.date(models.ScienceFiles.ingestion_date)
+                func.date(model.ingestion_date)
                 <= datetime.datetime.strptime(value, "%Y%m%d").date()
             )
         # all non-time string matching parameters
         else:
-            query = query.where(getattr(models.ScienceFiles, param) == value)
+            query = query.where(getattr(model, param) == value)
 
     # We want to order the query returns by the filename
     # This will implicitly sort by: instrument, data level, descriptor, start_date, ...
     # Default for the table is by the ascending id so by insertion order
-    query = query.order_by(models.ScienceFiles.file_path)
+    query = query.order_by(model.file_path)
 
     with db.Session() as session:
         search_results = session.execute(query).all()
