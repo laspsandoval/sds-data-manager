@@ -284,7 +284,7 @@ def test_lambda_handler_mag_l1c_case(session):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
-            jobName="mag-l1c-norm-mago-job-3",
+            jobName="mag-l1c-norm-mago-job-2",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-mag",
             containerOverrides={
