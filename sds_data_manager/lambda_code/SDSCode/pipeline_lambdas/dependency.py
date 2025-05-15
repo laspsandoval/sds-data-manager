@@ -790,11 +790,11 @@ def get_jobs(
         Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
         If "ALL" is provided, dependencies for all valid relationships
         (HARD, SOFT_TRIGGER, SOFT_NO_TRIGGER) will be returned.
-    data_source : str, optional
+    data_source : str
         Source name of the data product.
-    data_type : str, optional
+    data_type : str
         Data type of the data product.
-    descriptor : str, optional
+    descriptor : str
         Descriptor of the data product.
     start_date : str, optional
         Start date to find dependent files with, in YYYYMMDD format.
