@@ -398,8 +398,10 @@ def test_bulk_reprocessing_data_level(session, caplog):
     events["instrument"] = "swe"
     with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
         lambda_handler(events, context)
-    # There should be three different jobs submitted for swe l1b
-    assert mock_submit.call_count == 3
+    # There should be 4 different jobs submitted for swe l1b sci because there are 4
+    # upstream swe l1a sci files with start dates in the reprocessing range.
+
+    assert mock_submit.call_count == 4
 
 
 def test_bulk_reprocessing_all(session, caplog):

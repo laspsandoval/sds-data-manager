@@ -774,9 +774,9 @@ def get_files(
 def get_jobs(
     dependency_type: str,
     relationship: str,
-    data_source: Optional[str] = None,
-    data_type: Optional[str] = None,
-    descriptor: Optional[str] = None,
+    data_source: str,
+    data_type: str,
+    descriptor: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> list | ProcessingInputCollection | None:
