@@ -205,7 +205,7 @@ def test_get_downstream_dependencies():
     assert dependency_response == expected_complete_dependent
 
 
-def test_get_downstream_dependencies_for_all_relationships():
+def test_get_all_downstream_dependencies_for_relationship():
     """Add test for getting back ancillary dependencies."""
     dependency_response = dependency.get_jobs(
         data_source="mag",
