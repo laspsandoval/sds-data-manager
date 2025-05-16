@@ -373,7 +373,7 @@ def get_dependencies(node, dependency_type, relationship):
     relationships = (
         Relationship().valid_relationship if relationship == "ALL" else [relationship]
     )
-    print(node)
+
     dependencies = []
     for rel in relationships:
         deps = dependency_config.dependencies[rel][dependency_type].get(node, [])

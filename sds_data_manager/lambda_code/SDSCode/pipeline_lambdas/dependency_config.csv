@@ -280,7 +280,7 @@ swe, ancillary, esa-lut, swe, l1b, sci, HARD, DOWNSTREAM
 swe, ancillary, eu-conversion, swe, l1b, sci, HARD, DOWNSTREAM
 
 swe, l1b, sci, swe, l2, sci, HARD, DOWNSTREAM
-spin, spice, historical, swe, l2, sci, HARD, DOWNSTREAM
+spin, spin, historical, swe, l2, sci, HARD, DOWNSTREAM
 
 swe, l1b, sci, swe, l3, sci, HARD, DOWNSTREAM
 swe, l2, sci, swe, l3, sci, HARD, DOWNSTREAM
