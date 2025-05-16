@@ -196,6 +196,62 @@ hi, l1a, 90sensor-de, hi, l1b, 90sensor-de, HARD, DOWNSTREAM
 hi, l1b, 45sensor-de, hi, l1c, 45sensor-pset, HARD, DOWNSTREAM
 hi, l1b, 90sensor-de, hi, l1c, 90sensor-pset, HARD, DOWNSTREAM
 
+# Hi L2 Map Dependencies:
+# Roughly 50 different Hi maps will be made - with the following parameters...
+# 3 different time periods              (3mo,       6mo,    1yr)
+# 3 different map spacings/resolutions  (4deg,   6deg)
+# 2 different sensors                   (45sensor,  90sensor)
+# 2 different reference frames          (hf,        sf)
+# 3 different ena directions            (full, ram, anti)
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-ram-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-ram-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-anti-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-anti-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-ram-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-ram-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-anti-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-anti-6deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-ram-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-ram-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-anti-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-anti-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-ram-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-ram-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-anti-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-anti-6deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-4deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-full-4deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-4deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-full-4deg-3mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-full-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-ram-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-ram-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-anti-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-anti-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-full-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-ram-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-ram-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-anti-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-anti-4deg-6mo, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-ram-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-ram-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-ram-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-ram-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
+hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
+
 hi, l2, h90-ena-h-sf-nsp-ram-hae-4deg-6mo, hi, l3, h90-ena-h-sf-sp-full-hae-4deg-6mo, HARD, DOWNSTREAM
 hi, l2, h90-ena-h-sf-nsp-anti-hae-4deg-6mo, hi, l3, h90-ena-h-sf-sp-full-hae-4deg-6mo, HARD, DOWNSTREAM
 
