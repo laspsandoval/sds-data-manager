@@ -157,8 +157,8 @@ hit, ancillary, hit-event-type-lookup, hit, l3, direct-events, HARD, DOWNSTREAM
 # <---- IDEX Dependencies ---->
 
 idex, l0, raw, idex, l1a, all, HARD, DOWNSTREAM
-leapseconds, spice, historical, idex, l1a, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
-spacecraft_clock, spice, historical, idex, l1a, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, idex, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, idex, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
 
 idex, l1a, sci-1week, idex, l1b, sci-1week, HARD, DOWNSTREAM
 spin, spin, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
