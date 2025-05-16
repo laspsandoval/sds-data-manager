@@ -73,6 +73,8 @@ class DataType:
 
     # TODO: transition these class to imap_data_access once it's defined.
     SPICE: str = "spice"
+    SPIN: str = "spin"
+    REPOINT: str = "repoint"
     ANCILLARY: str = "ancillary"
     SPIN: str = "spin"
     REPOINT: str = "repoint"
@@ -373,7 +375,7 @@ def get_dependencies(node, dependency_type, relationship):
     relationships = (
         Relationship().valid_relationship if relationship == "ALL" else [relationship]
     )
-
+    print(node)
     dependencies = []
     for rel in relationships:
         deps = dependency_config.dependencies[rel][dependency_type].get(node, [])
@@ -389,7 +391,6 @@ def get_dependencies(node, dependency_type, relationship):
                 for dep in deps
             ]
         )
-
     return dependencies
 
 
