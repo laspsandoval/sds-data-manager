@@ -115,19 +115,19 @@ def lambda_handler(event, context):
     file_obj = None
     try:
         file_obj = imap_data_access.SPICEFilePath(filename)
-    except imap_data_access.SPICEFilePath.InvalidSPICEFileError:
+    except imap_data_access.ImapFilePath.InvalidImapFileError:
         # Not a SPICE file, continue on to science files
         logger.info(f"Filename {filename} is not a valid SPICE file.")
         try:
             # file_obj will be None if it's not a SPICE file
             file_obj = file_obj or imap_data_access.ScienceFilePath(filename)
-        except imap_data_access.ScienceFilePath.InvalidScienceFileError:
+        except imap_data_access.ImapFilePath.InvalidImapFileError:
             # Not a SCIENCE file, continue on to ancillary files
             logger.info(f"Filename {filename} is not a valid SCIENCE file.")
             try:
                 # file_obj will be None if it's not a SPICE file
                 file_obj = imap_data_access.AncillaryFilePath(filename)
-            except imap_data_access.AncillaryFilePath.InvalidAncillaryFileError as e:
+            except imap_data_access.ImapFilePath.InvalidImapFileError as e:
                 # Did not match any file types
                 logger.info(str(e))
                 logger.error(

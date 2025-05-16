@@ -643,7 +643,7 @@ def test_dependency_success():
         },
         {
             "data_source": "spin",
-            "data_type": "spice",
+            "data_type": "spin",
             "descriptor": "historical",
             "relationship": "HARD",
         },

@@ -585,7 +585,7 @@ def get_upstream_dependency_inputs(
                 logger.info(f"No spin files found for {start_date} to {end_date}")
                 return None
             logger.info(f"Found spin files: {spin_files}. Adding to collection.")
-            dependency_inputs.add(processing_input.SPICEInput(*spin_files))
+            dependency_inputs.add(processing_input.SpinInput(*spin_files))
 
         # If repoint is a dependency, query s3 for latest repoint file
         has_repoint_dep = any(dep["data_source"] == "repoint" for dep in dependencies)
@@ -597,7 +597,7 @@ def get_upstream_dependency_inputs(
             logger.info(
                 f"Found repoint file: {latest_repoint_file}. Adding to collection."
             )
-            dependency_inputs.add(processing_input.SPICEInput(latest_repoint_file))
+            dependency_inputs.add(processing_input.RepointInput(latest_repoint_file))
 
         # Otherwise, combine rest of kernels types and query metakernel lambda
         # for given date range
@@ -653,7 +653,9 @@ def get_upstream_dependency_inputs(
         # Check for non-spice dependencies
         # ---------------------------------
         non_spice_dependencies = [
-            dep for dep in dependencies if dep["data_type"] != "spice"
+            dep
+            for dep in dependencies
+            if dep["data_type"] not in ["spice", "spin", "repoint"]
         ]
         for dep in non_spice_dependencies:
             relationship = dep["relationship"]

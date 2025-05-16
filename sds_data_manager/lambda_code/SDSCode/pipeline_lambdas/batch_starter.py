@@ -212,6 +212,7 @@ def submit_all_jobs(session, job_node, start_date, end_date):
         start_date=start_date,
         end_date=end_date,
     )
+    print("UPSTREAM DEPENDENCIES FOUND: ", upstream_dependencies)
     if not upstream_dependencies:
         return
 
