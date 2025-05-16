@@ -302,6 +302,38 @@ class DependencyConfig:
         # data descriptor.
         return True
 
+    def kickoff_pipeline_jobs(self) -> list:
+        """Return all the jobs that kick off each instrument pipeline.
+
+        These are nodes that are downstream from a node with the data_level equal to
+        "l0" and the descriptor equal to "raw".
+
+        Returns
+        -------
+        list
+            List of dictionaries containing the data source, data type, and descriptor
+            of the jobs that kick off each instrument pipeline.
+        """
+        kick_off_jobs = []
+        for relationship in [self.relationship.HARD, self.relationship.SOFT_TRIGGER]:
+            # Get all the downstream dependencies for the l0 raw data
+            dependencies = self.dependencies[relationship]["DOWNSTREAM"]
+            for parent_node, child_node in dependencies.items():
+                # If the parent dependency is l0 raw, add the child dependencies to the
+                # kick_off_jobs list.
+                if parent_node[1] == "l0" and parent_node[2] == "raw":
+                    kick_off_jobs.extend(
+                        [
+                            {
+                                "data_source": node[0],
+                                "data_type": node[1],
+                                "descriptor": node[2],
+                            }
+                            for node in child_node
+                        ]
+                    )
+        return kick_off_jobs
+
 
 def get_dependencies(node, dependency_type, relationship):
     """Lookup the dependencies for the given ``node``.
@@ -342,7 +374,6 @@ def get_dependencies(node, dependency_type, relationship):
     dependencies = []
     for rel in relationships:
         deps = dependency_config.dependencies[rel][dependency_type].get(node, [])
-
         # Add keys for a dict-like representation
         dependencies.extend(
             [
@@ -741,11 +772,11 @@ def get_files(
 
 
 def get_jobs(
+    dependency_type: str,
+    relationship: str,
     data_source: str,
     data_type: str,
     descriptor: str,
-    dependency_type: str,
-    relationship: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> list | ProcessingInputCollection | None:
@@ -753,18 +784,18 @@ def get_jobs(
 
     Parameters
     ----------
-    data_source : str
-        Source name of the data product.
-    data_type : str
-        Data type of the data product.
-    descriptor : str
-        Descriptor of the data product.
     dependency_type : str
         Whether it's UPSTREAM or DOWNSTREAM dependency.
     relationship : str
         Whether it's HARD, SOFT_TRIGGER, or SOFT_NO_TRIGGER dependency.
         If "ALL" is provided, dependencies for all valid relationships
         (HARD, SOFT_TRIGGER, SOFT_NO_TRIGGER) will be returned.
+    data_source : str
+        Source name of the data product.
+    data_type : str
+        Data type of the data product.
+    descriptor : str
+        Descriptor of the data product.
     start_date : str, optional
         Start date to find dependent files with, in YYYYMMDD format.
     end_date : str, optional

@@ -142,6 +142,18 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
+            file_path="/path/to/imap_lo_l0_raw_20240101_v001.pkts",
+            instrument="lo",
+            data_level="l0",
+            descriptor="raw",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ScienceFiles(
             file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
             instrument="mag",
             data_level="l1b",
@@ -229,7 +241,7 @@ def _populate_file_catalog(session):
         ),
         # Adding files to test for duplicate job
         ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_de_20240101_v001.cdf",
+            file_path="/path/to/imap_lo_l1a_de_20100101_v001.cdf",
             instrument="lo",
             data_level="l1a",
             descriptor="de",
@@ -245,7 +257,7 @@ def _populate_file_catalog(session):
             instrument="lo",
             data_level="l1a",
             descriptor="sci",
-            start_date=datetime(2010, 1, 1),
+            start_date=datetime(2024, 1, 1),
             version="v001",
             extension="cdf",
             ingestion_date=datetime.strptime(
