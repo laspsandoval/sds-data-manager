@@ -167,7 +167,7 @@ attitude_history, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 
 idex, l1b, sci-1week, idex, l2a, sci-1week, HARD, DOWNSTREAM
 idex, l2a, sci-1week, idex, l2b, sci-1week, HARD, DOWNSTREAM
-idex, l1b, evt, idex, l2b, sci-1week, HARD, DOWNSTREAM
+idex, l1b, evt, idex, l2b, sci-1week, SOFT_NO_TRIGGER, DOWNSTREAM
 idex, l2b, sci-1week, idex, l2c, sci-1week, HARD, DOWNSTREAM
 
 # <---- LO Dependencies ---->
