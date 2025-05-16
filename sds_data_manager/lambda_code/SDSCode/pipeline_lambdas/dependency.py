@@ -76,8 +76,6 @@ class DataType:
     SPIN: str = "spin"
     REPOINT: str = "repoint"
     ANCILLARY: str = "ancillary"
-    SPIN: str = "spin"
-    REPOINT: str = "repoint"
 
     @property
     def valid_type(self) -> list[str]:
