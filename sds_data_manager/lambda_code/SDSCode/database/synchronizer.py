@@ -49,7 +49,11 @@ def lambda_handler(event, context):
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         if "Contents" in page:
             s3_files_dict.update(
-                {obj["Key"]: obj["LastModified"] for obj in page["Contents"]}
+                {
+                    obj["Key"]: obj["LastModified"]
+                    for obj in page["Contents"]
+                    if "spice/" not in obj["Key"]
+                }
             )
 
     s3_files = set(s3_files_dict.keys())
