@@ -3,6 +3,7 @@
 import datetime
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime as dt
 
 import boto3
@@ -21,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from ..database import database as db
 from ..database import models
 from . import dependency
-from .dependency import DependencyConfig
+from .dependency import DependencyConfig, get_jobs
 
 # import dependency
 
@@ -38,6 +39,40 @@ SPECIAL_CASE_JOBS = [
     ("ultra", "l3", "u90-spx-hsf-sp-full-hae-nside8-3mo"),
     ("idex", "l2b", "sci-1week"),
 ]
+
+
+@dataclass
+class Cadence:
+    """Valid cadences for processing jobs triggered by cron jobs.
+
+    Valid cadences can be in either months or years
+    """
+
+    months3: str = "3mo"
+    months6: str = "6mo"
+    years1: str = "1yr"
+
+    @property
+    def valid_source(self) -> list[str]:
+        """Get all Cadences.
+
+        Returns
+        -------
+        list[str]
+            list of valid cadences.
+        """
+        return [self.years1, self.months3, self.months6]
+
+    @property
+    def days(self) -> dict:
+        """Cadence to days.
+
+        Returns
+        -------
+        dict
+            Cadence values in days.
+        """
+        return {self.years1: 365, self.months3: 90, self.months6: 180}
 
 
 def determine_job_version(
@@ -120,35 +155,49 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
     end_date : str
         End date to query the data.
     """
-    pass
-    # def find_most_recent_dep_start_date(dep, sd):
-    #     # Find the most recent start_date that matches the filters
-    #     return (
-    #         session.query(func.max(models.ScienceFiles.start_date))
-    #         .filter(
-    #             models.ScienceFiles.instrument == dep[0],
-    #             models.ScienceFiles.data_level == dep[1],
-    #             models.ScienceFiles.descriptor == dep[2],
-    #             models.ScienceFiles.start_date < dt.strptime(sd, "%Y%m%d"),
-    #         )
-    #         .scalar()
-    #     )
-    #
-    # if job_node["data_source"] == "idex":
-    #     # if job_node["data_source"] == "idex" and job_node["data_type"] == "l2b":
-    #     #     # IDEX l2b needs all the l1b evt datasets from the last 7 days
-    #     start_date_dt = dt.strptime(start_date, "%Y%m%d")
-    #
-    # # Check for ena l3 special case maps.
-    # else:
-    #     # Each of these maps has a l2 map and corresponding glows l3e files.
-    #     # To run this job, we need to find the most recent l2 map file and use that
-    #     # date range to query the glows l3e files.
-    #     deps = get_jobs("UPSTREAM", "HARD", *job_node)
-    #     # Get the l2 upstream dependency. There should only be one
-    #     l2_dep = [dep for dep in deps if dep[1] == "l2"][0]
-    #     # Find the most recent l2 map file
-    #     sd = find_most_recent_dep_start_date(l2_dep, start_date)
+
+    def find_most_recent_dep_start_date(dep, start_date):
+        # Find the most recent start_date that matches the filters
+        return (
+            session.query(func.max(models.ScienceFiles.start_date))
+            .filter(
+                models.ScienceFiles.instrument == dep[0],
+                models.ScienceFiles.data_level == dep[1],
+                models.ScienceFiles.descriptor == dep[2],
+                models.ScienceFiles.start_date <= dt.strptime(start_date, "%Y%m%d"),
+            )
+            .scalar()
+        )
+
+    start_date_dt = dt.strptime(start_date, "%Y%m%d")
+    if job_node["data_source"] == "idex":
+        # IDEX l2b needs all the l1b evt datasets since the last l2b job
+        # We need to find the most recent l2b job and use that start date in the query
+        # for upstream dependencies.
+        start_date_dt = start_date_dt - datetime.timedelta(days=1)
+        new_start_date = find_most_recent_dep_start_date(job_node, start_date_dt)
+        submit_all_jobs(
+            session, job_node, new_start_date, end_date, filter_dependencies=False
+        )
+    else:
+        # Each of these maps has a l2 map and corresponding glows l3e files.
+        # To run this job, we need to find the most recent l2 map file and use that
+        # date range to query the glows l3e files.
+        deps = get_jobs("UPSTREAM", "HARD", *job_node)
+        # Get the l2 upstream dependency. There should only be one
+        l2_dep = next(dep for dep in deps if dep[1] == "l2")
+        # Find the most recent l2 map file
+        new_start_date = find_most_recent_dep_start_date(l2_dep, start_date_dt)
+        # Get the number of days the map was created for
+        map_days = Cadence().days[job_node["descriptor"]]
+        new_end_date = start_date_dt + datetime.timedelta(days=map_days)
+        submit_all_jobs(
+            session,
+            job_node,
+            new_start_date,
+            new_end_date.strftime("%Y%m%d"),
+            filter_dependencies=False,
+        )
 
 
 def try_to_submit_job(
