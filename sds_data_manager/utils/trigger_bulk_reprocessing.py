@@ -5,7 +5,6 @@
 import argparse
 import contextlib
 import logging
-import os
 import urllib.request
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -37,8 +36,10 @@ def _get_url_response(url: str):
     try:
         # Open the URL and yield the response
         req = urllib.request.Request(url, method="POST")
-        # Add access token to request
-        req.add_header("Authorization", f"Bearer {os.environ.get('GALAXY_API_TOKEN')}")
+        # TODO add token to request
+        # # Add access token to request
+        # req.add_header("Authorization",
+        # f"Bearer {os.environ.get('GALAXY_API_TOKEN')}")
         with urllib.request.urlopen(req) as response:
             yield response
     except HTTPError as e:
