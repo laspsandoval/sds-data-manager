@@ -48,6 +48,8 @@ def lambda_handler(event, context):
     # TODO search spice/ folder
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         if "Contents" in page:
+            # Add keys that do not have spice/ in them. This code does not have
+            # SPICE synchronization logic yet.
             s3_files_dict.update(
                 {
                     obj["Key"]: obj["LastModified"]
