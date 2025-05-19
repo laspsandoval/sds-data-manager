@@ -5,6 +5,7 @@
 import argparse
 import contextlib
 import logging
+import os
 import urllib.request
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -35,7 +36,9 @@ def _get_url_response(url: str):
     """
     try:
         # Open the URL and yield the response
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url, method="POST")
+        # Add access token to request
+        req.add_header("Authorization", f"Bearer {os.environ.get('GALAXY_API_TOKEN')}")
         with urllib.request.urlopen(req) as response:
             yield response
     except HTTPError as e:
@@ -84,17 +87,19 @@ def trigger_bulk_reprocessing(
 
     # Add optional parameters if provided
     for param in ["instrument", "data_level", "descriptor"]:
-        if param:
+        if locals()[param] is not None:
             query_params[param] = locals()[param]
-
-    base = "https://api.dev.imap-mission.com/reprocess?"
+    base = "https://api.dev.imap-mission.com/auth/reprocess?"
     url = f"{base}{urlencode(query_params)}"
 
-    logger.info("Triggering bulk reprocessing for %s with url %s", query_params, url)
+    print(f"Triggering bulk reprocessing for {query_params} with url {url}")
     with _get_url_response(url) as response:
         # Retrieve the response
         response_text = response.read().decode("utf-8")
-        return response_text
+        if response.status == 200:
+            print("Reprocessing triggered successfully.")
+        else:
+            print(f"Reprocessing triggered with api result: {result}")
 
 
 if __name__ == "__main__":
@@ -108,7 +113,7 @@ if __name__ == "__main__":
         dest="start_date",
         action="store",
         required=True,
-        help="Start date in format YYYYMMDD",
+        help="Reprocessing start date in format YYYYMMDD",
     )
     parser.add_argument(
         "-e",
@@ -116,24 +121,31 @@ if __name__ == "__main__":
         dest="end_date",
         action="store",
         required=True,
-        help="End date in format YYYYMMDD",
+        help="Reprocessing end date in format YYYYMMDD",
     )
     parser.add_argument(
-        "-i", "--instrument", dest="instrument", action="store", help="Instrument name"
+        "-i",
+        "--instrument",
+        dest="instrument",
+        default=None,
+        action="store",
+        help="Instrument name to reprocess",
     )
     parser.add_argument(
         "-l",
         "--data_level",
         dest="data_level",
         action="store",
-        help="Data level (optional)",
+        default=None,
+        help="Data level to reprocess(optional)",
     )
     parser.add_argument(
         "-d",
         "--descriptor",
         dest="descriptor",
         action="store",
-        help="Descriptor for the data (optional)",
+        default=None,
+        help="Descriptor for the data to reprocess(optional)",
     )
 
     args = parser.parse_args()
@@ -150,5 +162,3 @@ if __name__ == "__main__":
         args.data_level,
         args.descriptor,
     )
-
-    print(f"Reprocessing triggered with api result: {result}")
