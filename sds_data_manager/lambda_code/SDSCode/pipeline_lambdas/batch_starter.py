@@ -1,8 +1,9 @@
 """Functions for supporting the batch starter component of the architecture."""
 
+import datetime
 import json
 import logging
-from datetime import datetime
+from datetime import datetime as dt
 
 import boto3
 import imap_data_access
@@ -30,6 +31,13 @@ logger.setLevel(logging.INFO)
 
 # Create a batch client
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
+
+SPECIAL_CASE_JOBS = [
+    ("hi", "l3", "h90-ena-h-sf-sp-full-hae-4deg-6mo"),
+    ("lo", "l3", "ilo-ena-h-sf-sp-full-hae-4deg-6mo"),
+    ("ultra", "l3", "u90-spx-hsf-sp-full-hae-nside8-3mo"),
+    ("idex", "l2b", "sci-1week"),
+]
 
 
 def determine_job_version(
@@ -98,6 +106,51 @@ def determine_job_version(
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
 
+def handle_special_case_jobs(session, job_node, start_date, end_date):
+    """Handle special case jobs that require more specific dependency querying.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    job_node : dict
+        job node to get the potential jobs from.
+    start_date : str
+        Start date to query the data.
+    end_date : str
+        End date to query the data.
+    """
+    pass
+    # def find_most_recent_dep_start_date(dep, sd):
+    #     # Find the most recent start_date that matches the filters
+    #     return (
+    #         session.query(func.max(models.ScienceFiles.start_date))
+    #         .filter(
+    #             models.ScienceFiles.instrument == dep[0],
+    #             models.ScienceFiles.data_level == dep[1],
+    #             models.ScienceFiles.descriptor == dep[2],
+    #             models.ScienceFiles.start_date < dt.strptime(sd, "%Y%m%d"),
+    #         )
+    #         .scalar()
+    #     )
+    #
+    # if job_node["data_source"] == "idex":
+    #     # if job_node["data_source"] == "idex" and job_node["data_type"] == "l2b":
+    #     #     # IDEX l2b needs all the l1b evt datasets from the last 7 days
+    #     start_date_dt = dt.strptime(start_date, "%Y%m%d")
+    #
+    # # Check for ena l3 special case maps.
+    # else:
+    #     # Each of these maps has a l2 map and corresponding glows l3e files.
+    #     # To run this job, we need to find the most recent l2 map file and use that
+    #     # date range to query the glows l3e files.
+    #     deps = get_jobs("UPSTREAM", "HARD", *job_node)
+    #     # Get the l2 upstream dependency. There should only be one
+    #     l2_dep = [dep for dep in deps if dep[1] == "l2"][0]
+    #     # Find the most recent l2 map file
+    #     sd = find_most_recent_dep_start_date(l2_dep, start_date)
+
+
 def try_to_submit_job(
     session: db.Session,
     job_info: dict,
@@ -123,7 +176,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = datetime.strftime(start_date, "%Y%m%d")
+    start_date_str = dt.strftime(start_date, "%Y%m%d")
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -187,7 +240,7 @@ def try_to_submit_job(
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_all_jobs(session, job_node, start_date, end_date):
+def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies=True):
     """Submit all jobs for the given job and upstream dependencies.
 
     Parameters
@@ -200,6 +253,13 @@ def submit_all_jobs(session, job_node, start_date, end_date):
         Start date to query the data.
     end_date : str
         End date to query the data.
+    filter_dependencies : bool
+        If True, filter the upstream dependencies to only include the files valid for
+        upstream primary science start_date. For cadence jobs, we should never filter
+        the upstream dependencies because we want all the files found within the cadence
+        job range. For IDEX l2b, this is a special case where we need the last 7 days
+        of housekeeping event message data, so we should not filter the dependencies.
+
     """
     # Submit downstream jobs for each upstream primary science dependency file.
     # Find the files that this job depends on
@@ -224,7 +284,7 @@ def submit_all_jobs(session, job_node, start_date, end_date):
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
-        job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
+        job_start_date = dt.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
@@ -234,7 +294,7 @@ def submit_all_jobs(session, job_node, start_date, end_date):
         )
         # If there is only one file to process, then we can use upstream dependencies
         # that have already been queried.
-        if num_jobs > 1:
+        if num_jobs > 1 or filter_dependencies:
             # Query for upstream files only needed for this job with using the
             # start date of the primary science file.
             upstream_deps_for_job = dependency.get_jobs(
@@ -265,6 +325,11 @@ def s3_processing_event(session, events):
     """
     # Since the SQS events can be batched together, we need to loop through
     # each event. In this loop, "event" represents one file landing.
+
+    # Check for glows l3e files. They might come in large groupings from the sqs because
+    # glows l3 processing might produce ~30 files at once. We only want one to trigger
+    # one downstream l3 survival probability map.
+    triggered_from_glows_l3e = False
     for event in events["Records"]:
         # Event details:
         logger.info(f"Individual event: {event}")
@@ -275,6 +340,17 @@ def s3_processing_event(session, events):
 
         file_obj = imap_data_access.file_validation.generate_imap_file_path(filename)
         input_obj = imap_data_access.processing_input.generate_imap_input(filename)
+
+        if input_obj.data_source == "glows" and input_obj.data_type == "l3e":
+            if triggered_from_glows_l3e:
+                logger.info(
+                    f"Already triggered from a glows l3e."
+                    f" Skipping trigger from filename {filename}"
+                )
+                continue
+            else:
+                triggered_from_glows_l3e = True
+
         if isinstance(file_obj, SPICEFilePath):
             # Set the start and end dates for the upstream event message.
             # TODO: fix date range if/when repoint file ingestion event is
@@ -322,7 +398,10 @@ def s3_processing_event(session, events):
             logger.info(f"No downstream dependencies found for the file: {filename}")
             continue
         for job in potential_jobs + potential_soft_jobs:
-            submit_all_jobs(session, job, start_date, end_date)
+            if job in SPECIAL_CASE_JOBS:
+                handle_special_case_jobs(session, job, start_date, end_date)
+            else:
+                submit_all_jobs(session, job, start_date, end_date)
 
 
 def bulk_reprocessing_event(session, events):
@@ -381,7 +460,10 @@ def bulk_reprocessing_event(session, events):
         ]
 
     for job in potential_jobs:
-        submit_all_jobs(session, job, start_date, end_date)
+        if job in SPECIAL_CASE_JOBS:
+            handle_special_case_jobs(session, job, start_date, end_date)
+        else:
+            submit_all_jobs(session, job, start_date, end_date)
 
 
 def lambda_handler(events: dict, context):
