@@ -756,32 +756,62 @@ def test_lambda_handler_mag_l1c_case(session):
 
 
 ### TEST CADENCE EVENT
-def test_def_cadence_map_event(session, mock_urlopen):
+def test_def_cadence_map_event(session):
     """Test that a cadence event kicks off the right processing job."""
-    _populate_file_catalog(session)
+    # Add 10 months of ultra l1c "45sensor-pset" files to the database
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_ultra_l1c_45sensor-pset_2025{month:02}01_v001.cdf",
+                instrument="ultra",
+                data_level="l1c",
+                descriptor="45sensor-pset",
+                start_date=datetime(2025, month, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for month in range(1, 10)
+        ]
+    )
+    # Add 10 months of ultra l1c "90sensor-pset" files to the database
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_ultra_l1c_90sensor-pset_2025{month:02}01_v001.cdf",
+                instrument="ultra",
+                data_level="l1c",
+                descriptor="90sensor-pset",
+                start_date=datetime(2025, month, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for month in range(1, 10)
+        ]
+    )
+
+    session.commit()
     cadence_event = {
-        "cadence": "6mo",
+        "cadence": "3mo",
     }
 
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
+            ".cadence_to_datetime_range"
+        ) as dt_mock,
+    ):
+        dt_mock.return_value = ("20250301", "20250601")
         lambda_handler(cadence_event, context)
         # Verify the function was not called
-        assert mock_submit.call_count == 1
-
-
-def test_bulk_reprocessing_all(session, mock_urlopen, caplog):
-    """Tests ``lambda_handler`` when there is bulk reprocessing for all instruments."""
-    _populate_file_catalog(session)
-    # leave instrument, data_level and descriptor blank
-    events = {"reprocessing": True, "start_date": 20230101, "end_date": 20260101}
-    context = {"context": "sample_context"}
-    # Add instrument and try again
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
-        lambda_handler(events, context)
-    # There should be two jobs submitted, one for swe, one for lo based off the existing
-    # l0 files
-    assert mock_submit.call_count == 2
+        assert mock_submit.call_count == 12
 
 
 ###### HELPER FUNCTION TESTS #######

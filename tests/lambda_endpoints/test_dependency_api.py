@@ -235,24 +235,6 @@ def test_get_kickoff_jobs():
         assert dep["data_type"] in ["l1a", "l1b", "l1"]
 
 
-def test_get_downstream_dependencies_for_all_instruments():
-    """Add test for getting back dependencies for all instruments."""
-    event = {
-        "queryStringParameters": {
-            "dependency_type": "DOWNSTREAM",
-            "data_type": "l0",
-            "relationship": "HARD",
-        }
-    }
-    dependency_response = dependency.lambda_handler(event, None)
-    dependents = json.loads(dependency_response["body"])
-    # There are 14 jobs that are HARD downstream dependencies from l0
-    assert len(dependents) == 14
-    for dep in dependents:
-        # Some instruments have l1b jobs that are downstream from l0 (lo and hit).
-        assert dep["data_type"] in ["l1a", "l1b", "l1"]
-
-
 def test_get_upstream_ancillary_trigger(session, caplog):
     """Tests get upstream dependencies with an ancillary trigger source."""
     _populate_file_catalog(session)

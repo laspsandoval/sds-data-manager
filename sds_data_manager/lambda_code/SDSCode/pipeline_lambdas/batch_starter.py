@@ -100,7 +100,7 @@ class Cadence:
 
 def cadence_to_datetime_range(
     cadence: str, as_str: bool = False
-) -> tuple[datetime | str, datetime | str]:
+) -> tuple[dt, dt] | tuple[str, str]:
     """Convert the cadence to a datetime range.
 
     Parameters
@@ -119,10 +119,10 @@ def cadence_to_datetime_range(
     if cadence not in cadence_obj.valid_cadence:
         raise ValueError(
             f"Invalid cadence: {cadence}. Valid cadences are:"
-            f" {cadence_obj.valid_source}"
+            f" {cadence_obj.valid_cadence}"
         )
-    end_date = datetime.today()
-    start_date = end_date - dt.timedelta(days=cadence_obj.days[cadence])
+    end_date = dt.today()
+    start_date = end_date - datetime.timedelta(days=cadence_obj.days[cadence])
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
         end_date = end_date.strftime("%Y%m%d")
@@ -162,91 +162,6 @@ class Cadence:
             Cadence values in days.
         """
         return {self.years1: 365, self.months3: 90, self.months6: 180}
-
-
-class IMAPDependencyFinderError(Exception):
-    """Base class for exceptions in this module."""
-
-    pass
-
-
-@contextlib.contextmanager
-def _get_url_response(url: str):
-    """Get the response from a URL.
-
-    This is a helper function to make it easier to handle
-    the different types of errors that can occur when
-    opening a URL and write out the response body.
-
-    Parameters
-    ----------
-    url: str
-        The url string to query the api with.
-
-    Yields
-    ------
-    http.client.HTTPResponse
-        The response object received from the API.
-    """
-    try:
-        # Open the URL and yield the response
-        with urllib.request.urlopen(url) as response:
-            yield response
-    except HTTPError as e:
-        message = (
-            f"HTTP Error: {e.code} - {e.reason}\n"
-            f"Server Message: {e.read().decode('utf-8')}"
-        )
-        raise IMAPDependencyFinderError(message) from e
-
-    except URLError as e:
-        message = f"URL Error: {e.reason}"
-        raise IMAPDependencyFinderError(message) from e
-
-
-def _get_dependencies(dependency_events: dict):
-    """Return dependencies for the input dependency requirements.
-
-    Parameters
-    ----------
-    dependency_events : dict
-        Dependency information to be used as query parameters in the API request url.
-
-    Returns
-    -------
-    Union[list, ProcessingInputCollection, None]
-        - A list of dependency dictionaries if "start_date" is not in the
-            request url .
-        - ProcessingInputCollection if 'start_date' is in the request url.
-        - None If the API returns a 206 status code indicating missing dependencies.
-
-    """
-    base = f"{os.getenv('IMAP_DATA_ACCESS_URL')}/dependency?"
-    url = f"{base}{urlencode(dependency_events)}"
-
-    logger.info("Finding dependencies for %s with url %s", dependency_events, url)
-    with _get_url_response(url) as response:
-        # Retrieve the response as a list of dictionaries containing the dependency
-        # information
-        dependency_response = response.read().decode("utf-8")
-        # Check for a 206 status code
-        if response.status == 206:
-            logger.info(f"Dependency API response: {dependency_response}")
-            return None
-
-        logger.debug(f"Received dependencies: {dependency_response}")
-    # The API returns different output formats depending on the query parameters:
-    # Without "start_date": Returns a list of dependency dictionaries.
-    #      This functionality is used when searching for downstream dependencies
-    # With "start_date" (requires "version" and "trigger_type"; "end_date" optional):
-    # Returns a serialized ProcessingInputCollection of files from S3
-    if "start_date" in url:
-        dependencies = ProcessingInputCollection()
-        dependencies.deserialize(dependency_response)
-    else:
-        dependencies = json.loads(dependency_response)
-
-    return dependencies
 
 
 def determine_job_version(
@@ -457,7 +372,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
+    start_date_str = dt.strftime(start_date, "%Y%m%d")
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -540,6 +455,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         not want to filter any dependencies out, for example, IDEX l2b needs all of the
         l1b housekeeping datasets in the collection. Default is set to True.
 
+
     """
     logger.info(f"Finding dependencies for the job node: {job_node}")
     # Submit downstream jobs for each upstream primary science dependency file.
@@ -569,7 +485,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
-        job_start_date = datetime.datetime.strptime(filepath.start_date, "%Y%m%d")
+        job_start_date = dt.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
@@ -626,7 +542,6 @@ def s3_processing_event(session, events):
         # Event details:
         logger.info("Individual event: " + json.dumps(event, indent=2))
         body = json.loads(event["body"])
-
         filename = body["detail"]["object"]["key"]
 
         file_obj = imap_data_access.file_validation.generate_imap_file_path(filename)
@@ -662,7 +577,7 @@ def s3_processing_event(session, events):
             # If there is no end date for the ancillary file, then it is implicitly
             # valid through today.
             if not end_date:
-                end_date = datetime.today().strftime("%Y%m%d")
+                end_date = dt.today().strftime("%Y%m%d")
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
         potential_jobs = dependency.get_jobs(
@@ -842,15 +757,38 @@ def cadence_processing_event(session, events):
         raise ValueError("Cadence event must include 'cadence' key.")
     # Get jobs for specified cadence.
     potential_jobs = dep_config.get_cadence_jobs(cadence)
+    logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
     start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
-    for job in potential_jobs:
-        j = {
-            "data_source": job[0],
-            "data_type": job[1],
-            "descriptor": job[2],
-        }
-        submit_all_jobs(session, j, start_date, end_date, filter_dependencies=False)
+    for job_node in potential_jobs:
+        upstream_dependencies = dependency.get_jobs(
+            data_source=job_node[0],
+            data_type=job_node[1],
+            descriptor=job_node[2],
+            dependency_type="UPSTREAM",
+            relationship="ALL",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not upstream_dependencies:
+            return
 
+        logger.info(f"All required dependencies found for the dependency: {job_node}")
+        # Find the first science processingInput that has the same source as the
+        # potential job. Use this to determine the start date.
+        primary_science = upstream_dependencies.get_science_inputs(job_node[0])[0]
+        # Find the start_date of the earliest file and use this as the start_date
+        # For the map.
+        job_start_date = primary_science.get_time_range()[0]
+        job_version = determine_job_version(
+            session=session,
+            instrument=job_node[0],
+            data_level=job_node[1],
+            descriptor=job_node[2],
+            start_date=job_start_date,
+        )
+        try_to_submit_job(
+            session, job_node, job_start_date, job_version, upstream_dependencies
+        )
 
 
 def lambda_handler(events: dict, context):
