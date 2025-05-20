@@ -116,7 +116,7 @@ def cadence_to_datetime_range(
         The start date and end date of the cadence. The end_date is set to today
     """
     cadence_obj = Cadence()
-    if cadence not in cadence_obj.valid_source:
+    if cadence not in cadence_obj.valid_cadence:
         raise ValueError(
             f"Invalid cadence: {cadence}. Valid cadences are:"
             f" {cadence_obj.valid_source}"
@@ -142,7 +142,7 @@ class Cadence:
     years1: str = "1yr"
 
     @property
-    def valid_source(self) -> list[str]:
+    def valid_cadence(self) -> list[str]:
         """Get all Cadences.
 
         Returns
@@ -849,7 +849,7 @@ def cadence_processing_event(session, events):
             "data_type": job[1],
             "descriptor": job[2],
         }
-        submit_all_jobs(session, j, start_date, end_date, cadence=True)
+        submit_all_jobs(session, j, start_date, end_date, filter_dependencies=False)
 
 
 
