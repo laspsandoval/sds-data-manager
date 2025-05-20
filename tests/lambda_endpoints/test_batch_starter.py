@@ -405,7 +405,7 @@ def test_idex_l2b(session):
         )
 
 
-def test_ultra_l3_map(session):
+def test_ultra_l3_map(session, caplog):
     """Tests ``lambda_handler` for unique ultra l3 map case."""
     # Add 6 months of glows l3e files and 1 ultra l2 map file. These are the
     # dependencies for the ultra l3 map job. The cadence for this example is 3 months of
@@ -445,13 +445,19 @@ def test_ultra_l3_map(session):
     )
     session.commit()
     events = {
+        # This event is for the ultra l3 map job. The glows l3e files may come in
+        # groupings. We want to test that only one job is submitted.
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_ultra_l2_u90-ena-h-sf-full-hae-nside8-3mo_'
-                '20240201_v001.cdf"}}'
+                '{"object": {"key": "imap_glows_l3e_ulc-sp_20240201_v001.cdf"}}'
                 "}"
-            }
+            },
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_glows_l3e_ulc-sp_20240301_v001.cdf"}}'
+                "}"
+            },
         ]
     }
     context = {"context": "sample_context"}
@@ -491,6 +497,9 @@ def test_ultra_l3_map(session):
                 ]
             },
         )
+        # Assert that only one job is submitted.
+        assert mock_batch_client.submit_job.call_count == 1
+        assert "Already tried to submit job from a glows l3e file." in caplog.text
 
 
 def test_lambda_handler_mag_l1c_case(session):

@@ -425,7 +425,7 @@ def s3_processing_event(session, events):
 
     # Check for glows l3e files. They might come in large groupings from the sqs because
     # glows l3 processing might produce ~30 files at once. We only want one to trigger
-    # one downstream l3 survival probability map.
+    # one downstream l3 survival probability map job in this case.
     triggered_from_glows_l3e = False
     for event in events["Records"]:
         # Event details:
