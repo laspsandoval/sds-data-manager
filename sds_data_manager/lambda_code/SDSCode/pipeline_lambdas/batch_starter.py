@@ -787,6 +787,7 @@ def cadence_processing_event(session, events):
             descriptor=job_node[2],
             start_date=job_start_date,
         )
+        # TODO write out upstream_dependencies.serialize() to a json file
         # Submit the map job with all of the upstream dependencies in the date range.
         try_to_submit_job(
             session, job_node, job_start_date, job_version, upstream_dependencies
