@@ -162,73 +162,90 @@ def determine_job_version(
 
 
 def handle_special_case_jobs(session, job_node, start_date, end_date):
-    """Handle special case jobs that require more specific dependency querying.
+    """Handle special case jobs that require specific dependency querying.
 
     Parameters
     ----------
     session : orm session
         Database session.
     job_node : dict
-        job node to get the potential jobs from.
+        Dictionary containing job details: data source, data type, and descriptor.
     start_date : str
-        Start date to query the data.
+        Start date for querying data in the format 'YYYYMMDD'.
     end_date : str
-        End date to query the data.
+        End date for querying data in the format 'YYYYMMDD'.
     """
 
-    def find_most_recent_dep_start_date(dep, start_date):
-        # Find the most recent start_date that matches the filters
+    def find_most_recent_start_date(dep: dict, date: dt) -> dt:
+        """Find the most recent start date for a dependency given the filters.
+
+        Parameters
+        ----------
+        dep : dict
+            Dependency details including data source, data type, and descriptor.
+        date : datetime
+            The date to filter dependencies up to.
+
+        Returns
+        -------
+        datetime
+            The most recent start date for the dependency.
+        """
         return (
             session.query(func.max(models.ScienceFiles.start_date))
             .filter(
                 models.ScienceFiles.instrument == dep["data_source"],
                 models.ScienceFiles.data_level == dep["data_type"],
                 models.ScienceFiles.descriptor == dep["descriptor"],
-                models.ScienceFiles.start_date <= start_date,
+                models.ScienceFiles.start_date <= date,
             )
             .scalar()
         )
 
-    start_date_dt = dt.strptime(start_date, "%Y%m%d")
+    start_date = dt.strptime(start_date, "%Y%m%d")
     if job_node["data_source"] == "idex":
-        # IDEX l2b needs all the l1b evt datasets since the last l2b job.
-        # We need to find the most recent l2b job (before the current start_date from
-        # the trigger file which is a l2a file).
+        # Special case for IDEX l2b jobs:
+        # IDEX l2b requires all l1b event datasets since the last l2b job.
+        # Find the most recent l2b job before the current start date.
         one_day = datetime.timedelta(days=1)
-        new_start_date = (
-            find_most_recent_dep_start_date(job_node, start_date_dt - one_day) + one_day
-        )
-        new_start_date = new_start_date.strftime("%Y%m%d")
-        # Add one day to the most recent start date because we only want data after.
-        # Submit the IDEX l2b job with the new start date and the original end date.
-        submit_all_jobs(
-            session, job_node, new_start_date, end_date, filter_dependencies=False
-        )
+        new_start_date = find_most_recent_start_date(job_node, start_date - one_day)
+        # Add one day from the most recent l2b job start date
+        # We need idex l1b evt files AFTER the last l2b job.
+        new_start_date = (new_start_date + one_day).strftime("%Y%m%d")
+        new_end_date = end_date
     else:
-        # Each of these maps has a l2 map and corresponding glows l3e files.
-        # To run this job, we need to find the most recent l2 map file and use that
-        # date range to query the glows l3e files.
+        # Special case for l3 hi, lo, and ultra map jobs:
+        # These jobs require both l2 map files and corresponding glows l3e files.
+        # Find the most recent l2 map file and use its date range to query glows l3e
+        # files.
         deps = get_jobs(
-            "UPSTREAM",
-            "HARD",
-            job_node["data_source"],
-            job_node["data_type"],
-            job_node["descriptor"],
+            dependency_type="UPSTREAM",
+            relationship="HARD",
+            data_source=job_node["data_source"],
+            data_type=job_node["data_type"],
+            descriptor=job_node["descriptor"],
         )
-        # Get the l2 upstream dependency. There should only be one
+        # Get the l2 upstream dependency (there should only be one).
         l2_dep = next(dep for dep in deps if dep["data_type"] == "l2")
-        # Find the most recent l2 map file
-        new_start_date = find_most_recent_dep_start_date(l2_dep, start_date_dt)
-        # Get the number of days the map was created for
-        map_days = Cadence().days[job_node["descriptor"].split("-")[-1]]
-        new_end_date = start_date_dt + datetime.timedelta(days=map_days)
-        submit_all_jobs(
-            session,
-            job_node,
-            new_start_date.strftime("%Y%m%d"),
-            new_end_date.strftime("%Y%m%d"),
-            filter_dependencies=False,
+        # Find the most recent l2 map file start_date.
+        new_start_date = find_most_recent_start_date(l2_dep, start_date).strftime(
+            "%Y%m%d"
         )
+        # Determine the number of days the map was created for based on the cadence.
+        map_days = Cadence().days[job_node["descriptor"].split("-")[-1]]
+        # Use the date range of the l2 map as the query range for the l3 job.
+        new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
+            "%Y%m%d"
+        )
+
+    # Submit the job with the updated date range.
+    submit_all_jobs(
+        session,
+        job_node,
+        new_start_date,
+        new_end_date,
+        filter_dependencies=False,
+    )
 
 
 def try_to_submit_job(
@@ -544,7 +561,9 @@ def bulk_reprocessing_event(session, events):
             # TODO fix bulk reprocessing for special cases.
             logger.warning(
                 f"bulk reprocessing is currently not supported for unique"
-                f" job: {job}. Handling will be added soon."
+                f" job: {job}. Handling will be added soon. Please reprocess "
+                f"the upstream {job['data_source']} to trigger reprocessing for"
+                f" {job['data_type']} "
             )
         else:
             submit_all_jobs(session, job, start_date, end_date)
