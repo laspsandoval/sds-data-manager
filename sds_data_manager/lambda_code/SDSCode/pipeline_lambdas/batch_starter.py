@@ -108,7 +108,7 @@ def cadence_to_datetime_range(
     cadence : str
         The cadence string (e.g. "3mo", "6mo", "1yr").
     as_str : bool
-        If True, return the start and end dates as strings. Default is True.
+        If True, return the start and end dates as strings. Default is False.
 
     Returns
     -------
@@ -771,7 +771,7 @@ def cadence_processing_event(session, events):
             end_date=end_date,
         )
         if not upstream_dependencies:
-            return
+            continue
 
         logger.info(f"All required dependencies found for the dependency: {job_node}")
         # Find the first science processingInput that has the same source as the

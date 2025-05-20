@@ -137,7 +137,7 @@ class BatchStarterLambda(Construct):
             id="ProcessingCadenceJob3month",
             rule_name="ProcessingCadenceJob3month",
             description="Trigger processing jobs every 3 months (30 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(30)),
+            schedule=aws_events.Schedule.rate(Duration.days(90)),
         )
         self.month6job = aws_events.Rule(
             scope=scope,
