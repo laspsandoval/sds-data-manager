@@ -34,10 +34,30 @@ logger.setLevel(logging.INFO)
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
 
 SPECIAL_CASE_JOBS = [
-    ("hi", "l3", "h90-ena-h-sf-sp-full-hae-4deg-6mo"),
-    ("lo", "l3", "ilo-ena-h-sf-sp-full-hae-4deg-6mo"),
-    ("ultra", "l3", "u90-spx-hsf-sp-full-hae-nside8-3mo"),
-    ("idex", "l2b", "sci-1week"),
+    {
+        "data_source": "hi",
+        "data_type": "l3",
+        "descriptor": "h90-ena-h-sf-sp-full-hae-4deg-6mo",
+        "relationship": "HARD",
+    },
+    {
+        "data_source": "lo",
+        "data_type": "l3",
+        "descriptor": "ilo-ena-h-sf-sp-full-hae-4deg-6mo",
+        "relationship": "HARD",
+    },
+    {
+        "data_source": "ultra",
+        "data_type": "l3",
+        "descriptor": "u90-spx-hsf-sp-full-hae-nside8-3mo",
+        "relationship": "HARD",
+    },
+    {
+        "data_source": "idex",
+        "data_type": "l2b",
+        "descriptor": "sci-1week",
+        "relationship": "HARD",
+    },
 ]
 
 
@@ -161,21 +181,26 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         return (
             session.query(func.max(models.ScienceFiles.start_date))
             .filter(
-                models.ScienceFiles.instrument == dep[0],
-                models.ScienceFiles.data_level == dep[1],
-                models.ScienceFiles.descriptor == dep[2],
-                models.ScienceFiles.start_date <= dt.strptime(start_date, "%Y%m%d"),
+                models.ScienceFiles.instrument == dep["data_source"],
+                models.ScienceFiles.data_level == dep["data_type"],
+                models.ScienceFiles.descriptor == dep["descriptor"],
+                models.ScienceFiles.start_date <= start_date,
             )
             .scalar()
         )
 
     start_date_dt = dt.strptime(start_date, "%Y%m%d")
     if job_node["data_source"] == "idex":
-        # IDEX l2b needs all the l1b evt datasets since the last l2b job
-        # We need to find the most recent l2b job and use that start date in the query
-        # for upstream dependencies.
-        start_date_dt = start_date_dt - datetime.timedelta(days=1)
-        new_start_date = find_most_recent_dep_start_date(job_node, start_date_dt)
+        # IDEX l2b needs all the l1b evt datasets since the last l2b job.
+        # We need to find the most recent l2b job (before the current start_date from
+        # the trigger file which is a l2a file).
+        one_day = datetime.timedelta(days=1)
+        new_start_date = (
+            find_most_recent_dep_start_date(job_node, start_date_dt - one_day) + one_day
+        )
+        new_start_date = new_start_date.strftime("%Y%m%d")
+        # Add one day to the most recent start date because we only want data after.
+        # Submit the IDEX l2b job with the new start date and the original end date.
         submit_all_jobs(
             session, job_node, new_start_date, end_date, filter_dependencies=False
         )
@@ -183,18 +208,24 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         # Each of these maps has a l2 map and corresponding glows l3e files.
         # To run this job, we need to find the most recent l2 map file and use that
         # date range to query the glows l3e files.
-        deps = get_jobs("UPSTREAM", "HARD", *job_node)
+        deps = get_jobs(
+            "UPSTREAM",
+            "HARD",
+            job_node["data_source"],
+            job_node["data_type"],
+            job_node["descriptor"],
+        )
         # Get the l2 upstream dependency. There should only be one
-        l2_dep = next(dep for dep in deps if dep[1] == "l2")
+        l2_dep = next(dep for dep in deps if dep["data_type"] == "l2")
         # Find the most recent l2 map file
         new_start_date = find_most_recent_dep_start_date(l2_dep, start_date_dt)
         # Get the number of days the map was created for
-        map_days = Cadence().days[job_node["descriptor"]]
+        map_days = Cadence().days[job_node["descriptor"].split("-")[-1]]
         new_end_date = start_date_dt + datetime.timedelta(days=map_days)
         submit_all_jobs(
             session,
             job_node,
-            new_start_date,
+            new_start_date.strftime("%Y%m%d"),
             new_end_date.strftime("%Y%m%d"),
             filter_dependencies=False,
         )
@@ -390,11 +421,11 @@ def s3_processing_event(session, events):
         file_obj = imap_data_access.file_validation.generate_imap_file_path(filename)
         input_obj = imap_data_access.processing_input.generate_imap_input(filename)
 
-        if input_obj.data_source == "glows" and input_obj.data_type == "l3e":
+        if input_obj.source == "glows" and input_obj.data_type == "l3e":
             if triggered_from_glows_l3e:
                 logger.info(
-                    f"Already triggered from a glows l3e."
-                    f" Skipping trigger from filename {filename}"
+                    f"Already tried to submit job from a glows l3e file."
+                    f"Skipping trigger from filename {filename}"
                 )
                 continue
             else:
@@ -510,7 +541,11 @@ def bulk_reprocessing_event(session, events):
 
     for job in potential_jobs:
         if job in SPECIAL_CASE_JOBS:
-            handle_special_case_jobs(session, job, start_date, end_date)
+            # TODO fix bulk reprocessing for special cases.
+            logger.warning(
+                f"bulk reprocessing is currently not supported for unique"
+                f" job: {job}. Handling will be added soon."
+            )
         else:
             submit_all_jobs(session, job, start_date, end_date)
 

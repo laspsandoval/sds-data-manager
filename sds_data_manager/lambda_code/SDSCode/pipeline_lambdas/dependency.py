@@ -660,7 +660,7 @@ def get_upstream_dependency_inputs(
 
             dep_string = f"{dep=}\n{start_date=}\n{end_date=}"
 
-            logger.info(f"Searching for files matching dep={dep_string}")
+            logger.info(f"Searching for files matching {dep_string}")
 
             records = get_files(session, dep, start_date, end_date)
             if not records and relationship == Relationship.HARD:
@@ -892,5 +892,5 @@ def get_jobs(
         end_date=end_date,
     )
 
-    logger.info(f"Found dependencies: {dependencies}.")
+    logger.info(f"Found dependencies: {upstream_dependencies_output}.")
     return upstream_dependencies_output
