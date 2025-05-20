@@ -73,7 +73,7 @@ class Cadence:
     years1: str = "1yr"
 
     @property
-    def valid_source(self) -> list[str]:
+    def valid_cadence(self) -> list[str]:
         """Get all Cadences.
 
         Returns
@@ -209,6 +209,9 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         # Find the most recent l2b job before the current start date.
         one_day = datetime.timedelta(days=1)
         new_start_date = find_most_recent_start_date(job_node, start_date - one_day)
+        if not new_start_date:
+            # If there are no l2b jobs, subtract 7 days from the start date.
+            new_start_date = start_date - datetime.timedelta(days=7)
         # Add one day from the most recent l2b job start date
         # We need idex l1b evt files AFTER the last l2b job.
         new_start_date = (new_start_date + one_day).strftime("%Y%m%d")
@@ -228,11 +231,21 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         # Get the l2 upstream dependency (there should only be one).
         l2_dep = next(dep for dep in deps if dep["data_type"] == "l2")
         # Find the most recent l2 map file start_date.
-        new_start_date = find_most_recent_start_date(l2_dep, start_date).strftime(
-            "%Y%m%d"
-        )
+        new_start_date = find_most_recent_start_date(l2_dep, start_date)
+        if not new_start_date:
+            raise ValueError(
+                f"No l2 map files found for {l2_dep['data_source']} "
+                f"{l2_dep['data_type']} {l2_dep['descriptor']}."
+            )
+        new_start_date = new_start_date.strftime("%Y%m%d")
         # Determine the number of days the map was created for based on the cadence.
-        map_days = Cadence().days[job_node["descriptor"].split("-")[-1]]
+        cadence_key = job_node["descriptor"].split("-")[-1]
+        if cadence_key not in Cadence().valid_cadence:
+            raise ValueError(
+                f"Invalid cadence '{cadence_key}' from descriptor"
+                f"'{job_node['descriptor']}'."
+            )
+        map_days = Cadence().days[cadence_key]
         # Use the date range of the l2 map as the query range for the l3 job.
         new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
             "%Y%m%d"
