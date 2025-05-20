@@ -352,8 +352,7 @@ class DependencyConfig:
             List of unique nodes.
         """
         job_nodes = []
-        # Only check for downstream nodes. Only dependencies that are jobs can be
-        # downstream. For example, an ancillary dependency cannot be a downstream dep.
+        # Add each node to the list.
         for relationship in self.relationship.valid_relationship:
             for dependency_type in self.dependency_type.valid_dependency_type:
                 [

@@ -138,10 +138,6 @@ class BatchStarterLambda(Construct):
             rule_name="ProcessingCadenceJob3month",
             description="Trigger processing jobs every 3 months (30 days)",
             schedule=aws_events.Schedule.rate(Duration.days(30)),
-            target=aws_events_targets.LambdaFunction(
-                lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "3mo"}),
-            ),
         )
         self.month6job = aws_events.Rule(
             scope=scope,
@@ -149,10 +145,6 @@ class BatchStarterLambda(Construct):
             rule_name="ProcessingCadenceJob6month",
             description="Trigger processing jobs every 6 months (180 days)",
             schedule=aws_events.Schedule.rate(Duration.days(180)),
-            target=aws_events_targets.LambdaFunction(
-                lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "6mo"}),
-            ),
         )
         self.year1job = aws_events.Rule(
             scope=scope,
@@ -160,8 +152,22 @@ class BatchStarterLambda(Construct):
             rule_name="ProcessingCadenceJob1year",
             description="Trigger processing jobs once a year (365 days)",
             schedule=aws_events.Schedule.rate(Duration.days(365)),
-            target=aws_events_targets.LambdaFunction(
-                lambda_.IFunction(self.instrument_lambda),
-                event=aws_events.RuleTargetInput().from_object({"cadence": "1yr"}),
+        )
+        self.year1job.add_target(
+            aws_events_targets.LambdaFunction(
+                self.instrument_lambda,
+                event=aws_events.RuleTargetInput.from_object({"cadence": "1yr"}),
+            )
+        )
+        self.month6job.add_target(
+            aws_events_targets.LambdaFunction(
+                self.instrument_lambda,
+                event=aws_events.RuleTargetInput.from_object({"cadence": "6mo"}),
+            ),
+        )
+        self.month3job.add_target(
+            aws_events_targets.LambdaFunction(
+                self.instrument_lambda,
+                event=aws_events.RuleTargetInput.from_object({"cadence": "3mo"}),
             ),
         )

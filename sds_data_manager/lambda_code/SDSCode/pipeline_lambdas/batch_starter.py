@@ -742,14 +742,14 @@ def bulk_reprocessing_event(session, events):
 
 
 def cadence_processing_event(session, events):
-    """Process events triggerd by cron jobs.
+    """Process events triggerd by EventBridge rules.
 
     Parameters
     ----------
     session : orm session
         Database session.
     events : dict
-        Event input from a cron job.
+        Event input from an Event Bridge rule.
     """
     dep_config = DependencyConfig()
     cadence = events.get("cadence")
@@ -758,6 +758,7 @@ def cadence_processing_event(session, events):
     # Get jobs for specified cadence.
     potential_jobs = dep_config.get_cadence_jobs(cadence)
     logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
+    # Get the start and end dates for this job
     start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
     for job_node in potential_jobs:
         upstream_dependencies = dependency.get_jobs(
@@ -786,6 +787,7 @@ def cadence_processing_event(session, events):
             descriptor=job_node[2],
             start_date=job_start_date,
         )
+        # Submit the map job with all of the upstream dependencies in the date range.
         try_to_submit_job(
             session, job_node, job_start_date, job_version, upstream_dependencies
         )
@@ -826,7 +828,7 @@ def lambda_handler(events: dict, context):
     5. Event of a cron job cadence trigger.
         Example event:
             {
-                "cadence": months3 or years1,
+                "cadence": 3mo, 1yr, or 6mo
             }
 
     Parameters

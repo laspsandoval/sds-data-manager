@@ -810,7 +810,8 @@ def test_def_cadence_map_event(session):
     ):
         dt_mock.return_value = ("20250301", "20250601")
         lambda_handler(cadence_event, context)
-        # Verify the function was not called
+        # Verify the function was called 12 times. There are currently 12 l2 map jobs
+        # with the cadence of 3 months.
         assert mock_submit.call_count == 12
 
 
