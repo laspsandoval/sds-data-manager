@@ -42,7 +42,11 @@ def lambda_handler(event, context):
     # add session, pick model like in indexer and add query to filter_as
     query_params = event["queryStringParameters"]
     # get desired table for query
-    query_table = query_params.get("table")
+    if query_params.get("table") is not None:
+        query_table = query_params.get("table")
+    else:
+        query_table = "science"
+
     logger.info(f"Querying table: {query_table}")
     model = table_models[query_table]
 
