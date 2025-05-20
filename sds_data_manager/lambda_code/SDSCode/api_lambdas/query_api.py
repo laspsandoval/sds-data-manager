@@ -43,15 +43,14 @@ def lambda_handler(event, context):
     query_params = event["queryStringParameters"]
     # get desired table for query
     query_table = query_params.get("table")
+    logger.info(f"Querying table: {query_table}")
     model = table_models[query_table]
 
     # select the given table for the query
     query = select(model.__table__)
     # get a list of all valid search parameters
     valid_parameters = [
-        column.key
-        for column in model.__table__.columns
-        if column.key not in ["id"]
+        column.key for column in model.__table__.columns if column.key not in ["id"]
     ]
     # Up until this point, valid_parameters are the same as the
     # columns in the ScienceFiles table. And looks like we removed
@@ -88,15 +87,13 @@ def lambda_handler(event, context):
         # setup the correct "where" time condition
         if param == "start_date":
             query = query.where(
-                model.start_date
-                >= datetime.datetime.strptime(value, "%Y%m%d")
+                model.start_date >= datetime.datetime.strptime(value, "%Y%m%d")
             )
         elif param == "end_date":
             # TODO: Need to discuss as a team how to handle date queries. For now,
             # the date queries will only look at the file start_date.
             query = query.where(
-                model.start_date
-                <= datetime.datetime.strptime(value, "%Y%m%d")
+                model.start_date <= datetime.datetime.strptime(value, "%Y%m%d")
             )
         elif param == "ingestion_start_date":
             # filtering by ingestion date
@@ -116,6 +113,7 @@ def lambda_handler(event, context):
     # We want to order the query returns by the filename
     # This will implicitly sort by: instrument, data level, descriptor, start_date, ...
     # Default for the table is by the ascending id so by insertion order
+    # This fails for the SPICE table because it uses 'file_name'
     query = query.order_by(model.file_path)
 
     with db.Session() as session:
@@ -128,6 +126,8 @@ def lambda_handler(event, context):
     # Also remove values that are not needed by users
     for result in search_results:
         result["start_date"] = result["start_date"].strftime("%Y%m%d")
+        if result.get("end_date"):
+            result["end_date"] = result["end_date"].strftime("%Y%m%d")
         d = result["ingestion_date"]
         if d.tzinfo is not None:
             # If the datetime has a timezone, convert it to UTC and remove the timezone
