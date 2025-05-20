@@ -343,6 +343,47 @@ class DependencyConfig:
                     )
         return kick_off_jobs
 
+    def get_all_nodes(self) -> list:
+        """Get a unique list of nodes from the dependency graph.
+
+        Returns
+        -------
+        list
+            List of unique nodes.
+        """
+        job_nodes = []
+        # Only check for downstream nodes. Only dependencies that are jobs can be
+        # downstream. For example, an ancillary dependency cannot be a downstream dep.
+        for relationship in self.relationship.valid_relationship:
+            for dependency_type in self.dependency_type.valid_dependency_type:
+                [
+                    job_nodes.extend(dep)
+                    for dep in self.dependencies[relationship][dependency_type].values()
+                ]
+        return list(set(job_nodes))
+
+    def get_cadence_jobs(self, cadence: str) -> list:
+        """Get cadence jobs.
+
+        Parameters
+        ----------
+        cadence : str
+            Cadence string. Either "3mo", "6mo", or "1yr".
+
+        Returns
+        -------
+        list
+            List of cadence jobs.
+        """
+        # Cadence jobs are only at data level l2 and contain either "3mo", "6mo", or
+        # "1yr" strings as the last part of the descriptor.
+
+        return [
+            node
+            for node in self.get_all_nodes()
+            if node[1] == "l2" and cadence == node[2].split("-")[-1]
+        ]
+
 
 def get_dependencies(node, dependency_type, relationship):
     """Lookup the dependencies for the given ``node``.
