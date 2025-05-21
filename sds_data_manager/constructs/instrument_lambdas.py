@@ -104,7 +104,6 @@ class BatchStarterLambda(Construct):
         self.instrument_lambda.add_to_role_policy(lambda_policy)
 
         data_bucket.grant_read_write(self.instrument_lambda)
-
         rds_secret = secrets.Secret.from_secret_name_v2(
             self, "rds_secret", rds_construct.secret_name
         )
@@ -131,20 +130,20 @@ class BatchStarterLambda(Construct):
         # Set up eventBridge rules to trigger batch starter lambda.
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
         # Create an eventBridge rule for 3, 6, and 12, month cadences.
-
+        # TODO: IMWG is still deciding on the number of days for each cadence.
         self.month3job = aws_events.Rule(
             scope=scope,
             id="ProcessingCadenceJob3month",
             rule_name="ProcessingCadenceJob3month",
             description="Trigger processing jobs every 3 months (30 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(90)),
+            schedule=aws_events.Schedule.rate(Duration.days(91)),
         )
         self.month6job = aws_events.Rule(
             scope=scope,
             id="ProcessingCadenceJob6month",
             rule_name="ProcessingCadenceJob6month",
             description="Trigger processing jobs every 6 months (180 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(180)),
+            schedule=aws_events.Schedule.rate(Duration.days(182)),
         )
         self.year1job = aws_events.Rule(
             scope=scope,

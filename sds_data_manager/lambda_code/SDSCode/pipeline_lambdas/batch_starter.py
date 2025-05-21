@@ -6,6 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime as dt
+from pathlib import Path
 
 import boto3
 import imap_data_access
@@ -14,12 +15,14 @@ from imap_data_access import (
     ScienceFilePath,
     SPICEFilePath,
 )
+from imap_data_access.file_validation import CadenceFilePath
 from imap_data_access.processing_input import (
     ProcessingInputCollection,
 )
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
+from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -161,7 +164,8 @@ class Cadence:
         dict
             Cadence values in days.
         """
-        return {self.years1: 365, self.months3: 90, self.months6: 180}
+        # TODO: IMWG is still deciding on the number of days for each cadence.
+        return {self.years1: 365, self.months3: 91, self.months6: 182}
 
 
 def determine_job_version(
@@ -352,7 +356,7 @@ def try_to_submit_job(
     job_info: dict,
     start_date: datetime,
     version: str,
-    upstream_dependencies: ProcessingInputCollection,
+    upstream_dependencies: ProcessingInputCollection | str,
 ):
     """Try to submit a batch job with the given job information.
 
@@ -366,8 +370,10 @@ def try_to_submit_job(
         Start date of the data.
     version : str
         Version of the job.
-    upstream_dependencies : ProcessingInputCollection
-        Input collection of upstream dependencies.
+    upstream_dependencies : ProcessingInputCollection or str
+        Either a filename string of a JSON file containing the serialized upstream
+        dependencies. Otherwise, a ProcessingInputCollection of the upstream
+        dependencies.
     """
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
@@ -400,6 +406,13 @@ def try_to_submit_job(
     # Reformat the upstream dependencies from dependency call to match
     # what batch job expects.
     # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
+
+    # If upstream dependencies are a ProcessingInputCollection, serialize them into a
+    # string. Otherwise, it should be a string representing the filename of a JSON file
+    # containing the serialized upstream dependencies.
+    if isinstance(upstream_dependencies, ProcessingInputCollection):
+        upstream_dependencies = upstream_dependencies.serialize()
+
     batch_command = [
         "--instrument",
         instrument,
@@ -412,7 +425,7 @@ def try_to_submit_job(
         "--version",
         version,
         "--dependency",
-        f"{upstream_dependencies.serialize()}",
+        upstream_dependencies,
         "--upload-to-sdc",
     ]
 
@@ -741,6 +754,32 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
+def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
+    """Upload a JSON file containing a cadence job's dependencies to S3.
+
+    Parameters
+    ----------
+    cadence_file_path : Path
+        The cadence JSON file to upload.
+    upstream_dependencies : ProcessingInputCollection
+        The upstream dependencies to serialize and upload.
+    """
+    # Check if the file already exists
+    if os.path.isfile(cadence_file_path):
+        raise KeyError(f"{cadence_file_path} already exists, cannot create JSON file.")
+    cadence_file_path.parent.mkdir(parents=True, exist_ok=True)
+    # Dump the serialized dependencies to a JSON file.
+    with open(cadence_file_path, "w") as f:
+        json.dump(upstream_dependencies.serialize(), f)
+
+    # call the upload API handler directly
+    response = upload_api.lambda_handler(
+        {"pathParameters": {"proxy": cadence_file_path.as_posix()}}, None
+    )
+    if response["statusCode"] == 200:
+        logger.info(f"Cadence file uploaded successfully to s3: {response['body']}")
+
+
 def cadence_processing_event(session, events):
     """Process events triggerd by EventBridge rules.
 
@@ -755,8 +794,8 @@ def cadence_processing_event(session, events):
     cadence = events.get("cadence")
     if not cadence:
         raise ValueError("Cadence event must include 'cadence' key.")
-    # Get jobs for specified cadence.
-    potential_jobs = dep_config.get_cadence_jobs(cadence)
+    # Get jobs for specified cadence. Sort them for testing purposes.
+    potential_jobs = sorted(dep_config.get_cadence_jobs(cadence), key=lambda x: x[2])
     logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
     # Get the start and end dates for this job
     start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
@@ -787,10 +826,33 @@ def cadence_processing_event(session, events):
             descriptor=job_node[2],
             start_date=job_start_date,
         )
-        # TODO write out upstream_dependencies.serialize() to a json file
-        # Submit the map job with all of the upstream dependencies in the date range.
+        # Serialize the upstream dependencies to a JSON file. This is necessary for map
+        # jobs with many dependencies to avoid passing a long list of dependencies
+        # directly to the batch job. Imap processing code will read the JSON file and
+        # deserialize the dependencies.
+        cadence_dependency_path = CadenceFilePath.generate_from_inputs(
+            instrument=job_node[0],
+            data_level=job_node[1],
+            descriptor=job_node[2],
+            start_time=job_start_date.strftime("%Y%m%d"),
+            version=job_version,
+            extension="json",
+        )
+        cadence_dependency_path = Path(cadence_dependency_path.construct_path())
+        upload_cadence_file(cadence_dependency_path, upstream_dependencies)
+        # Submit the map job with all of the upstream dependencies in the date range
+        # (as JSON file).
+        node = {
+            "data_source": job_node[0],
+            "descriptor": job_node[2],
+            "data_type": job_node[1],
+        }
         try_to_submit_job(
-            session, job_node, job_start_date, job_version, upstream_dependencies
+            session,
+            node,
+            job_start_date,
+            job_version,
+            os.path.basename(cadence_dependency_path),
         )
 
 

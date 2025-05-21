@@ -2,10 +2,12 @@
 
 import json
 import logging
+import pathlib
 import os
 from datetime import datetime
 from unittest.mock import Mock, patch
 
+import imap_data_access
 import pytest
 from imap_data_access.processing_input import (
     ProcessingInputCollection,
@@ -28,6 +30,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
     determine_job_version,
     lambda_handler,
+    upload_cadence_file,
 )
 
 from .conftest import (
@@ -756,7 +759,7 @@ def test_lambda_handler_mag_l1c_case(session):
 
 
 ### TEST CADENCE EVENT
-def test_def_cadence_map_event(session):
+def test_def_cadence_map_event(setup_s3, session, tmp_path):
     """Test that a cadence event kicks off the right processing job."""
     # Add 10 months of ultra l1c "45sensor-pset" files to the database
     session.add_all(
@@ -799,23 +802,70 @@ def test_def_cadence_map_event(session):
     cadence_event = {
         "cadence": "3mo",
     }
-
     context = {"context": "sample_context"}
     with (
-        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "BATCH_CLIENT") as mock_batch_client,
         patch(
             "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
             ".cadence_to_datetime_range"
         ) as dt_mock,
+        patch("imap_data_access.config", {"DATA_DIR": tmp_path}),
     ):
         dt_mock.return_value = ("20250301", "20250601")
         lambda_handler(cadence_event, context)
         # Verify the function was called 12 times. There are currently 12 l2 map jobs
         # with the cadence of 3 months.
-        assert mock_submit.call_count == 12
+        assert mock_batch_client.submit_job.call_count == 12
+        # Assert that the function was called with the cadence json file path
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="ultra-l2-u90-ena-h-sf-nsp-full-hae-6deg-3mo-job-12",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-ultra",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "ultra",
+                    "--data-level",
+                    "l2",
+                    "--descriptor",
+                    "u90-ena-h-sf-nsp-full-hae-6deg-3mo",
+                    "--start-date",
+                    "20250301",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo_20250301_v001.json",
+                    "--upload-to-sdc",
+                ]
+            },
+        )
 
 
 ###### HELPER FUNCTION TESTS #######
+def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
+    """Test uploading a cadence json file to S3."""
+    dependencies = ProcessingInputCollection(
+        ScienceInput("imap_ultra_l1c_45sensor-pset_20250201_v001.cdf")
+    )
+    cadence_file = (
+        imap_data_access.file_validation.CadenceFilePath.generate_from_inputs(
+            "ultra",
+            "l2",
+            "u90-ena-h-sf-nsp-full-hae-6deg-3mo",
+            "20250301",
+            "v001",
+            "json",
+        )
+    )
+    with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
+        cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
+        upload_cadence_file(cadence_dependency_path, dependencies)
+    assert cadence_dependency_path.exists()
+    with open(cadence_dependency_path) as f:
+        cadence_json = json.load(f)
+    assert cadence_json == dependencies.serialize()
+
+
 def test_determine_max_version(session):
     """Test the ``determine_job_version`` function."""
     _populate_processing_table(session)

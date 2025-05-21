@@ -123,21 +123,29 @@ def lambda_handler(event, context):
             try:
                 # file_obj will be None if it's not a SPICE file
                 file_obj = imap_data_access.AncillaryFilePath(filename)
-            except imap_data_access.ImapFilePath.InvalidImapFileError as e:
-                # Did not match any file types
-                logger.info(str(e))
-                logger.error(
-                    f"Filename {filename} does not match ancillary, science, or SPICE."
-                )
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps(
-                        "error: file name does "
-                        "not match ancillary, "
-                        "science, or SPICE file "
-                        "naming convention."
-                    ),
-                }
+            except imap_data_access.ImapFilePath.InvalidImapFileError:
+                # Not a ANCILLARY file, continue on to cadence files
+                logger.info(f"Filename {filename} is not a valid ANCILLARY file.")
+                try:
+                    file_obj = imap_data_access.file_validation.CadenceFilePath(
+                        filename
+                    )
+                except imap_data_access.ImapFilePath.InvalidImapFileError as e:
+                    # Did not match any file types
+                    logger.info(str(e))
+                    logger.error(
+                        f"Filename {filename} does not match ancillary, science, "
+                        f"cadence, or SPICE."
+                    )
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps(
+                            "error: file name does "
+                            "not match ancillary, "
+                            "science, cadence, or SPICE file "
+                            "naming convention."
+                        ),
+                    }
 
     s3_key_path = file_obj.construct_path()
     # Strip off the data directory to get the upload path + name
