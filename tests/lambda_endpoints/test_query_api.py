@@ -370,9 +370,9 @@ def test_invalid_param_ancillary_query(session):
 
     expected_body = json.dumps(
         "repointing is not a valid query parameter for ancillary table. "
-        + "Valid query parameters are: ['file_path', 'instrument', "
-        "'descriptor', 'start_date', 'end_date', 'version', 'extension', "
-        "'ingestion_date', 'ingestion_start_date', 'ingestion_end_date']"
+        + "Valid query parameters are: ['file_path', 'instrument', 'descriptor'"
+          ", 'start_date', 'version', 'extension', 'ingestion_date', "
+          "'ingestion_start_date', 'end_date', 'ingestion_end_date']"
     )
 
     returned_query = query_api.lambda_handler(event=event, context={})
