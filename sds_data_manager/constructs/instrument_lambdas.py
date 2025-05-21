@@ -118,7 +118,12 @@ class BatchStarterLambda(Construct):
 
         # Add api route for triggering batch starter with a bulk reprocessing request
         api.add_route(
-            route="/reprocess",  # TODO replace with /auth/reprocess
+            route="/reprocess",
+            http_method="POST",
+            lambda_function=self.instrument_lambda,
+        )
+        api.add_route(
+            route="/authorized/reprocess",
             http_method="POST",
             lambda_function=self.instrument_lambda,
         )
