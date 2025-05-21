@@ -75,7 +75,7 @@ def lambda_handler(event, context):
             response = {
                 "statusCode": 400,
                 "body": json.dumps(
-                    f"{param} is not a valid query parameter for {query_table} table."
+                    f"{param} is not a valid query parameter for {query_table} table. "
                     + f"Valid query parameters are: {valid_parameters}"
                 ),
                 "headers": {
