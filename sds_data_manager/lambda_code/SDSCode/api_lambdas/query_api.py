@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def lambda_handler(event, context):
+# Too many conditional branches
+def lambda_handler(event, context):  # noqa: PLR0912
     """Entry point to the query API lambda.
 
     Parameters
