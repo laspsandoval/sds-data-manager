@@ -243,7 +243,9 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
             descriptor=job_node["descriptor"],
         )
         # Get the l2 upstream dependency (there should only be one).
-        l2_dep = next(dep for dep in deps if dep["data_type"] == "l2")
+        l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
+        if l2_dep is None:
+            raise ValueError(f"Missing required l2 dependency for job: {job_node}.")
         # Find the most recent l2 map file start_date.
         new_start_date = find_most_recent_start_date(l2_dep, start_date)
         if not new_start_date:
