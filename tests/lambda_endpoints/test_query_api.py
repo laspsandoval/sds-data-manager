@@ -297,3 +297,82 @@ def test_sorting_of_query(session):
 
     assert returned_query["statusCode"] == 200
     assert returned_query["body"] == expected_response
+
+
+def _populate_test_data_ancillary_table(session):
+    """Put a filepath into the test data for the ancillary table."""
+    filepath = "test/ancillary/file/path/imap_mag_test_20210101_v001.csv"
+
+    metadata_params = {
+        "file_path": filepath,
+        "instrument": "mag",
+        "descriptor": "test",
+        "start_date": datetime.datetime.strptime("20210101", "%Y%m%d"),
+        "version": "v001",
+        "extension": "csv",
+        "ingestion_date": datetime.datetime.strptime(
+            "2021-01-01 10:13:12+00:00", "%Y-%m-%d %H:%M:%S%z"
+        ),
+    }
+
+    # Add data to the AncillaryFiles table and return the session
+    session.add(models.AncillaryFiles(**metadata_params))
+    session.commit()
+
+
+@pytest.fixture
+def expected_response_ancillary_table():
+    """Return the expected response for ancillary table."""
+    expected_response = json.dumps(
+        [
+            {
+                "file_path": "test/ancillary/file/path/imap_mag_test_20210101_v001.csv",
+                "instrument": "mag",
+                "descriptor": "test",
+                "start_date": "20210101",
+                "version": "v001",
+                "extension": "csv",
+                "ingestion_date": "20210101 10:13:12",
+            }
+        ]
+    )
+    return expected_response
+
+
+def test_query_result_body_ancillary_table(session):
+    """Tests that the query result body can be loaded for ancillary table."""
+    _populate_test_data_ancillary_table(session)
+    event = {"queryStringParameters": {}}
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert json.loads(returned_query["body"])
+
+
+def test_query_ancillary_table(session, expected_response_ancillary_table):
+    """Test querying the ancillary table with a valid parameter."""
+    _populate_test_data_ancillary_table(session)
+
+    event = {"queryStringParameters": {"instrument": "mag", "table": "ancillary"}}
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 200
+    assert returned_query["body"] == expected_response_ancillary_table
+
+
+def test_invalid_param_ancillary_query(session):
+    """Test invalid parameter on the ancillary table."""
+    _populate_test_data_ancillary_table(session)
+
+    event = {"queryStringParameters": {"repointing": "123", "table": "ancillary"}}
+
+    expected_body = json.dumps(
+        "repointing is not a valid query parameter for ancillary table. "
+        + f"Valid query parameters are: "
+    )
+
+    returned_query = query_api.lambda_handler(event=event, context={})
+
+    assert returned_query["statusCode"] == 400
+    assert returned_query["body"] == expected_body
