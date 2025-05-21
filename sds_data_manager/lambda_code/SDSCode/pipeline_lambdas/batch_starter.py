@@ -160,7 +160,7 @@ def determine_job_version(
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
 
-def handle_special_case_jobs(session, job_node, start_date, end_date):
+def get_special_case_date_range(session, job_node, start_date, end_date):
     """Determine the start and end dates for special case jobs.
 
     This function is used to handle unique processing jobs where the normal method of
@@ -172,6 +172,9 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
     use, we need to find the most recent l2 map file and its cadence, e.g 3mo, 6mo, or
     1yr and use that range to query for all the GLOWS l3e and l2 map files.
 
+    Note: This does not handle cadence jobs. Cadence jobs are handled in the
+    cadence_processing_event function.
+
     Parameters
     ----------
     session : orm session
@@ -182,6 +185,11 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         Start date for querying data in the format 'YYYYMMDD'.
     end_date : str
         End date for querying data in the format 'YYYYMMDD'.
+
+    Returns
+    -------
+    tuple
+        Tuple containing the start and end date for the job.
     """
 
     def find_most_recent_start_date(dep: dict, date: datetime) -> datetime:
@@ -266,15 +274,7 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
             "%Y%m%d"
         )
-
-    # Submit the job with the updated date range.
-    submit_all_jobs(
-        session,
-        job_node,
-        new_start_date,
-        new_end_date,
-        filter_dependencies=False,
-    )
+    return new_start_date, new_end_date
 
 
 def try_to_submit_job(
@@ -400,6 +400,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     if not upstream_dependencies:
         return
 
+    # Handle special case reprocessing jobs.
     logger.info(f"All required dependencies found for the dependency: {job_node}")
     # Find the first science processingInput that has the same source as the
     # potential job. Use this to determine the start date.
@@ -522,11 +523,68 @@ def s3_processing_event(session, events):
         if not potential_jobs and not potential_soft_jobs:
             logger.info(f"No downstream dependencies found for the file: {filename}")
             continue
+
         for job in potential_jobs + potential_soft_jobs:
             if job in SPECIAL_CASE_JOBS:
-                handle_special_case_jobs(session, job, start_date, end_date)
+                start_date, end_date = get_special_case_date_range(
+                    session, job, start_date, end_date
+                )
+                logger.info(
+                    f"Found a special case job. Using date range: "
+                    f"{start_date} - {end_date}"
+                )
+                filter_dependencies = False
             else:
-                submit_all_jobs(session, job, start_date, end_date)
+                filter_dependencies = True
+
+            submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
+
+
+def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_date):
+    """Handle special case reprocessing jobs.
+
+    This function is used to handle unique jobs when reprocessing is triggered.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    job_node : dict
+        job node to get the potential jobs from.
+    start_date : str
+        Start date to query the data.
+    end_date : str
+        End date to query the data.
+    """
+    # get the upstream dependencies for the reprocessing date range
+    upstream_dependencies = dependency.get_jobs(
+        data_source=job_node["data_source"],
+        data_type=job_node["data_type"],
+        descriptor=job_node["descriptor"],
+        dependency_type="UPSTREAM",
+        relationship="ALL",
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if not upstream_dependencies:
+        return
+    # find the primary science processingInput that has the same source as the job.
+    primary_science = upstream_dependencies.get_science_inputs(job_node["data_source"])[
+        0
+    ]
+    logger.info(
+        f"Handling special case reprocessing. Found "
+        f"{len(primary_science.imap_file_paths)} files to reprocess."
+    )
+    for filepath in primary_science.imap_file_paths:
+        # For each file to reprocess we need to determine the correct
+        # start and end date to use for the job.
+        start_date, end_date = get_special_case_date_range(
+            session, job_node, filepath.start_date, filepath.start_date
+        )
+        submit_all_jobs(
+            session, job_node, start_date, end_date, filter_dependencies=False
+        )
 
 
 def bulk_reprocessing_event(session, events):
@@ -586,13 +644,7 @@ def bulk_reprocessing_event(session, events):
 
     for job in potential_jobs:
         if job in SPECIAL_CASE_JOBS:
-            # TODO fix bulk reprocessing for special cases.
-            logger.warning(
-                f"bulk reprocessing is currently not supported for unique"
-                f" job: {job}. Handling will be added soon. Please reprocess "
-                f"the upstream {job['data_source']} to trigger reprocessing for"
-                f" {job['data_type']} "
-            )
+            handle_special_case_reprocessing_jobs(session, job, start_date, end_date)
         else:
             submit_all_jobs(session, job, start_date, end_date)
 

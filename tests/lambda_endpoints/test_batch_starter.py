@@ -502,6 +502,65 @@ def test_ultra_l3_map(session, caplog):
         assert "Already tried to submit job from a GLOWS l3e file." in caplog.text
 
 
+def test_bulk_reprocessing_special_case(session):
+    """Tests ``lambda_handler`` for a special case in bulk reprocessing."""
+    # Add test data to the database for the special case
+    # Add idex l1b evt files. Some of these will be used as dependencies for the job.
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_idex_l1b_evt_2024020{day}_v001.cdf",
+                instrument="idex",
+                data_level="l1b",
+                descriptor="evt",
+                start_date=datetime(2024, 2, day),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for day in range(1, 3)
+        ]
+    )
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_idex_{level}_sci-1week_2024020{day}_v001.cdf",
+                instrument="idex",
+                data_level=level,
+                descriptor="sci-1week",
+                start_date=datetime(2024, 2, day),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for day, level in zip([1, 2, 1, 2], ["l2b", "l2b", "l2a", "l2a"])
+        ]
+    )
+    session.commit()
+
+    # Bulk reprocessing event for the special case
+    events = {
+        "queryStringParameters": {
+            "reprocessing": "True",
+            "start_date": "20240201",
+            "end_date": "20240210",
+            "instrument": "idex",
+            "data_level": "l2b",
+            "descriptor": "sci-1week",
+        }
+    }
+    context = {"context": "None"}
+
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(events, context)
+        # Verify that 2 l2b jobs were reprocessed
+        assert mock_batch_client.submit_job.call_count == 2
+
+
 def test_lambda_handler_mag_l1c_case(session):
     """Tests ``lambda_handler` for unique mac l1c case."""
     # Mock the situation where mag l1b files trigger batch starter back to back.
