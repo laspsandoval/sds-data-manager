@@ -499,7 +499,7 @@ def test_ultra_l3_map(session, caplog):
         )
         # Assert that only one job is submitted.
         assert mock_batch_client.submit_job.call_count == 1
-        assert "Already tried to submit job from a glows l3e file." in caplog.text
+        assert "Already tried to submit job from a GLOWS l3e file." in caplog.text
 
 
 def test_lambda_handler_mag_l1c_case(session):
