@@ -232,7 +232,7 @@ def test_invalid_query(session):
     _populate_test_data(session)
     event = {"queryStringParameters": {"size": "500"}}
     expected_response = json.dumps(
-        "size is not a valid query parameter. "
+        "size is not a valid query parameter for science table. "
         + "Valid query parameters are: "
         + "['file_path', 'instrument', 'data_level', 'descriptor', "
         "'start_date', 'repointing', 'version', 'extension', 'ingestion_date', "
