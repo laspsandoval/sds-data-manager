@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-# Too many conditional branches
 def lambda_handler(event, context):
     """Entry point to the query API lambda.
 
@@ -58,10 +57,12 @@ def lambda_handler(event, context):
         column.key for column in model.__table__.columns if column.key not in ["id"]
     ]
     # Up until this point, valid_parameters are the same as the
-    # columns in the ScienceFiles table. And looks like we removed
+    # columns in the selected table. And looks like we removed
     # the "id" column from the list. But we also need to add
-    # 'end_date' to the list of valid_parameters.
-    valid_parameters.append("end_date")
+    # 'end_date' to the list of valid_parameters but only for
+    # the science table.
+    if query_table != "ancillary":
+        valid_parameters.append("end_date")
     valid_parameters.append("ingestion_start_date")
     valid_parameters.append("ingestion_end_date")
 
