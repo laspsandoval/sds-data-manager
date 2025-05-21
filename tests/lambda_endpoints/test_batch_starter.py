@@ -5,6 +5,7 @@ import logging
 import pathlib
 import os
 from datetime import datetime
+from os.path import basename
 from unittest.mock import Mock, patch
 
 import imap_data_access
@@ -847,15 +848,8 @@ def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
     dependencies = ProcessingInputCollection(
         ScienceInput("imap_ultra_l1c_45sensor-pset_20250201_v001.cdf")
     )
-    cadence_file = (
-        imap_data_access.file_validation.CadenceFilePath.generate_from_inputs(
-            "ultra",
-            "l2",
-            "u90-ena-h-sf-nsp-full-hae-6deg-3mo",
-            "20250301",
-            "v001",
-            "json",
-        )
+    cadence_file = imap_data_access.file_validation.CadenceFilePath(
+        basename(cadence_file)
     )
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
