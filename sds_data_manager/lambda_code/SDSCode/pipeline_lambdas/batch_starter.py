@@ -4,7 +4,6 @@ import datetime
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime as dt
 
 import boto3
 import imap_data_access
@@ -162,7 +161,16 @@ def determine_job_version(
 
 
 def handle_special_case_jobs(session, job_node, start_date, end_date):
-    """Handle special case jobs that require specific dependency querying.
+    """Determine the start and end dates for special case jobs.
+
+    This function is used to handle unique processing jobs where the normal method of
+    determining the start and end date for the upstream dependencies is insufficient.
+    For example, l3 survival probability correlated maps for HI, LO, and ULTRA
+    depend on their respective l2 maps and multiple GLOWS l3e files (containing the
+    survival probabilities) covering the date of the l2 map. We cannot simply use the
+    start date of the trigger file in this case. To determine the correct start date to
+    use, we need to find the most recent l2 map file and its cadence, e.g 3mo, 6mo, or
+    1yr and use that range to query for all the GLOWS l3e and l2 map files.
 
     Parameters
     ----------
@@ -176,7 +184,7 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
         End date for querying data in the format 'YYYYMMDD'.
     """
 
-    def find_most_recent_start_date(dep: dict, date: dt) -> dt:
+    def find_most_recent_start_date(dep: dict, date: datetime) -> datetime:
         """Find the most recent start date for a dependency given the filters.
 
         Parameters
@@ -202,24 +210,30 @@ def handle_special_case_jobs(session, job_node, start_date, end_date):
             .scalar()
         )
 
-    start_date = dt.strptime(start_date, "%Y%m%d")
+    start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
     if job_node["data_source"] == "idex":
         # Special case for IDEX l2b jobs:
         # IDEX l2b requires all l1b event datasets since the last l2b job.
-        # Find the most recent l2b job before the current start date.
+        # Since a l2a file can only trigger IDEX l2b, (l1b files are HARD_NO_TRIGGER)
+        # the start_date is from the current l2a file. This means we need to subtract
+        # one day from the query to 'find_most_recent_start_date' to get the last l2b
+        # job before the current l2a file.
         one_day = datetime.timedelta(days=1)
         new_start_date = find_most_recent_start_date(job_node, start_date - one_day)
         if not new_start_date:
             # If there are no l2b jobs, subtract 7 days from the start date.
             new_start_date = start_date - datetime.timedelta(days=7)
-        # Add one day from the most recent l2b job start date
-        # We need idex l1b evt files AFTER the last l2b job.
+        # Add one day from the most recent l2b job start date since we need IDEX l1b evt
+        # files AFTER the last l2b job.
         new_start_date = (new_start_date + one_day).strftime("%Y%m%d")
+        # The end date stays the same since we want the cutoff of the query to be the
+        # end_date (for in-situ science files besides GLOWS, the start_date is the same
+        # as the end_date for normal processing) of the current l2a file.
         new_end_date = end_date
     else:
-        # Special case for l3 hi, lo, and ultra map jobs:
-        # These jobs require both l2 map files and corresponding glows l3e files.
-        # Find the most recent l2 map file and use its date range to query glows l3e
+        # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
+        # These jobs require both l2 map files and corresponding GLOWS l3e files.
+        # Find the most recent l2 map file and use its date range to query GLOWS l3e
         # files.
         deps = get_jobs(
             dependency_type="UPSTREAM",
@@ -286,7 +300,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = dt.strftime(start_date, "%Y%m%d")
+    start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -365,10 +379,9 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         End date to query the data.
     filter_dependencies : bool
         If True, filter the upstream dependencies to only include the files valid for
-        upstream primary science start_date. For cadence jobs, we should never filter
-        the upstream dependencies because we want all the files found within the cadence
-        job range. For IDEX l2b, this is a special case where we need the last 7 days
-        of housekeeping event message data, so we should not filter the dependencies.
+        upstream primary science start_date. There are a few special cases where we do
+        not want to filter any dependencies out, for example, IDEX l2b needs all of the
+        l1b housekeeping datasets in the collection. Default is set to True.
 
     """
     # Submit downstream jobs for each upstream primary science dependency file.
@@ -394,7 +407,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
-        job_start_date = dt.strptime(filepath.start_date, "%Y%m%d")
+        job_start_date = datetime.datetime.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
@@ -436,8 +449,8 @@ def s3_processing_event(session, events):
     # Since the SQS events can be batched together, we need to loop through
     # each event. In this loop, "event" represents one file landing.
 
-    # Check for glows l3e files. They might come in large groupings from the sqs because
-    # glows l3 processing might produce ~30 files at once. We only want one to trigger
+    # Check for GLOWS l3e files. They might come in large groupings from the sqs because
+    # GLOWS l3 processing might produce ~30 files at once. We only want one to trigger
     # one downstream l3 survival probability map job in this case.
     triggered_from_glows_l3e = False
     for event in events["Records"]:
@@ -454,7 +467,7 @@ def s3_processing_event(session, events):
         if input_obj.source == "glows" and input_obj.data_type == "l3e":
             if triggered_from_glows_l3e:
                 logger.info(
-                    f"Already tried to submit job from a glows l3e file."
+                    f"Already tried to submit job from a GLOWS l3e file."
                     f"Skipping trigger from filename {filename}"
                 )
                 continue
