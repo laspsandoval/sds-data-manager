@@ -3,6 +3,7 @@
 import datetime
 import json
 import logging
+from collections import namedtuple
 
 from sqlalchemy import func, select
 
@@ -15,7 +16,7 @@ logger.setLevel(logging.INFO)
 
 
 # Too many conditional branches
-def lambda_handler(event, context):  # noqa: PLR0912
+def lambda_handler(event, context):
     """Entry point to the query API lambda.
 
     Parameters
@@ -34,22 +35,21 @@ def lambda_handler(event, context):  # noqa: PLR0912
 
     logger.info("Received event: " + json.dumps(event, indent=2))
 
-    table_models = {
-        "science": models.ScienceFiles,
-        "ancillary": models.AncillaryFiles,
-        "SPICE": models.SPICEFiles,
-    }
+    TableModels = namedtuple("TableModels", ["science", "ancillary", "spice"])
+
+    table_models = TableModels(
+        science=models.ScienceFiles,
+        ancillary=models.AncillaryFiles,
+        spice=models.SPICEFiles,
+    )
 
     # add session, pick model like in indexer and add query to filter_as
     query_params = event["queryStringParameters"]
     # get desired table for query
-    if query_params.get("table") is not None:
-        query_table = query_params.get("table")
-    else:
-        query_table = "science"
+    query_table = query_params.get("table", "science")
 
     logger.info(f"Querying table: {query_table}")
-    model = table_models[query_table]
+    model = getattr(table_models, query_table)
 
     # select the given table for the query
     query = select(model.__table__)
@@ -75,7 +75,7 @@ def lambda_handler(event, context):  # noqa: PLR0912
             response = {
                 "statusCode": 400,
                 "body": json.dumps(
-                    f"{param} is not a valid query parameter. "
+                    f"{param} is not a valid query parameter for table {query_table}."
                     + f"Valid query parameters are: {valid_parameters}"
                 ),
                 "headers": {
@@ -84,8 +84,8 @@ def lambda_handler(event, context):  # noqa: PLR0912
                 },
             }
             logger.debug(
-                f"Received an invalid query parameter [{param}],"
-                " valid options are: {valid_parameters}"
+                f"Received an invalid query parameter [{param}] for table "
+                "{query_table}, valid options are: {valid_parameters}"
             )
             return response
         # check if we're search for start_date or end date or ingestion dates to
