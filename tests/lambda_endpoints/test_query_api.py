@@ -330,6 +330,7 @@ def expected_response_ancillary_table():
                 "instrument": "mag",
                 "descriptor": "test",
                 "start_date": "20210101",
+                "end_date": None,
                 "version": "v001",
                 "extension": "csv",
                 "ingestion_date": "20210101 10:13:12",
@@ -342,7 +343,7 @@ def expected_response_ancillary_table():
 def test_query_result_body_ancillary_table(session):
     """Tests that the query result body can be loaded for ancillary table."""
     _populate_test_data_ancillary_table(session)
-    event = {"queryStringParameters": {}}
+    event = {"queryStringParameters": {"table": "ancillary"}}
 
     returned_query = query_api.lambda_handler(event=event, context={})
 
@@ -369,7 +370,9 @@ def test_invalid_param_ancillary_query(session):
 
     expected_body = json.dumps(
         "repointing is not a valid query parameter for ancillary table. "
-        + f"Valid query parameters are: "
+        + "Valid query parameters are: ['file_path', 'instrument', "
+        "'descriptor', 'start_date', 'end_date', 'version', 'extension', "
+        "'ingestion_date', 'ingestion_start_date', 'ingestion_end_date']"
     )
 
     returned_query = query_api.lambda_handler(event=event, context={})
