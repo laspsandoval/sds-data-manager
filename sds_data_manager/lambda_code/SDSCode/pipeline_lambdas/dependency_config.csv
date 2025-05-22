@@ -508,3 +508,13 @@ ultra, l2, u90-ena-h-sf-full-hae-nside8-3mo, ultra, l3, u90-spx-hsf-sp-full-hae-
 ephemeris_reconstructed, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+
+
+# Ultra L2 depends on the following Spice products:
+# spacecraft clock kernel, leap seconds kernel, general frame kernel pointing attitude kernel
+# science frame kernel - TODO: this is not yet available through the system
+frames, spice, historical, ultra, l2, all, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, ultra, l2, all, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, ultra, l2, all, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, ultra, l2, all, HARD_NO_TRIGGER, DOWNSTREAM
+# sci-frames, spice, historical, ultra, l2, all, HARD_NO_TRIGGER, DOWNSTREAM
