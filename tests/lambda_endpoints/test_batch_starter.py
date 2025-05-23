@@ -1,5 +1,6 @@
 """Tests the batch starter."""
 
+import datetime as dt
 import json
 import logging
 import pathlib
@@ -843,6 +844,26 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
 
 
 ###### HELPER FUNCTION TESTS #######
+def test_cadence_to_datetime_range():
+    """Test the ``cadence_to_datetime_range`` function."""
+    with patch(
+        "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter.datetime"
+    ) as mock_datetime:
+        mock_datetime.datetime.today.return_value = datetime(2024, 4, 1)
+        mock_datetime.timedelta.side_effect = dt.timedelta
+        start_date, end_date = batch_starter.cadence_to_datetime_range(
+            cadence="3mo", as_str=True
+        )
+        assert start_date == "20240102"
+        assert end_date == "20240401"
+
+        start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="6mo")
+        assert (end_date - start_date) == dt.timedelta(days=180)
+
+        start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="1yr")
+        assert (end_date - start_date) == dt.timedelta(days=365)
+
+
 def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
     """Test uploading a cadence json file to S3."""
     dependencies = ProcessingInputCollection(

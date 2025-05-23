@@ -4,8 +4,7 @@ import datetime
 import json
 import logging
 import os
-from dataclasses import dataclass
-from datetime import datetime as dt
+from enum import IntEnum
 from pathlib import Path
 
 import boto3
@@ -103,7 +102,7 @@ class Cadence:
 
 def cadence_to_datetime_range(
     cadence: str, as_str: bool = False
-) -> tuple[dt, dt] | tuple[str, str]:
+) -> tuple[datetime, datetime] | tuple[str, str]:
     """Convert the cadence to a datetime range.
 
     Parameters
@@ -118,14 +117,8 @@ def cadence_to_datetime_range(
     tuple(datetime, datetime)
         The start date and end date of the cadence. The end_date is set to today
     """
-    cadence_obj = Cadence()
-    if cadence not in cadence_obj.valid_cadence:
-        raise ValueError(
-            f"Invalid cadence: {cadence}. Valid cadences are:"
-            f" {cadence_obj.valid_cadence}"
-        )
-    end_date = dt.today()
-    start_date = end_date - datetime.timedelta(days=cadence_obj.days[cadence])
+    end_date = datetime.datetime.today()
+    start_date = end_date - datetime.timedelta(days=CadenceDays.str_lookup(cadence))
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
         end_date = end_date.strftime("%Y%m%d")
@@ -133,39 +126,40 @@ def cadence_to_datetime_range(
     return start_date, end_date
 
 
-@dataclass
-class Cadence:
-    """Valid cadences for processing jobs triggered by cron jobs.
+class CadenceDays(IntEnum):
+    """Enum for a cadence value and the corresponding days."""
 
-    Valid cadences can be in either months or years
-    """
+    THREE_MONTHS = 90
+    SIX_MONTHS = 180
+    ONE_YEAR = 365
 
-    months3: str = "3mo"
-    months6: str = "6mo"
-    years1: str = "1yr"
+    @staticmethod
+    def valid_cadence_str():
+        """Get a list of valid cadence strings."""
+        return ["3mo", "6mo", "1yr"]
 
-    @property
-    def valid_cadence(self) -> list[str]:
-        """Get all Cadences.
+    @classmethod
+    def str_lookup(cls, cadence_str: str):
+        """Get a CadenceDays value from a string.
 
-        Returns
-        -------
-        list[str]
-            list of valid cadences.
-        """
-        return [self.years1, self.months3, self.months6]
-
-    @property
-    def days(self) -> dict:
-        """Cadence to days.
+        Parameters
+        ----------
+        cadence_str : str
+            The cadence string (e.g. "3mo", "6mo", "1yr").
 
         Returns
         -------
-        dict
-            Cadence values in days.
+        CadenceDays
+            The corresponding CadenceDays enum value.
         """
-        # TODO: IMWG is still deciding on the number of days for each cadence.
-        return {self.years1: 365, self.months3: 91, self.months6: 182}
+        if cadence_str not in cls.valid_cadence_str():
+            raise ValueError(
+                f"Invalid cadence: {cadence_str}. Valid cadences are:"
+                f" {cls.valid_cadence_str}"
+            )
+        return {"3mo": cls.THREE_MONTHS, "6mo": cls.SIX_MONTHS, "1yr": cls.ONE_YEAR}[
+            cadence_str
+        ]
 
 
 def determine_job_version(
@@ -378,7 +372,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = dt.strftime(start_date, "%Y%m%d")
+    start_date_str = datetime.strftime(start_date, "%Y%m%d")
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -498,7 +492,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
-        job_start_date = dt.strptime(filepath.start_date, "%Y%m%d")
+        job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
@@ -590,7 +584,7 @@ def s3_processing_event(session, events):
             # If there is no end date for the ancillary file, then it is implicitly
             # valid through today.
             if not end_date:
-                end_date = dt.today().strftime("%Y%m%d")
+                end_date = datetime.datetime.today().strftime("%Y%m%d")
         # Potential jobs are the instruments that depend on the current file,
         # which are the downstream dependencies.
         potential_jobs = dependency.get_jobs(
@@ -844,7 +838,7 @@ def cadence_processing_event(session, events):
         try_to_submit_job(
             session,
             node,
-            datetime.datetime.strptime(start_date, "%Y%m%d"),
+            datetime.strptime(start_date, "%Y%m%d"),
             job_version,
             os.path.basename(cadence_dependency_path),
         )

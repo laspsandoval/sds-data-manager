@@ -131,40 +131,40 @@ class BatchStarterLambda(Construct):
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
         # Create an eventBridge rule for 3, 6, and 12, month cadences.
         # TODO: IMWG is still deciding on the number of days for each cadence.
-        self.month3job = aws_events.Rule(
+        self.event_3month = aws_events.Rule(
             scope=scope,
             id="ProcessingCadenceJob3month",
             rule_name="ProcessingCadenceJob3month",
             description="Trigger processing jobs every 3 months (30 days)",
             schedule=aws_events.Schedule.rate(Duration.days(91)),
         )
-        self.month6job = aws_events.Rule(
+        self.event_6month = aws_events.Rule(
             scope=scope,
             id="ProcessingCadenceJob6month",
             rule_name="ProcessingCadenceJob6month",
             description="Trigger processing jobs every 6 months (180 days)",
             schedule=aws_events.Schedule.rate(Duration.days(182)),
         )
-        self.year1job = aws_events.Rule(
+        self.event_1year = aws_events.Rule(
             scope=scope,
             id="ProcessingCadenceJob1year",
             rule_name="ProcessingCadenceJob1year",
             description="Trigger processing jobs once a year (365 days)",
             schedule=aws_events.Schedule.rate(Duration.days(365)),
         )
-        self.year1job.add_target(
+        self.event_1year.add_target(
             aws_events_targets.LambdaFunction(
                 self.instrument_lambda,
                 event=aws_events.RuleTargetInput.from_object({"cadence": "1yr"}),
             )
         )
-        self.month6job.add_target(
+        self.event_6month.add_target(
             aws_events_targets.LambdaFunction(
                 self.instrument_lambda,
                 event=aws_events.RuleTargetInput.from_object({"cadence": "6mo"}),
             ),
         )
-        self.month3job.add_target(
+        self.event_3month.add_target(
             aws_events_targets.LambdaFunction(
                 self.instrument_lambda,
                 event=aws_events.RuleTargetInput.from_object({"cadence": "3mo"}),
