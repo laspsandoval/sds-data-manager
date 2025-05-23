@@ -372,7 +372,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = datetime.strftime(start_date, "%Y%m%d")
+    start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -492,7 +492,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
     for filepath in primary_science.imap_file_paths:
-        job_start_date = datetime.strptime(filepath.start_date, "%Y%m%d")
+        job_start_date = datetime.datetime.strptime(filepath.start_date, "%Y%m%d")
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
@@ -838,7 +838,7 @@ def cadence_processing_event(session, events):
         try_to_submit_job(
             session,
             node,
-            datetime.strptime(start_date, "%Y%m%d"),
+            datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
             os.path.basename(cadence_dependency_path),
         )
