@@ -336,6 +336,7 @@ class DependencyConfig:
                                 "data_source": node[0],
                                 "data_type": node[1],
                                 "descriptor": node[2],
+                                "relationship": relationship,
                             }
                             for node in child_node
                         ]
@@ -688,7 +689,10 @@ def get_upstream_dependency_inputs(
             )
 
             records = get_files(session, dep, start_date, end_date)
-            if not records and relationship == Relationship.HARD:
+            if not records and relationship in [
+                Relationship.HARD,
+                Relationship.HARD_NO_TRIGGER,
+            ]:
                 logger.info(f"No records found for dependency: {dep_string}")
                 return None
 

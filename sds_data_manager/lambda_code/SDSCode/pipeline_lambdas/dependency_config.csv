@@ -229,7 +229,9 @@ attitude_history, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 
 idex, l1b, sci-1week, idex, l2a, sci-1week, HARD, DOWNSTREAM
 idex, l2a, sci-1week, idex, l2b, sci-1week, HARD, DOWNSTREAM
-idex, l1b, evt, idex, l2b, sci-1week, SOFT_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, idex, l2b, all, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, idex, l2b, all, HARD_NO_TRIGGER, DOWNSTREAM
+idex, l1b, evt, idex, l2b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 idex, l2b, sci-1week, idex, l2c, sci-1week, HARD, DOWNSTREAM
 
 # <---- LO Dependencies ---->
@@ -461,3 +463,8 @@ ultra, l1c, 90sensor-pset, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-1yr, HARD, 
 ultra, l1c, 90sensor-pset, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD, DOWNSTREAM
 ultra, l1c, 45sensor-pset, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD, DOWNSTREAM
 ultra, l1c, 45sensor-pset, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD, DOWNSTREAM
+
+
+# Ultra L3 survival probability map Dependencies:
+glows, l3e, ulc-sp, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
+ultra, l2, u90-ena-h-sf-full-hae-nside8-3mo, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
