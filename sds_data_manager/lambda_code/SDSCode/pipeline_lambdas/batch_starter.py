@@ -610,8 +610,12 @@ def s3_processing_event(session, events):
                 filter_dependencies = True
 
             submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
-    # When all the records from the sqs event have been processed, we can safely delete
-    # the message from the queue.
+        # When the record from the sqs event has been processed, we can safely
+        # delete it from the queue.
+        SQS_CLIENT.delete_message(
+            QueueUrl=event["eventSourceARN"],
+            ReceiptHandle=event["receiptHandle"],
+        )
 
 
 def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_date):
