@@ -30,6 +30,8 @@ logger.setLevel(logging.INFO)
 
 # Create a batch client
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
+# Create an sqs client
+SQS_CLIENT = boto3.client("sqs", region_name="us-west-2")
 
 SPECIAL_CASE_JOBS = [
     {
@@ -608,6 +610,8 @@ def s3_processing_event(session, events):
                 filter_dependencies = True
 
             submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
+    # When all the records from the sqs event have been processed, we can safely delete
+    # the message from the queue.
 
 
 def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_date):
