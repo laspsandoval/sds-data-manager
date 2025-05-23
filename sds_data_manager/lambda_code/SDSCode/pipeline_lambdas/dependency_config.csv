@@ -502,14 +502,6 @@ ultra, l1c, 45sensor-pset, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD, 
 ultra, l1c, 45sensor-pset, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD, DOWNSTREAM
 
 
-# Ultra L3 survival probability map Dependencies:
-glows, l3e, ulc-sp, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
-ultra, l2, u90-ena-h-sf-full-hae-nside8-3mo, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
-ephemeris_reconstructed, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-spacecraft_clock, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-leapseconds, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-
-
 # Ultra L2 depends on the following Spice products:
 # spacecraft clock kernel, leap seconds kernel, general frame kernel, pointing attitude kernel
 # science frame kernel - TODO: this is not yet available through the system
@@ -698,3 +690,10 @@ pointing_attitude, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-
 # sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
 # sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
 # sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+
+# Ultra L3 survival probability map Dependencies:
+glows, l3e, ulc-sp, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
+ultra, l2, u90-ena-h-sf-full-hae-nside8-3mo, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
+ephemeris_reconstructed, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD_NO_TRIGGER, DOWNSTREAM
