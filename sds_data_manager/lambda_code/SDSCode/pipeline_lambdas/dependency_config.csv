@@ -503,45 +503,44 @@ ultra, l1c, 45sensor-pset, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD, 
 
 
 # Ultra L2 depends on the following Spice products:
-# spacecraft clock kernel, leap seconds kernel, general frame kernel, pointing attitude kernel
-# science frame kernel - TODO: this is not yet available through the system
-# Specify frames kernel for all Ultra L2 ENA Maps
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+# spacecraft clock kernel, leap seconds kernel, imap frame kernel, pointing attitude kernel, science frame kernel
+# Specify science_frames kernel for all Ultra L2 ENA Maps
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
 # Specify spacecraft_clock kernel for all Ultra L2 ENA Maps
 spacecraft_clock, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
@@ -653,43 +652,43 @@ pointing_attitude, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-
 pointing_attitude, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# Specify sci-frames kernel for all Ultra L2 ENA Maps (TODO:)
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
-# sci-frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+# Specify imap frames kernel for all Ultra L2 ENA Maps
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u45-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-hf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-2deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, ultra, l2, u90-ena-h-sf-nsp-full-hae-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
 
 # Ultra L3 survival probability map Dependencies:
 glows, l3e, ulc-sp, ultra, l3, u90-spx-hsf-sp-full-hae-nside8-3mo, HARD, DOWNSTREAM
