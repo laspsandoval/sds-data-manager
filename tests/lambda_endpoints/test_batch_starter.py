@@ -511,6 +511,7 @@ def test_bulk_reprocessing_special_case(session):
     """Tests ``lambda_handler`` for a special case in bulk reprocessing."""
     # Add test data to the database for the special case
     # Add idex l1b evt files. Some of these will be used as dependencies for the job.
+    _populate_file_catalog(session)
     session.add_all(
         [
             ScienceFiles(
@@ -560,16 +561,7 @@ def test_bulk_reprocessing_special_case(session):
     }
     context = {"context": "None"}
 
-    with (
-        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
-        patch(
-            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency.spice_metakernel_api.lambda_handler"
-        ) as mock_metakernel,
-    ):
-        mock_metakernel.return_value = {
-            "statusCode": 200,
-            "body": json.dumps(["naif0012.tls"]),
-        }
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
         # Verify that 2 l2b jobs were reprocessed
         assert mock_batch_client.submit_job.call_count == 2
