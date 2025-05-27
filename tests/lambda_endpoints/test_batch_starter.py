@@ -764,6 +764,7 @@ def test_lambda_handler_mag_l1c_case(session):
 ### TEST CADENCE EVENT
 def test_def_cadence_map_event(setup_s3, session, tmp_path):
     """Test that a cadence event kicks off the right processing job."""
+    _populate_file_catalog(session)
     # Add 10 months of ultra l1c "45sensor-pset" files to the database
     session.add_all(
         [
