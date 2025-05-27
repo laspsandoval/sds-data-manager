@@ -1,5 +1,7 @@
 """Module containing constructs for instrumenting Lambda functions."""
 
+import datetime
+
 from aws_cdk import Duration, Environment, aws_events, aws_events_targets
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_iam as iam
@@ -12,6 +14,9 @@ from constructs import Construct
 
 from sds_data_manager.constructs.api_gateway_construct import ApiGateway
 from sds_data_manager.constructs.database_construct import SdpDatabase
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
+    CadenceDays,
+)
 
 
 class BatchStarterLambda(Construct):
@@ -129,44 +134,80 @@ class BatchStarterLambda(Construct):
 
         # Set up eventBridge rules to trigger batch starter lambda.
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
-        # Create an eventBridge rule for 3, 6, and 12, month cadences.
-        # TODO: IMWG is still deciding on the number of days for each cadence.
-        self.event_3month = aws_events.Rule(
-            scope=scope,
-            id="ProcessingCadenceJob3month",
-            rule_name="ProcessingCadenceJob3month",
-            description="Trigger processing jobs every 3 months (30 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(91)),
-        )
-        self.event_6month = aws_events.Rule(
-            scope=scope,
-            id="ProcessingCadenceJob6month",
-            rule_name="ProcessingCadenceJob6month",
-            description="Trigger processing jobs every 6 months (180 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(182)),
-        )
-        self.event_1year = aws_events.Rule(
-            scope=scope,
-            id="ProcessingCadenceJob1year",
-            rule_name="ProcessingCadenceJob1year",
-            description="Trigger processing jobs once a year (365 days)",
-            schedule=aws_events.Schedule.rate(Duration.days(365)),
-        )
-        self.event_1year.add_target(
-            aws_events_targets.LambdaFunction(
-                self.instrument_lambda,
-                event=aws_events.RuleTargetInput.from_object({"cadence": "1yr"}),
+        # Create eventBridge rules to trigger:
+        #    - 3 month map jobs (every 365.25 / 4 days)
+        #    - 6 month map jobs (every 365.25 / 2 days)
+        #    - 1 year map jobs (every 365.25 days)
+        # Note: each map job trigger will have its own eventBridge rule, because we need
+        # them to run every x days starting from the same date (t0).
+        # TODO what would be a good start date?
+        t0_date = datetime.datetime(2026, 1, 1)
+        # Create rules for 50 years (far beyond what we expect as a precaution)
+        # AWS event bridge supports up to 500 rules, so this is well within the limit.
+        total_days = CadenceDays.ONE_YEAR * 15
+        for i in range(int(total_days // CadenceDays.THREE_MONTHS.value)):
+            date = t0_date + datetime.timedelta(days=CadenceDays.THREE_MONTHS.value * i)
+            string_date = date.strftime("%Y%m%d")
+            event_3month = aws_events.Rule(
+                scope=scope,
+                id=f"ProcessingCadenceJob3month_{string_date}",
+                rule_name=f"ProcessingCadenceJob3month_{string_date}",
+                description="Trigger processing jobs every 365.25 / 4 days",
+                schedule=aws_events.Schedule.cron(
+                    day=str(date.day),
+                    hour=str(date.hour),
+                    minute=str(date.minute),
+                    month=str(date.month),
+                    year=str(date.year),
+                ),
             )
-        )
-        self.event_6month.add_target(
-            aws_events_targets.LambdaFunction(
-                self.instrument_lambda,
-                event=aws_events.RuleTargetInput.from_object({"cadence": "6mo"}),
-            ),
-        )
-        self.event_3month.add_target(
-            aws_events_targets.LambdaFunction(
-                self.instrument_lambda,
-                event=aws_events.RuleTargetInput.from_object({"cadence": "3mo"}),
-            ),
-        )
+            event_3month.add_target(
+                aws_events_targets.LambdaFunction(
+                    self.instrument_lambda,
+                    event=aws_events.RuleTargetInput.from_object({"cadence": "3mo"}),
+                ),
+            )
+        for i in range(int(total_days // CadenceDays.SIX_MONTHS.value)):
+            date = t0_date + datetime.timedelta(days=CadenceDays.SIX_MONTHS.value * i)
+            string_date = date.strftime("%Y%m%d")
+            event_6month = aws_events.Rule(
+                scope=scope,
+                id=f"ProcessingCadenceJob6month_{string_date}",
+                rule_name=f"ProcessingCadenceJob6month_{string_date}",
+                description="Trigger processing jobs every 365.25 / 2 days",
+                schedule=aws_events.Schedule.cron(
+                    day=str(date.day),
+                    hour=str(date.hour),
+                    minute=str(date.minute),
+                    month=str(date.month),
+                    year=str(date.year),
+                ),
+            )
+            event_6month.add_target(
+                aws_events_targets.LambdaFunction(
+                    self.instrument_lambda,
+                    event=aws_events.RuleTargetInput.from_object({"cadence": "6mo"}),
+                ),
+            )
+        for i in range(int(total_days // CadenceDays.ONE_YEAR.value)):
+            date = t0_date + datetime.timedelta(days=CadenceDays.ONE_YEAR.value * i)
+            string_date = date.strftime("%Y%m%d")
+            event_1year = aws_events.Rule(
+                scope=scope,
+                id=f"ProcessingCadenceJob1year_{string_date}",
+                rule_name=f"ProcessingCadenceJob1year_{string_date}",
+                description="Trigger processing jobs every 365.25 days",
+                schedule=aws_events.Schedule.cron(
+                    day=str(date.day),
+                    hour=str(date.hour),
+                    minute=str(date.minute),
+                    month=str(date.month),
+                    year=str(date.year),
+                ),
+            )
+            event_1year.add_target(
+                aws_events_targets.LambdaFunction(
+                    self.instrument_lambda,
+                    event=aws_events.RuleTargetInput.from_object({"cadence": "1yr"}),
+                )
+            )

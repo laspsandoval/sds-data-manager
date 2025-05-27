@@ -4,7 +4,7 @@ import datetime
 import json
 import logging
 import os
-from enum import IntEnum
+from enum import Enum
 from pathlib import Path
 
 import boto3
@@ -26,8 +26,6 @@ from ..database import database as db
 from ..database import models
 from . import dependency
 from .dependency import DependencyConfig, get_jobs
-
-# import dependency
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -66,40 +64,6 @@ SPECIAL_CASE_JOBS = [
 ]
 
 
-@dataclass
-class Cadence:
-    """Valid cadences for processing jobs triggered by cron jobs.
-
-    Valid cadences can be in either months or years
-    """
-
-    months3: str = "3mo"
-    months6: str = "6mo"
-    years1: str = "1yr"
-
-    @property
-    def valid_cadence(self) -> list[str]:
-        """Get all Cadences.
-
-        Returns
-        -------
-        list[str]
-            list of valid cadences.
-        """
-        return [self.years1, self.months3, self.months6]
-
-    @property
-    def days(self) -> dict:
-        """Cadence to days.
-
-        Returns
-        -------
-        dict
-            Cadence values in days.
-        """
-        return {self.years1: 365, self.months3: 90, self.months6: 180}
-
-
 def cadence_to_datetime_range(
     cadence: str, as_str: bool = False
 ) -> tuple[datetime, datetime] | tuple[str, str]:
@@ -118,7 +82,9 @@ def cadence_to_datetime_range(
         The start date and end date of the cadence. The end_date is set to today
     """
     end_date = datetime.datetime.today()
-    start_date = end_date - datetime.timedelta(days=CadenceDays.str_lookup(cadence))
+    start_date = end_date - datetime.timedelta(
+        days=CadenceDays.str_lookup(cadence).value
+    )
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
         end_date = end_date.strftime("%Y%m%d")
@@ -126,12 +92,12 @@ def cadence_to_datetime_range(
     return start_date, end_date
 
 
-class CadenceDays(IntEnum):
+class CadenceDays(float, Enum):
     """Enum for a cadence value and the corresponding days."""
 
-    THREE_MONTHS = 90
-    SIX_MONTHS = 180
-    ONE_YEAR = 365
+    ONE_YEAR = 365.25
+    THREE_MONTHS = ONE_YEAR / 4
+    SIX_MONTHS = ONE_YEAR / 2
 
     @staticmethod
     def valid_cadence_str():
@@ -332,12 +298,12 @@ def get_special_case_date_range(session, job_node, start_date, end_date):
         new_start_date = new_start_date.strftime("%Y%m%d")
         # Determine the number of days the map was created for based on the cadence.
         cadence_key = job_node["descriptor"].split("-")[-1]
-        if cadence_key not in Cadence().valid_cadence:
+        if cadence_key not in CadenceDays.valid_cadence_str():
             raise ValueError(
                 f"Invalid cadence '{cadence_key}' from descriptor"
                 f"'{job_node['descriptor']}'."
             )
-        map_days = Cadence().days[cadence_key]
+        map_days = CadenceDays.str_lookup(cadence_key).value
         # Use the date range of the l2 map as the query range for the l3 job.
         new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
             "%Y%m%d"

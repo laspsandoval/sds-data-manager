@@ -30,6 +30,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
     dependency,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
+    CadenceDays,
     determine_job_version,
     lambda_handler,
     upload_cadence_file,
@@ -854,14 +855,16 @@ def test_cadence_to_datetime_range():
         start_date, end_date = batch_starter.cadence_to_datetime_range(
             cadence="3mo", as_str=True
         )
-        assert start_date == "20240102"
+        assert start_date == "20231231"
         assert end_date == "20240401"
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="6mo")
-        assert (end_date - start_date) == dt.timedelta(days=180)
+        assert (end_date - start_date) == dt.timedelta(
+            days=CadenceDays.ONE_YEAR.value / 2
+        )
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="1yr")
-        assert (end_date - start_date) == dt.timedelta(days=365)
+        assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
 
 
 def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
