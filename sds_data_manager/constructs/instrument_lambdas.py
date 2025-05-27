@@ -142,11 +142,16 @@ class BatchStarterLambda(Construct):
         # them to run every x days starting from the same date (t0).
         # TODO what would be a good start date?
         t0_date = datetime.datetime(2026, 1, 1)
-        # Create rules for 50 years (far beyond what we expect as a precaution)
+        today = datetime.datetime.now()
+        # Create rules for 15 years (far beyond what we expect as a precaution)
         # AWS event bridge supports up to 500 rules, so this is well within the limit.
         total_days = CadenceDays.ONE_YEAR * 15
         for i in range(int(total_days // CadenceDays.THREE_MONTHS.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.THREE_MONTHS.value * i)
+            if date < today:
+                # Skip dates that are in the past. This might be the case if we are
+                # deploying this construct after the t0_date.
+                continue
             string_date = date.strftime("%Y%m%d")
             event_3month = aws_events.Rule(
                 scope=scope,
@@ -170,6 +175,8 @@ class BatchStarterLambda(Construct):
         for i in range(int(total_days // CadenceDays.SIX_MONTHS.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.SIX_MONTHS.value * i)
             string_date = date.strftime("%Y%m%d")
+            if date < today:
+                continue
             event_6month = aws_events.Rule(
                 scope=scope,
                 id=f"ProcessingCadenceJob6month_{string_date}",
@@ -192,6 +199,8 @@ class BatchStarterLambda(Construct):
         for i in range(int(total_days // CadenceDays.ONE_YEAR.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.ONE_YEAR.value * i)
             string_date = date.strftime("%Y%m%d")
+            if date < today:
+                continue
             event_1year = aws_events.Rule(
                 scope=scope,
                 id=f"ProcessingCadenceJob1year_{string_date}",
