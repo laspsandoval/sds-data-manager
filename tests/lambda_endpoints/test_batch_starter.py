@@ -3,8 +3,8 @@
 import datetime as dt
 import json
 import logging
-import pathlib
 import os
+import pathlib
 from datetime import datetime
 from os.path import basename
 from unittest.mock import Mock, patch
@@ -765,14 +765,14 @@ def test_lambda_handler_mag_l1c_case(session):
 def test_def_cadence_map_event(setup_s3, session, tmp_path):
     """Test that a cadence event kicks off the right processing job."""
     _populate_file_catalog(session)
-    # Add 10 months of ultra l1c "45sensor-pset" files to the database
+    # Add 10 months of ultra l1c "45sensor" pset files to the database
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_ultra_l1c_45sensor-pset_2025{month:02}01_v001.cdf",
+                file_path=f"/path/to/imap_ultra_l1c_45sensor-{pset_type}pset_2025{month:02}01_v001.cdf",
                 instrument="ultra",
                 data_level="l1c",
-                descriptor="45sensor-pset",
+                descriptor=f"45sensor-{pset_type}pset",
                 start_date=datetime(2025, month, 1),
                 version="v001",
                 extension="cdf",
@@ -780,17 +780,19 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for month in range(1, 10)
+            for pset_type, month in zip(
+                ["spacecraft"] * 5 + ["helio"] * 5, range(1, 10)
+            )
         ]
     )
-    # Add 10 months of ultra l1c "90sensor-pset" files to the database
+    # Add 10 months of ultra l1c "90sensor" pset files to the database
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_ultra_l1c_90sensor-pset_2025{month:02}01_v001.cdf",
+                file_path=f"/path/to/imap_ultra_l1c_90sensor-{pset_type}pset_2025{month:02}01_v001.cdf",
                 instrument="ultra",
                 data_level="l1c",
-                descriptor="90sensor-pset",
+                descriptor=f"90sensor-{pset_type}pset",
                 start_date=datetime(2025, month, 1),
                 version="v001",
                 extension="cdf",
@@ -798,7 +800,9 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for month in range(1, 10)
+            for pset_type, month in zip(
+                ["spacecraft"] * 5 + ["helio"] * 5, range(1, 10)
+            )
         ]
     )
 
