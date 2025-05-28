@@ -41,26 +41,18 @@ SPECIAL_CASE_JOBS = [
         "data_source": "hi",
         "data_type": "l3",
         "descriptor": "h90-ena-h-sf-sp-full-hae-4deg-6mo",
-        "relationship": "HARD",
     },
     {
         "data_source": "lo",
         "data_type": "l3",
         "descriptor": "ilo-ena-h-sf-sp-full-hae-4deg-6mo",
-        "relationship": "HARD",
     },
     {
         "data_source": "ultra",
         "data_type": "l3",
         "descriptor": "u90-spx-hsf-sp-full-hae-nside8-3mo",
-        "relationship": "HARD",
     },
-    {
-        "data_source": "idex",
-        "data_type": "l2b",
-        "descriptor": "sci-1week",
-        "relationship": "HARD",
-    },
+    {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1week"},
 ]
 
 
@@ -578,6 +570,7 @@ def s3_processing_event(session, events):
             continue
 
         for job in potential_jobs + potential_soft_jobs:
+            job.pop("relationship")
             if job in SPECIAL_CASE_JOBS:
                 start_date, end_date = get_special_case_date_range(
                     session, job, start_date, end_date

@@ -845,6 +845,16 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
         )
 
 
+def test_invalid_cadence(session):
+    """Test that an invalid cadence raises a ValueError."""
+    cadence_event = {
+        "cadence": "4mo",
+    }
+    context = {"context": "sample_context"}
+    with pytest.raises(ValueError, match="Invalid cadence"):
+        lambda_handler(cadence_event, context)
+
+
 ###### HELPER FUNCTION TESTS #######
 def test_cadence_to_datetime_range():
     """Test the ``cadence_to_datetime_range`` function."""
