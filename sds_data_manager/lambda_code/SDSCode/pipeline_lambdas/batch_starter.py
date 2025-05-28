@@ -3,6 +3,7 @@
 import datetime
 import json
 import logging
+import os
 from dataclasses import dataclass
 
 import boto3
@@ -551,6 +552,12 @@ def s3_processing_event(session, events):
     # GLOWS l3 processing might produce ~30 files at once. We only want one to trigger
     # one downstream l3 survival probability map job in this case.
     triggered_from_glows_l3e = False
+    sqs_queue_url = os.getenv("SQS_URL")
+    if not sqs_queue_url:
+        logger.warning(
+            "SQS_URL environment variable is not set. Messages will not"
+            " be deleted from the SQS."
+        )
     for event in events["Records"]:
         logger.info("Individual event: " + json.dumps(event, indent=2))
         body = json.loads(event["body"])
@@ -610,12 +617,18 @@ def s3_processing_event(session, events):
                 filter_dependencies = True
 
             submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
-        # When the record from the sqs event has been processed, we can safely
-        # delete it from the queue.
-        SQS_CLIENT.delete_message(
-            QueueUrl=event["eventSourceARN"],
-            ReceiptHandle=event["receiptHandle"],
-        )
+
+        if sqs_queue_url:
+            # When the record from the sqs event has been processed, it can safely be
+            # deleted from the queue.
+            SQS_CLIENT.delete_message(
+                QueueUrl=sqs_queue_url,
+                ReceiptHandle=event["receiptHandle"],
+            )
+            logger.info(
+                f"SQS record with receipt handle: {event['receiptHandle']} "
+                f"processed and deleted from the SQS."
+            )
 
 
 def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_date):
