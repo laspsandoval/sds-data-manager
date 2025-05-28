@@ -545,6 +545,7 @@ def s3_processing_event(session, events):
     events : dict
         SQS event input.
     """
+    # ruff: noqa: PLR0912
     # Since the SQS events can be batched together, we need to loop through
     # each event. In this loop, "event" represents one file landing.
 
