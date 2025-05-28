@@ -216,7 +216,7 @@ ephemeris_predicted, spice, best, hi, l1b, 90sensor-de, HARD_NO_TRIGGER, DOWNSTR
 ephemeris_90days, spice, best, hi, l1b, 90sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
 spin, spin, historical, hi, l1b, 90sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
 
-# L1C 45-sensor
+# L1C 45sensor-pset
 leapseconds, spice, historical, hi, l1c, 45sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, hi, l1c, 45sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
 imap_frames, spice, historical, hi, l1c, 45sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
@@ -231,7 +231,7 @@ spin, spin, historical, hi, l1c, 45sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
 hi, ancillary, 45sensor-cal-prod, hi, l1c, 45sensor-pset, HARD, DOWNSTREAM
 hi, l1b, 45sensor-de, hi, l1c, 45sensor-pset, HARD, DOWNSTREAM
 
-# L1C 90-sensor
+# L1C 90sensor-pset
 leapseconds, spice, historical, hi, l1c, 90sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, hi, l1c, 90sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
 imap_frames, spice, historical, hi, l1c, 90sensor-pset, HARD_NO_TRIGGER, DOWNSTREAM
