@@ -454,10 +454,18 @@ mag, l1b, burst-magi, mag, l1d, burst, HARD, DOWNSTREAM
 mag, ancillary, l1d-calibration, mag, l1d, norm, HARD, DOWNSTREAM
 
 # <---- Spacecraft Dependencies ---->
-
+# Quaternions
 spacecraft, l0, raw, spacecraft, l1a, quaternions, HARD, DOWNSTREAM
 leapseconds, spice, historical, spacecraft, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, spacecraft, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
+
+# Pointing kernel
+repoint, repoint, historical, spacecraft, spice, all, HARD, DOWNSTREAM
+leapseconds, spice, historical, spacecraft, spice, all, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, spacecraft, spice, all, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, spacecraft, spice, all, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, spacecraft, spice, all, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, spacecraft, spice, all, HARD_NO_TRIGGER, DOWNSTREAM
 
 # <---- SWAPI Dependencies ---->
 
