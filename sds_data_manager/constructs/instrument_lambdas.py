@@ -2,7 +2,8 @@
 
 import datetime
 
-from aws_cdk import Duration, Environment, aws_events, aws_events_targets
+import aws_cdk as cdk
+from aws_cdk import Duration, Environment, aws_events
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
@@ -107,7 +108,6 @@ class BatchStarterLambda(Construct):
             ],
         )
         self.instrument_lambda.add_to_role_policy(lambda_policy)
-
         data_bucket.grant_read_write(self.instrument_lambda)
         rds_secret = secrets.Secret.from_secret_name_v2(
             self, "rds_secret", rds_construct.secret_name
@@ -133,6 +133,14 @@ class BatchStarterLambda(Construct):
         )
 
         # Set up eventBridge rules to trigger batch starter lambda.
+
+        # create one permission for all eventbridge rules
+        self.instrument_lambda.add_permission(
+            "AllowEventBridgeInvoke",
+            principal=iam.ServicePrincipal("events.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingCadenceJob*",
+        )
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
         # Create eventBridge rules to trigger:
         #    - 3 month map jobs (every 365.25 / 4 days)
@@ -141,82 +149,80 @@ class BatchStarterLambda(Construct):
         # Note: each map job trigger will have its own eventBridge rule, because we need
         # them to run every x days starting from the same date (t0).
         # TODO what would be a good start date?
-        t0_date = datetime.datetime(2026, 1, 1)
+        first_job = datetime.datetime(2026, 1, 1)
+        t0_date = first_job - datetime.timedelta(days=CadenceDays.THREE_MONTHS)
         today = datetime.datetime.now()
         # Create rules for 15 years (far beyond what we expect as a precaution)
         # AWS event bridge supports up to 500 rules, so this is well within the limit.
         total_days = CadenceDays.ONE_YEAR * 15
-        for i in range(int(total_days // CadenceDays.THREE_MONTHS.value)):
+        for i in range(1, int(total_days // CadenceDays.THREE_MONTHS.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.THREE_MONTHS.value * i)
             if date < today:
                 # Skip dates that are in the past. This might be the case if we are
                 # deploying this construct after the t0_date.
                 continue
             string_date = date.strftime("%Y%m%d")
-            event_3month = aws_events.Rule(
+            cron_exp = (
+                f"cron({date.minute} {date.hour} {date.day} {date.month} ? {date.year})"
+            )
+            aws_events.CfnRule(
                 scope=scope,
                 id=f"ProcessingCadenceJob3month_{string_date}",
-                rule_name=f"ProcessingCadenceJob3month_{string_date}",
-                description="Trigger processing jobs every 365.25 / 4 days",
-                schedule=aws_events.Schedule.cron(
-                    day=str(date.day),
-                    hour=str(date.hour),
-                    minute=str(date.minute),
-                    month=str(date.month),
-                    year=str(date.year),
-                ),
+                name=f"ProcessingCadenceJob3month_{string_date}",
+                description=f"Trigger 'batch starter' processing job on {string_date}",
+                schedule_expression=cron_exp,
+                state="ENABLED",
+                targets=[
+                    aws_events.CfnRule.TargetProperty(
+                        arn=self.instrument_lambda.function_arn,
+                        id=f"Target{string_date}",
+                        input=cdk.Fn.sub('{"cadence": "3mo"}'),
+                    )
+                ],
             )
-            event_3month.add_target(
-                aws_events_targets.LambdaFunction(
-                    self.instrument_lambda,
-                    event=aws_events.RuleTargetInput.from_object({"cadence": "3mo"}),
-                ),
-            )
-        for i in range(int(total_days // CadenceDays.SIX_MONTHS.value)):
+        for i in range(1, int(total_days // CadenceDays.SIX_MONTHS.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.SIX_MONTHS.value * i)
             string_date = date.strftime("%Y%m%d")
             if date < today:
                 continue
-            event_6month = aws_events.Rule(
+            cron_exp = (
+                f"cron({date.minute} {date.hour} {date.day} {date.month} ? {date.year})"
+            )
+            aws_events.CfnRule(
                 scope=scope,
                 id=f"ProcessingCadenceJob6month_{string_date}",
-                rule_name=f"ProcessingCadenceJob6month_{string_date}",
-                description="Trigger processing jobs every 365.25 / 2 days",
-                schedule=aws_events.Schedule.cron(
-                    day=str(date.day),
-                    hour=str(date.hour),
-                    minute=str(date.minute),
-                    month=str(date.month),
-                    year=str(date.year),
-                ),
+                name=f"ProcessingCadenceJob6month_{string_date}",
+                description=f"Trigger 'batch starter' processing job on {string_date}",
+                schedule_expression=cron_exp,
+                state="ENABLED",
+                targets=[
+                    aws_events.CfnRule.TargetProperty(
+                        arn=self.instrument_lambda.function_arn,
+                        id=f"Target{string_date}",
+                        input=cdk.Fn.sub('{"cadence": "6mo"}'),
+                    )
+                ],
             )
-            event_6month.add_target(
-                aws_events_targets.LambdaFunction(
-                    self.instrument_lambda,
-                    event=aws_events.RuleTargetInput.from_object({"cadence": "6mo"}),
-                ),
-            )
-        for i in range(int(total_days // CadenceDays.ONE_YEAR.value)):
+        for i in range(1, int(total_days // CadenceDays.ONE_YEAR.value)):
             date = t0_date + datetime.timedelta(days=CadenceDays.ONE_YEAR.value * i)
             string_date = date.strftime("%Y%m%d")
             if date < today:
                 continue
-            event_1year = aws_events.Rule(
+            cron_exp = (
+                f"cron({date.minute} {date.hour} {date.day} {date.month} ? {date.year})"
+            )
+            aws_events.CfnRule(
                 scope=scope,
                 id=f"ProcessingCadenceJob1year_{string_date}",
-                rule_name=f"ProcessingCadenceJob1year_{string_date}",
-                description="Trigger processing jobs every 365.25 days",
-                schedule=aws_events.Schedule.cron(
-                    day=str(date.day),
-                    hour=str(date.hour),
-                    minute=str(date.minute),
-                    month=str(date.month),
-                    year=str(date.year),
-                ),
-            )
-            event_1year.add_target(
-                aws_events_targets.LambdaFunction(
-                    self.instrument_lambda,
-                    event=aws_events.RuleTargetInput.from_object({"cadence": "1yr"}),
-                )
+                name=f"ProcessingCadenceJob1year_{string_date}",
+                description=f"Trigger 'batch starter' processing job on {string_date}",
+                schedule_expression=cron_exp,
+                state="ENABLED",
+                targets=[
+                    aws_events.CfnRule.TargetProperty(
+                        arn=self.instrument_lambda.function_arn,
+                        id=f"Target{string_date}",
+                        input=cdk.Fn.sub('{"cadence": "1yr"}'),
+                    )
+                ],
             )
