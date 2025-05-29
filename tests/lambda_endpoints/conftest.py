@@ -78,7 +78,7 @@ def science_file():
 def cadence_file():
     """Path to a valid cadence file."""
     return (
-        "imap/cadence/ultra/l2/2025/03/imap_ultra_l2_u45-ena-h-hf-nsp-full-hae-6deg"
+        "imap/cadence/ultra/l2/2025/03/imap_ultra_l2_u45-ena-h-hf-nsp-test-hae-6deg"
         "-3mo_20250301_v001.json"
     )
 

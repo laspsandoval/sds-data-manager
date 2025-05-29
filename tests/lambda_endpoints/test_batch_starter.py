@@ -884,6 +884,7 @@ def test_cadence_to_datetime_range():
 
 def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
     """Test uploading a cadence json file to S3."""
+    caplog.set_level("INFO")
     dependencies = ProcessingInputCollection(
         ScienceInput("imap_ultra_l1c_45sensor-pset_20250201_v001.cdf")
     )
