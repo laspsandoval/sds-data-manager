@@ -721,17 +721,24 @@ def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
     # Check if the file already exists
     if os.path.isfile(cadence_file_path):
         raise KeyError(f"{cadence_file_path} already exists, cannot create JSON file.")
-
     # call the upload API handler directly
     signed_url = upload_api.lambda_handler(
         {"pathParameters": {"proxy": cadence_file_path.as_posix()}}, None
     )
-    response = requests.put(
-        signed_url["body"].strip('"'),
-        data=upstream_dependencies.serialize(),
-        timeout=60.0,
-    )
-    return response
+    try:
+        response = requests.put(
+            signed_url["body"].strip('"'),
+            data=upstream_dependencies.serialize(),
+            timeout=60.0,
+        )
+        return response
+    except requests.exceptions.MissingSchema as e:
+        logger.error(f"Schema error in signed url: {signed_url['body']}. Error: {e}")
+        # Log the error but do not raise, so processing continues for other jobs
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during cadence file upload: {e}")
+        return None
 
 
 def cadence_processing_event(session, events):
@@ -788,13 +795,13 @@ def cadence_processing_event(session, events):
         )
         cadence_dependency_path = Path(cadence_dependency_path.construct_path())
         response = upload_cadence_file(cadence_dependency_path, upstream_dependencies)
-        if response.status_code == 200:
-            logger.info("Cadence file uploaded successfully to s3")
-        else:
-            logger.error(
-                f"Cadence file upload failed with status code {response.status_code}."
-                f"Job will not be kicked off."
+        if response:
+            logger.info(
+                f"Cadence file uploaded successfully to s3 with status code: "
+                f"{response.status_code}"
             )
+        else:
+            logger.error("Cadence file upload failed Job will not be kicked off.")
             continue
         # Submit the map job with all of the upstream dependencies in the date range
         # (as JSON file).
