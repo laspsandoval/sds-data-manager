@@ -9,6 +9,7 @@ from pathlib import Path
 
 import boto3
 import imap_data_access
+import requests
 from imap_data_access import (
     AncillaryFilePath,
     ScienceFilePath,
@@ -720,17 +721,17 @@ def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
     # Check if the file already exists
     if os.path.isfile(cadence_file_path):
         raise KeyError(f"{cadence_file_path} already exists, cannot create JSON file.")
-    cadence_file_path.parent.mkdir(parents=True, exist_ok=True)
-    # Dump the serialized dependencies to a JSON file.
-    with open(cadence_file_path, "w") as f:
-        json.dump(upstream_dependencies.serialize(), f)
 
     # call the upload API handler directly
-    response = upload_api.lambda_handler(
+    signed_url = upload_api.lambda_handler(
         {"pathParameters": {"proxy": cadence_file_path.as_posix()}}, None
     )
-    if response["statusCode"] == 200:
-        logger.info(f"Cadence file uploaded successfully to s3: {response['body']}")
+    response = requests.put(
+        signed_url["body"].strip('"'),
+        data=upstream_dependencies.serialize(),
+        timeout=60.0,
+    )
+    return response
 
 
 def cadence_processing_event(session, events):
@@ -786,7 +787,15 @@ def cadence_processing_event(session, events):
             extension="json",
         )
         cadence_dependency_path = Path(cadence_dependency_path.construct_path())
-        upload_cadence_file(cadence_dependency_path, upstream_dependencies)
+        response = upload_cadence_file(cadence_dependency_path, upstream_dependencies)
+        if response.status_code == 200:
+            logger.info("Cadence file uploaded successfully to s3")
+        else:
+            logger.error(
+                f"Cadence file upload failed with status code {response.status_code}."
+                f"Job will not be kicked off."
+            )
+            continue
         # Submit the map job with all of the upstream dependencies in the date range
         # (as JSON file).
         node = {

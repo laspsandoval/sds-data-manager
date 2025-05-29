@@ -133,7 +133,6 @@ class BatchStarterLambda(Construct):
         )
 
         # Set up eventBridge rules to trigger batch starter lambda.
-
         # create one permission for all eventbridge rules
         self.instrument_lambda.add_permission(
             "AllowEventBridgeInvoke",
@@ -165,6 +164,7 @@ class BatchStarterLambda(Construct):
             cron_exp = (
                 f"cron({date.minute} {date.hour} {date.day} {date.month} ? {date.year})"
             )
+            # TODO retry count is set to 185???
             aws_events.CfnRule(
                 scope=scope,
                 id=f"ProcessingCadenceJob3month_{string_date}",
