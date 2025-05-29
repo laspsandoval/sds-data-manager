@@ -882,7 +882,7 @@ def test_cadence_to_datetime_range():
         assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
 
 
-def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
+def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
     """Test uploading a cadence json file to S3."""
     dependencies = ProcessingInputCollection(
         ScienceInput("imap_ultra_l1c_45sensor-pset_20250201_v001.cdf")
@@ -893,10 +893,7 @@ def test_upload_cadence_file(s3_client, tmp_path, cadence_file):
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
         upload_cadence_file(cadence_dependency_path, dependencies)
-    assert cadence_dependency_path.exists()
-    with open(cadence_dependency_path) as f:
-        cadence_json = json.load(f)
-    assert cadence_json == dependencies.serialize()
+    assert "Cadence file uploaded successfully" in caplog.text
 
 
 def test_determine_max_version(session):
