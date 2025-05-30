@@ -96,6 +96,7 @@ glows, ancillary, pipeline-settings-l3bcde, glows, l3b, ion-rate-profile, HARD, 
 glows, ancillary, uv-anisotropy-1CR, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
 glows, ancillary, WawHelioIonMP, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
 glows, ancillary, bad-days-list, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
+repoint, repoint, historical, glows, l3b, ion-rate-profile, HARD_NO_TRIGGER, DOWNSTREAM
 # science_frames, spice, historical, glows, l3b, ion-rate-profile, HARD_NO_TRIGGER, DOWNSTREAM
 
 
@@ -128,6 +129,7 @@ ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-lo,
 attitude_history, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+repoint, repoint, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 
 # Hi-45
 glows, l3d, solar-hist, glows, l3e, survival-probability-hi-45, HARD, DOWNSTREAM
@@ -145,6 +147,7 @@ ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-hi-
 attitude_history, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
+repoint, repoint, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 
 # Hi-90
 glows, l3d, solar-hist, glows, l3e, survival-probability-hi-90, HARD, DOWNSTREAM
@@ -162,6 +165,7 @@ ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-hi-
 attitude_history, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
+repoint, repoint, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 
 # Ultra
 glows, l3d, solar-hist, glows, l3e, survival-probability-ul, HARD, DOWNSTREAM
@@ -180,6 +184,7 @@ ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-ul,
 attitude_history, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
+repoint, repoint, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 
 # <---- HI Dependencies ---->
 # L1A
