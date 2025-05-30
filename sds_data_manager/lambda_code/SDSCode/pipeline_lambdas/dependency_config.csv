@@ -253,6 +253,32 @@ hi, l1b, 90sensor-de, hi, l1c, 90sensor-pset, HARD, DOWNSTREAM
 # 3 different map spacings/resolutions  (4deg,   6deg)
 # 2 different sensors                   (45sensor,  90sensor)
 # Hi-90 L2
+# leapseconds
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-full-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-full-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-full-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-full-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-ram-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-ram-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-anti-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-anti-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-ram-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-ram-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-anti-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-anti-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-full-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-full-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-full-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-full-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-ram-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-ram-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-anti-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-anti-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-ram-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-ram-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-sf-nsp-anti-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h90-ena-h-hf-nsp-anti-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+# L1C PSET
 hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
 hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
 hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
@@ -279,6 +305,32 @@ hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-sf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
 hi, l1c, 90sensor-pset, hi, l2, h90-ena-h-hf-nsp-anti-4deg-1yr, HARD, DOWNSTREAM
 
 # Hi-45 L2
+# leapseconds
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-full-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-full-6deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-full-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-full-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-ram-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-ram-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-anti-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-anti-6deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-ram-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-ram-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-anti-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-anti-6deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-full-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-full-4deg-3mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-full-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-full-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-ram-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-ram-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-anti-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-anti-4deg-6mo, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-ram-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-ram-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-sf-nsp-anti-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, hi, l2, h45-ena-h-hf-nsp-anti-4deg-1yr, HARD_NO_TRIGGER, DOWNSTREAM
+# L1C PSET
 hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
 hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-hf-nsp-full-6deg-3mo, HARD, DOWNSTREAM
 hi, l1c, 45sensor-pset, hi, l2, h45-ena-h-sf-nsp-full-6deg-6mo, HARD, DOWNSTREAM
