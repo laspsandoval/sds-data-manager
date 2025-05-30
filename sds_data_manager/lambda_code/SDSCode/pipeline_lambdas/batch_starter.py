@@ -729,6 +729,7 @@ def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
         response = requests.put(
             signed_url["body"].strip('"'),
             data=upstream_dependencies.serialize(),
+            headers={"Content-Type": "application/json"},
             timeout=60.0,
         )
         logger.info(
