@@ -5,7 +5,7 @@ import logging
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from os.path import basename
 from pathlib import Path
 from typing import Optional
@@ -681,10 +681,15 @@ def get_upstream_dependency_inputs(
 
             # convert start_date and end_date in seconds after j2000.
             # TODO: remove this once Bryan changes takes in 'yyyymmdd' format
-            def yyyymmdd_to_seconds_since_j2000(date_str: str) -> float:
+            def yyyymmdd_to_seconds_since_j2000(
+                date_str: str, end_date_input=False
+            ) -> float:
                 # Parse input date string
                 dt = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
-
+                # If the input date is the end date, add 24 hours to it because files
+                # through that day are valid.
+                if end_date_input:
+                    dt += timedelta(hours=24)
                 # Define J2000 epoch: 2000-01-01T12:00:00 UTC
                 j2000 = datetime(2000, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -693,7 +698,9 @@ def get_upstream_dependency_inputs(
                 return delta.total_seconds()
 
             start_time = yyyymmdd_to_seconds_since_j2000(start_date.strftime("%Y%m%d"))
-            end_time = yyyymmdd_to_seconds_since_j2000(end_date.strftime("%Y%m%d"))
+            end_time = yyyymmdd_to_seconds_since_j2000(
+                end_date.strftime("%Y%m%d"), True
+            )
             metakernel_response = spice_metakernel_api.lambda_handler(
                 {
                     "queryStringParameters": {
