@@ -401,7 +401,7 @@ idex, l2a, sci-1week, idex, l2b, sci-1week, HARD, DOWNSTREAM
 leapseconds, spice, historical, idex, l2b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, idex, l2b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 idex, l1b, evt, idex, l2b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
-idex, l2b, sci-1week, idex, l2c, sci-1week, HARD, DOWNSTREAM
+idex, l2b, sci-1week, idex, l2c, all, HARD, DOWNSTREAM
 
 # <---- LO Dependencies ---->
 lo, l0, raw, lo, l1a, all, HARD, DOWNSTREAM
