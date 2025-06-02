@@ -698,6 +698,7 @@ def get_upstream_dependency_inputs(
                 return delta.total_seconds()
 
             start_time = yyyymmdd_to_seconds_since_j2000(start_date.strftime("%Y%m%d"))
+            # TODO revisit setting end_time after SIT-4. This should be handled upstream
             end_time = yyyymmdd_to_seconds_since_j2000(
                 end_date.strftime("%Y%m%d"), True
             )
