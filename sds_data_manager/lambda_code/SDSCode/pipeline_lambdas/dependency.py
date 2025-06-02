@@ -686,8 +686,8 @@ def get_upstream_dependency_inputs(
             ) -> float:
                 # Parse input date string
                 dt = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
-                # If the input date is the end date, add 24 hours to it because files
-                # through that day are valid.
+                # If the input date is the end date, add 24 hours so files through that
+                # date are included.
                 if end_date_input:
                     dt += timedelta(hours=24)
                 # Define J2000 epoch: 2000-01-01T12:00:00 UTC
