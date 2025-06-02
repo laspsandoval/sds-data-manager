@@ -51,7 +51,7 @@ SPECIAL_CASE_JOBS = [
     {
         "data_source": "ultra",
         "data_type": "l3",
-        "descriptor": "u90-spx-hsf-sp-full-hae-nside8-3mo",
+        "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
         "relationship": "HARD",
     },
     {
