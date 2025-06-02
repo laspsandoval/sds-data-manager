@@ -455,7 +455,8 @@ mag, ancillary, l1d-calibration, mag, l1d, norm, HARD, DOWNSTREAM
 
 mag, l1c, norm-mago, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, l1b, burst-mago, mag, l2, burst-srf, HARD, DOWNSTREAM
-mag, ancillary, l2-calibration, mag, l2, all, HARD, DOWNSTREAM
+mag, ancillary, l2-calibration, mag, l2, norm-srf, HARD, DOWNSTREAM
+mag, ancillary, l2-calibration, mag, l2, burst-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-norm-offsets, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-burst-offsets, mag, l2, burst-srf, HARD, DOWNSTREAM
 
