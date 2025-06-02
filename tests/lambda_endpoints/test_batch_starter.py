@@ -517,13 +517,13 @@ def test_ultra_l3_map(session, caplog):
         # groupings. We want to test that only one job is submitted.
         "Records": [
             {
-                "body": '{"detail": '
-                '{"object": {"key": "imap_glows_l3e_survival-probability-ul_20240201_v001.cdf"}}'
+                "body": '{"detail": {"object": {"key": '
+                '"imap_glows_l3e_survival-probability-ul_20240201_v001.cdf"}}'
                 "}"
             },
             {
-                "body": '{"detail": '
-                '{"object": {"key": "imap_glows_l3e_survival-probability-ul_20240301_v001.cdf"}}'
+                "body": '{"detail": {"object": {"key": '
+                '"imap_glows_l3e_survival-probability-ul_20240301_v001.cdf"}}'
                 "}"
             },
         ]
@@ -538,11 +538,14 @@ def test_ultra_l3_map(session, caplog):
     # dependencies for the job.
     # NOTE: in reality, there will be more than 3 glows l3e files.
     glows_files = [
-        f"imap_glows_l3e_survival-probability-ul_20240{month}01_v001.cdf" for month in range(2, 6)
+        f"imap_glows_l3e_survival-probability-ul_20240{month}01_v001.cdf"
+        for month in range(2, 6)
     ]
     expected_processing_input.add(ScienceInput(*glows_files))
     expected_processing_input.add(
-        ScienceInput("imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-4deg-3mo_20240201_v001.cdf")
+        ScienceInput(
+            "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-4deg-3mo_20240201_v001.cdf"
+        )
     )
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
