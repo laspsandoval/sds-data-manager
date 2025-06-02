@@ -448,8 +448,8 @@ idex, l1a, sci-1week, idex, l1b, sci-1week, HARD, DOWNSTREAM
 spin, spin, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 leapseconds, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
-ephemeris_reconstructed, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
-attitude_history, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
+ephemeris_reconstructed, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
+attitude_history, spice, historical, idex, l1b, sci-1week, HARD, DOWNSTREAM
 planetary_ephemeris, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 imap_frames, spice, historical, idex, l1b, sci-1week, HARD_NO_TRIGGER, DOWNSTREAM
 
@@ -650,7 +650,7 @@ ultra, l1b, 45sensor-extendedspin,ultra, l1b, 45sensor-cullingmask, HARD, DOWNST
 ultra, l1b, 45sensor-extendedspin,ultra, l1b, 45sensor-badtimes, HARD, DOWNSTREAM
 ultra, l1b, 45sensor-cullingmask,ultra, l1b, 45sensor-badtimes, HARD, DOWNSTREAM
 
-ultra, ancillary, 45sensor-logistic-interpolation, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
+ultra, ancillary, l1b-45sensor-logistic-interpolation, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
 
 spacecraft_clock, spice, historical, ultra, l1b, 45sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, ultra, l1b, 45sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
