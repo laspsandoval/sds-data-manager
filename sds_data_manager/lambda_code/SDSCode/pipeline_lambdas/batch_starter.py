@@ -437,7 +437,8 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     )
     if not upstream_dependencies:
         logger.info(
-            f"Skiping job submission for {job_node} because no upstream dependencies."
+            f"Skipping job submission for {job_node} because of a missing upstream "
+            f"dependency."
         )
         return
 
@@ -473,6 +474,12 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
                 start_date=filepath.start_date,
                 end_date=filepath.start_date,
             )
+            if not upstream_deps_for_job:
+                logger.info(
+                    f"Skipping job submission for {job_node} with start_date: "
+                    f"{start_date} because of a missing upstream dependency."
+                )
+                continue
         else:
             upstream_deps_for_job = upstream_dependencies
         try_to_submit_job(
