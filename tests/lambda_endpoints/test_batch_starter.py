@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
+    AncillaryFiles,
     ProcessingJob,
     ScienceFiles,
     SPICEFiles,
@@ -267,6 +268,75 @@ def test_lambda_handler_missing_upstream_dependency(session, caplog):
         )
         # Verify the info statement was logged.
         assert log_str in caplog.text
+
+
+def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
+    """Tests ``lambda_handler`` function for a specific case."""
+    # This test covers a rare scenario: when a new ancillary file is uploaded, the
+    # dependency handler might find jobs to run where the uploaded file is valid for the
+    # job's start_date, but another required ancillary file is not. The test ensures
+    # that in these cases, the job is skipped.
+
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1c_norm-mago_20250418_v004.cdf",
+                instrument="mag",
+                data_level="l1c",
+                descriptor="norm-mago",
+                start_date=datetime(2025, 4, 18),
+                version="v004",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+            AncillaryFiles(
+                file_path="/path/to/imap_mag_l2-calibration_20250117_v001.cdf",
+                instrument="mag",
+                descriptor="l2-calibration",
+                start_date=datetime(2025, 1, 17),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+            AncillaryFiles(
+                file_path="/path/to/imap_mag_l2-norm-offsets_20250421_v001.cdf",
+                instrument="mag",
+                descriptor="l2-norm-offsets",
+                start_date=datetime(2025, 4, 21),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+        ]
+    )
+    multiple_events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_mag_l2-calibration_20250117_v001.cdf"}}'
+                "}"
+            },
+        ]
+    }
+    caplog.set_level("INFO")
+    context = {"context": "sample_context"}
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(multiple_events, context)
+        assert mock_batch_client.submit_job.call_count == 0
+
+    # Check that the expected message was logged.
+    expected_log = (
+        "Skipping job submission for {'data_source': 'mag', 'data_type': "
+        "'l2', 'descriptor': 'norm-srf'} with start_date: 20250117 because"
+        " of a missing upstream dependency."
+    )
+    assert expected_log in caplog.text
 
 
 ###### BULK REPROCESSING TESTS #######
