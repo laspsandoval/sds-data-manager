@@ -15,10 +15,14 @@
     ]
   },
   "context": {
-    "account_name": "dev",
+    "account_name": "backup",
     "backup": {
-      "account": "012345678901",
-      "source_account": "dev"
+      "account": "881353376961",
+      "source_account": "test"
+    },
+    "test": {
+        "account": "881353376961",
+        "region": "us-west-2"
     },
     "dev": {
       "account": "449431850278",
