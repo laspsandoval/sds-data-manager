@@ -940,3 +940,4 @@ leapseconds, spice, historical, ultra, l3, u90-ena-h-sf-sp-full-hae-4deg-3mo, HA
 
 # Ultra L3 spectral index map dependencies:
 ultra, l3, u90-ena-h-sf-sp-full-hae-4deg-3mo, ultra, l3, u90-spx-h-sf-sp-full-hae-4deg-3mo, HARD, DOWNSTREAM
+ultra, ancillary, ulc-spx-energy-ranges, ultra, l3, u90-spx-h-sf-sp-full-hae-4deg-3mo, HARD, DOWNSTREAM
