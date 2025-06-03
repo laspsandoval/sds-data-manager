@@ -315,6 +315,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
             ),
         ]
     )
+    session.commit()
     multiple_events = {
         "Records": [
             {
