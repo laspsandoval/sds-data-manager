@@ -42,14 +42,6 @@ from .conftest import (
     _populate_file_catalog,
 )
 
-batch_job_retry_strategy = {
-    "attempts": 3,
-    "evaluateOnExit": [
-        {"onStatusReason": "Your Spot Task was interrupted.", "action": "RETRY"},
-        {"onReason": "*", "action": "EXIT"},
-    ],
-}
-
 
 def _populate_processing_table(session):
     """Add test data to database."""
@@ -115,7 +107,7 @@ def test_lambda_handler(session):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
         mock_sqs_client.delete_message.assert_called_once()
 
@@ -205,7 +197,7 @@ def test_lambda_handler_ancillary_event(session):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
 
 
@@ -551,7 +543,7 @@ def test_idex_l2b(session):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
 
 
@@ -701,7 +693,7 @@ def test_ultra_l3_map(session, caplog):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
         # Assert that only one job is submitted.
         assert mock_batch_client.submit_job.call_count == 1
@@ -825,7 +817,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
 
         events = {
@@ -893,7 +885,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
 
 
@@ -982,7 +974,7 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
 
 
@@ -1364,5 +1356,5 @@ def test_spice_event(session, s3_client):
                     "--upload-to-sdc",
                 ]
             },
-            retryStrategy=batch_job_retry_strategy,
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
