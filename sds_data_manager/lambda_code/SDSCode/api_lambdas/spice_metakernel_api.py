@@ -52,7 +52,7 @@ class ScienceFramesKernels(Enum):
 
 
 class IMAPFramesKernels(Enum):
-    """Container for Frames Kernel Types."""
+    """Container for IMAP Frames Kernel Type."""
 
     IMAP_FRAMES = auto()
 
