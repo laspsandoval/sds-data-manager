@@ -398,6 +398,16 @@ def try_to_submit_job(
         containerOverrides={
             "command": batch_command,
         },
+        retryStrategy={
+            "attempts": 3,
+            "evaluateOnExit": [
+                {
+                    "onStatusReason": "Your Spot Task was interrupted.",
+                    "action": "RETRY",
+                },
+                {"onReason": "*", "action": "EXIT"},
+            ],
+        },
     )
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
