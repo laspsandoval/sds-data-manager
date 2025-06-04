@@ -254,7 +254,6 @@ def _metakernel_builder(
                 },
                 None,
             )
-
             metakernel.load_spice(
                 json.loads(spice_files["body"]),
                 spice_category.spice_category_name(),
