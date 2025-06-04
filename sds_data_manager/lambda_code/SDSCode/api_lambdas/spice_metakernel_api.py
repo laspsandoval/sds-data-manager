@@ -41,7 +41,7 @@ class PlanetaryConstantsKernels(Enum):
 
 
 class ScienceFramesKernels(Enum):
-    """Container for Frames Kernel Types."""
+    """Container for Science Frames Kernel Type."""
 
     SCIENCE_FRAMES = auto()
 
