@@ -86,6 +86,8 @@ spacecraft_clock, spice, historical, glows, l1a, all, HARD_NO_TRIGGER, DOWNSTREA
 glows, l1a, de, glows, l1b, de, HARD, DOWNSTREAM
 glows, l1a, hist, glows, l1b, hist, HARD, DOWNSTREAM
 
+glows, l1b, hist, glows, l2, hist, HARD, DOWNSTREAM
+
 glows, l2, hist, glows, l3a, hist, HARD, DOWNSTREAM
 glows, ancillary, calibration-data, glows, l3a, hist, HARD, DOWNSTREAM
 glows, ancillary, time-dep-bckgrd, glows, l3a, hist, HARD, DOWNSTREAM
@@ -544,6 +546,10 @@ mag, ancillary, l2-calibration, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-calibration, mag, l2, burst-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-norm-offsets, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-burst-offsets, mag, l2, burst-srf, HARD, DOWNSTREAM
+leapseconds, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
 
 # <---- Spacecraft Dependencies ---->
 # Quaternions
