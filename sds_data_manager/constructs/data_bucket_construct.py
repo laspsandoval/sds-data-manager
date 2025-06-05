@@ -80,6 +80,7 @@ class DataBucketConstruct(Construct):
         s3_backup_bucket_items_policy = iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=[
+                "s3:GetObjectTagging",
                 "s3:ReplicateObject",
                 "s3:ReplicateDelete",
                 "s3:ReplicateTags",
