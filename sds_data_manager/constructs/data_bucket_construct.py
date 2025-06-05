@@ -68,6 +68,7 @@ class DataBucketConstruct(Construct):
                 "s3:GetObjectVersionAcl",
                 "s3:GetObjectVersionTagging",
                 "s3:GetObjectTagging",
+                "s3:PutObjectTagging",
             ],
             resources=[f"{self.data_bucket.bucket_arn}/*"],
         )
@@ -86,6 +87,7 @@ class DataBucketConstruct(Construct):
                 "s3:ReplicateTags",
                 "s3:GetObject",
                 "s3:List*",
+                "s3:PutObjectTagging",
             ],
             resources=[f"arn:aws:s3:::{backup_bucket_name}/*"],
         )
