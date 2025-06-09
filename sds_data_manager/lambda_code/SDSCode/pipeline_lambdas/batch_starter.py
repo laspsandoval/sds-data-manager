@@ -790,9 +790,6 @@ def cadence_processing_event(session, events):
         Event input from an Event Bridge rule.
     """
     cadence = events.get("cadence")
-    # TODO: remove start_date and end_date handling after SIT-4.
-    start_date = events.get("start_date")
-    end_date = events.get("end_date")
     logger.info(f"A cadence event was triggered with the parameters: {cadence=}")
     if not cadence:
         raise ValueError("Cadence event must include 'cadence' key.")
@@ -801,13 +798,7 @@ def cadence_processing_event(session, events):
     potential_jobs = sorted(dep_config.get_cadence_jobs(cadence), key=lambda x: x[2])
     logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
     # Get the start and end dates for this job
-    if not start_date and not end_date:
-        start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
-    elif not start_date or not end_date:
-        raise ValueError(
-            "Cadence event must include both 'start_date' and 'end_date' if either is"
-            " provided."
-        )
+    start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
     logger.info(f"Using {start_date=} and {end_date=} for cadence jobs.")
 
     for job_node in potential_jobs:
