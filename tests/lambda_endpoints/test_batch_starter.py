@@ -195,8 +195,6 @@ def test_lambda_handler_ancillary_event(session):
                 "files": ["imap_swe_eu-conversion_20221231_v001.cdf"],
             },
         ]
-        # dependencies = ProcessingInputCollection()
-        # dependencies.deserialize()
         mock_batch_client.submit_job.assert_called_with(
             jobName="swe-l1b-sci-job-2",
             jobQueue="ProcessingJobQueue",
