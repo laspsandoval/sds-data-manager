@@ -16,9 +16,6 @@ from imap_data_access import (
     SPICEFilePath,
 )
 from imap_data_access.file_validation import CadenceFilePath
-from imap_data_access.processing_input import (
-    ProcessingInputCollection,
-)
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -320,7 +317,7 @@ def try_to_submit_job(
     job_info: dict,
     start_date: datetime,
     version: str,
-    upstream_dependencies: ProcessingInputCollection | str,
+    serialized_dependencies: str,
 ):
     """Try to submit a batch job with the given job information.
 
@@ -334,9 +331,8 @@ def try_to_submit_job(
         Start date of the data.
     version : str
         Version of the job.
-    upstream_dependencies : ProcessingInputCollection or str
-        Either a filename string of a JSON file containing the serialized upstream
-        dependencies. Otherwise, a ProcessingInputCollection of the upstream
+    serialized_dependencies : str
+        The serialized ProcessingInputCollection of the upstream
         dependencies.
     """
     instrument = job_info["data_source"]
@@ -366,16 +362,26 @@ def try_to_submit_job(
     logger.info(
         f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
     )
-
-    # Reformat the upstream dependencies from dependency call to match
-    # what batch job expects.
     # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
 
-    # If upstream dependencies are a ProcessingInputCollection, serialize them into a
-    # string. Otherwise, it should be a string representing the filename of a JSON file
-    # containing the serialized upstream dependencies.
-    if isinstance(upstream_dependencies, ProcessingInputCollection):
-        upstream_dependencies = upstream_dependencies.serialize()
+    # Serialize the upstream dependencies and write them to a JSON file. The Imap
+    # processing code will read the JSON file and deserialize the dependencies. This is
+    # to avoid passing a large string through the batch job command line.
+    # TODO replace CadenceFilePath with DependencyFilePath after new imap-data-access
+    # release
+    dependency_file = CadenceFilePath.generate_from_inputs(
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_time=start_date.strftime("%Y%m%d"),
+        version=version,
+        extension="json",
+    )
+    dependency_file_path = Path(dependency_file.construct_path())
+    response = upload_cadence_file(dependency_file_path, serialized_dependencies)
+    # If response is None, then the upload failed and we should skip submitting the job.
+    if not response:
+        return
 
     batch_command = [
         "--instrument",
@@ -389,7 +395,7 @@ def try_to_submit_job(
         "--version",
         version,
         "--dependency",
-        upstream_dependencies,
+        os.path.basename(dependency_file_path),
         "--upload-to-sdc",
     ]
 
@@ -502,7 +508,11 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         else:
             upstream_deps_for_job = upstream_dependencies
         try_to_submit_job(
-            session, job_node, job_start_date, job_version, upstream_deps_for_job
+            session,
+            job_node,
+            job_start_date,
+            job_version,
+            upstream_deps_for_job.serialize(),
         )
 
 
@@ -738,27 +748,36 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
+def upload_cadence_file(dependency_file_path: Path, serialized_dependencies: str):
     """Upload a JSON file containing a cadence job's dependencies to S3.
 
     Parameters
     ----------
-    cadence_file_path : Path
+    dependency_file_path : Path
         The cadence JSON file to upload.
-    upstream_dependencies : ProcessingInputCollection
-        The upstream dependencies to serialize and upload.
+    serialized_dependencies : str
+        The serialized upstream dependencies to upload.
     """
     # Check if the file already exists
-    if os.path.isfile(cadence_file_path):
-        raise KeyError(f"{cadence_file_path} already exists, cannot create JSON file.")
+    if os.path.isfile(dependency_file_path):
+        raise KeyError(
+            f"{dependency_file_path} already exists, cannot create JSON file."
+        )
     # call the upload API handler directly
     signed_url = upload_api.lambda_handler(
-        {"pathParameters": {"proxy": cadence_file_path.as_posix()}}, None
+        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
     )
+    if signed_url["statusCode"] != 200:
+        logger.error(
+            f"Failed to get signed URL for cadence file upload: {signed_url['body']}, "
+            f"with status code: {signed_url['statusCode']}. Cadence file upload failed "
+            f"the job did not get kicked off."
+        )
+        return None
     try:
         response = requests.put(
             signed_url["body"].strip('"'),
-            data=upstream_dependencies.serialize(),
+            data=serialized_dependencies,
             headers={"Content-Type": "application/json"},
             timeout=60.0,
         )
@@ -767,14 +786,10 @@ def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
             f"{response.status_code}"
         )
         return response
-    except requests.exceptions.MissingSchema as e:
-        logger.error(f"Schema error in signed url: {signed_url['body']}. Error: {e}")
-        # Log the error but do not raise, so processing continues for other jobs
-        return None
     except Exception as e:
         logger.error(
             f"Unexpected error during cadence file upload: {e}. "
-            f"Cadence file upload failed Job will not be kicked off."
+            f"Cadence file upload failed and the job did not get kicked off."
         )
         return None
 
@@ -822,26 +837,7 @@ def cadence_processing_event(session, events):
             descriptor=job_node[2],
             start_date=start_date,
         )
-        # Serialize the upstream dependencies to a JSON file. This is necessary for map
-        # jobs with many dependencies to avoid passing a long list of dependencies
-        # directly to the batch job. Imap processing code will read the JSON file and
-        # deserialize the dependencies.
-        cadence_dependency_path = CadenceFilePath.generate_from_inputs(
-            instrument=job_node[0],
-            data_level=job_node[1],
-            descriptor=job_node[2],
-            start_time=start_date,
-            version=job_version,
-            extension="json",
-        )
-        cadence_dependency_path = Path(cadence_dependency_path.construct_path())
-        response = upload_cadence_file(cadence_dependency_path, upstream_dependencies)
-        # If response is None, then the upload failed and we should continue to the
-        # next job.
-        if not response:
-            continue
         # Submit the map job with all of the upstream dependencies in the date range
-        # (as JSON file).
         node = {
             "data_source": job_node[0],
             "descriptor": job_node[2],
@@ -852,7 +848,7 @@ def cadence_processing_event(session, events):
             node,
             datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
-            os.path.basename(cadence_dependency_path),
+            upstream_dependencies.serialize(),
         )
 
 
