@@ -34,7 +34,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import 
     CadenceDays,
     determine_job_version,
     lambda_handler,
-    upload_cadence_file,
+    upload_dependency_file,
 )
 
 from .conftest import (
@@ -120,12 +120,6 @@ def test_lambda_handler(session, s3_client):
             processing_input.serialize(),
         )
 
-    # Clean up: Delete object from the test bucket to avoid conflicts in future tests
-    s3_client.delete_object(
-        Bucket=os.getenv("S3_BUCKET"),
-        Key="imap/cadence/swe/l1a/2024/01/imap_swe_l1a_sci_20240110_v001.json",
-    )
-
 
 def test_lambda_handler_multiple_events(session, s3_client):
     """Tests ``lambda_handler`` function with multiple events."""
@@ -149,12 +143,6 @@ def test_lambda_handler_multiple_events(session, s3_client):
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 2
-
-    # Clean up: Delete object from the test bucket to avoid conflicts in future tests
-    s3_client.delete_object(
-        Bucket=os.getenv("S3_BUCKET"),
-        Key="imap/cadence/swe/l1b/2024/01/imap_swe_l1b_sci_20240101_v001.json",
-    )
 
 
 def test_lambda_handler_ancillary_event(session):
@@ -1078,7 +1066,7 @@ def test_cadence_to_datetime_range():
         assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
 
 
-def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
+def test_upload_dependency_file(s3_client, tmp_path, cadence_file, caplog):
     """Test uploading a cadence json file to S3."""
     caplog.set_level("INFO")
     dependencies = ProcessingInputCollection(
@@ -1089,7 +1077,7 @@ def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
     )
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
-        upload_cadence_file(cadence_dependency_path, dependencies.serialize())
+        upload_dependency_file(cadence_dependency_path, dependencies.serialize())
     assert "Cadence file uploaded successfully" in caplog.text
 
 

@@ -377,8 +377,8 @@ def try_to_submit_job(
         version=version,
         extension="json",
     )
-    dependency_file_path = Path(dependency_file.construct_path())
-    response = upload_cadence_file(dependency_file_path, serialized_dependencies)
+    dependency_file_path = dependency_file.construct_path()
+    response = upload_dependency_file(dependency_file_path, serialized_dependencies)
     # If response is None, then the upload failed and we should skip submitting the job.
     if not response:
         return
@@ -395,7 +395,7 @@ def try_to_submit_job(
         "--version",
         version,
         "--dependency",
-        os.path.basename(dependency_file_path),
+        dependency_file_path.name,
         "--upload-to-sdc",
     ]
 
@@ -748,7 +748,7 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def upload_cadence_file(dependency_file_path: Path, serialized_dependencies: str):
+def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
     """Upload a JSON file containing a cadence job's dependencies to S3.
 
     Parameters

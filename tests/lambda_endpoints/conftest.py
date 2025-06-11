@@ -98,7 +98,7 @@ def invalid_file():
     )
 
 
-@pytest.fixture(autouse=True, scope="module")
+@pytest.fixture(autouse=True)
 def s3_client():
     """Mock S3 Client, so we don't need network requests."""
     with mock_s3():
