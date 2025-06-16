@@ -1,41 +1,22 @@
 """Test the I-Alirt ingest lambda function."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
 import pytest
+import xarray as xr
+from boto3.dynamodb.conditions import Key
 
 from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import (
+    insert_data,
     lambda_handler,
-    parse_packet,
+    parse_packets,
+    process_algorithms,
     query_filenames,
 )
-
-
-@pytest.fixture
-def populate_table(setup_dynamodb):
-    """Populate DynamoDB table."""
-    ingest_table = setup_dynamodb["ingest_table"]
-
-    items = [
-        {
-            "apid": 478,
-            "met": 123,
-            "ingest_time": "2021-01-01T00:00:00Z",
-            "packet_blob": b"binary_data_string",
-        },
-        {
-            "apid": 478,
-            "met": 124,
-            "ingest_time": "2021-02-01T00:00:00Z",
-            "packet_blob": b"binary_data_string",
-        },
-    ]
-    for item in items:
-        ingest_table.put_item(Item=item)
-
-    return items
 
 
 @pytest.fixture
@@ -75,30 +56,51 @@ def test_lambda_handler(setup_dynamodb):
     )
     item = response.get("Item")
 
-    assert item["met"] == 123
-    assert item["insert_time"] == "2021-01-01T00:00:00Z"
-    assert item["product_name"] == "hit_product_1"
-    assert item["data_product_1"] == str(1234.56)
+    assert item is None
 
 
 @patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.packet_file_to_datasets")
 def test_parse_packet_s3(mock_packet_file_to_datasets, s3_test_packet, tmp_path):
     """Test parse_packet function."""
-    expected_result = {"123": "parsed dataset"}
-    mock_packet_file_to_datasets.return_value = expected_result
+    ds = xr.Dataset({"data": (["epoch"], [1.0])}, coords={"epoch": (["epoch"], [100])})
+    mock_packet_file_to_datasets.return_value = {478: ds}
 
-    filename = Path(s3_test_packet).name
+    filename = [Path(s3_test_packet).name]
 
-    result = parse_packet(
-        filename, "test-data-bucket", s3_test_packet, download_dir=str(tmp_path)
-    )
+    result = parse_packets(filename, "test-data-bucket", tmp_path)
 
-    assert result == expected_result
+    assert result == ds
     mock_packet_file_to_datasets.assert_called_once()
 
     # Check if file was downloaded
-    real_tmp_file = tmp_path / filename
+    real_tmp_file = tmp_path / filename[0]
     assert real_tmp_file.exists()
+
+
+@patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.packet_file_to_datasets")
+def test_parse_packet_duplicate(mock_packet_file_to_datasets, s3_test_packet, tmp_path):
+    """Test parse_packet function that duplicate packets are removed."""
+    # Simulate two datasets with the same epoch.
+    ds1 = xr.Dataset({"data": (["epoch"], [1.0])}, coords={"epoch": (["epoch"], [100])})
+    ds2 = xr.Dataset({"data": (["epoch"], [2.0])}, coords={"epoch": (["epoch"], [100])})
+
+    # Each time the function packet_file_to_datasets() is called
+    # return the next item from this list.
+    mock_packet_file_to_datasets.side_effect = [
+        {478: ds1},
+        {478: ds2},
+    ]
+
+    filenames = [s3_test_packet, s3_test_packet]
+
+    combined = parse_packets(filenames, "test-data-bucket", tmp_path)
+
+    # One entry remains.
+    assert isinstance(combined, xr.Dataset)
+    assert len(combined["epoch"]) == 1
+
+    # Mock was called twice.
+    assert mock_packet_file_to_datasets.call_count == 2
 
 
 def test_query_filenames(s3_client):
@@ -141,3 +143,96 @@ def test_query_filenames_crossing_hour_boundary(s3_client):
     result = query_filenames(bucket, region, now)
 
     assert sorted(result) == sorted([first_prefix_key, second_prefix_key])
+
+
+def test_insert_data(setup_dynamodb):
+    """Test insert_data function."""
+    algorithm_table = setup_dynamodb["algorithm_table"]
+
+    # Existing item with 'hit' keys
+    algorithm_table.put_item(
+        Item={"apid": 478, "met": 123456, "hit_e_a_side_low_en": Decimal("0.0")}
+    )
+
+    # Existing item with no 'hit' keys
+    algorithm_table.put_item(Item={"apid": 478, "met": 123457, "other_data": 42})
+
+    # Create data for all three cases
+    test_data = [
+        # Will skip.
+        {
+            "apid": 478,
+            "met": 123456,
+            "utc": "2025-05-21T14:00:00",
+            "ttj2000ns": 759175836184000000,
+            "hit_e_a_side_med_en": Decimal("2.0"),
+        },
+        # Will update.
+        {
+            "apid": 478,
+            "met": 123457,
+            "utc": "2025-05-21T14:00:01",
+            "ttj2000ns": 759175836184000001,
+            "hit_e_a_side_low_en": Decimal("3.0"),
+        },
+        # Will insert.
+        {
+            "apid": 478,
+            "met": 123458,
+            "utc": "2025-05-21T14:00:02",
+            "ttj2000ns": 759175836184000002,
+            "hit_e_a_side_low_en": Decimal("5.0"),
+        },
+    ]
+
+    insert_data(test_data, algorithm_table, "hit")
+
+    item1 = algorithm_table.get_item(Key={"apid": 478, "met": 123456})["Item"]
+    item2 = algorithm_table.get_item(Key={"apid": 478, "met": 123457})["Item"]
+    item3 = algorithm_table.get_item(Key={"apid": 478, "met": 123458})["Item"]
+
+    # Not updated
+    assert item1["hit_e_a_side_low_en"] == Decimal("0.0")
+
+    # Existing item with no 'hit' data should be updated
+    assert item2["hit_e_a_side_low_en"] == Decimal("3.0")
+    assert item2["other_data"] == 42  # Original data still there
+
+    # New item should be inserted
+    assert item3["hit_e_a_side_low_en"] == Decimal("5.0")
+
+
+@mock.patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.process_hit")
+@mock.patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.process_swe")
+def test_process_algorithms(mock_swe, mock_hit, setup_dynamodb):
+    """Tests process_algorithms function."""
+    algorithm_table = setup_dynamodb["algorithm_table"]
+
+    mock_hit.return_value = [
+        {
+            "apid": 478,
+            "met": 111,
+            "hit_e_a_side_low_en": Decimal("1.0"),
+        }
+    ]
+    mock_swe.return_value = [
+        {
+            "apid": 478,
+            "met": 222,
+            "swe_normalized_counts_quarter_1_esa_0": Decimal("0.123"),
+        }
+    ]
+
+    process_algorithms(combined=None, algorithm_table=algorithm_table)
+
+    response = algorithm_table.query(KeyConditionExpression=Key("apid").eq(478))[
+        "Items"
+    ]
+
+    assert any(
+        item["met"] == 111 and "hit_e_a_side_low_en" in item for item in response
+    )
+    assert any(
+        item["met"] == 222 and "swe_normalized_counts_quarter_1_esa_0" in item
+        for item in response
+    )

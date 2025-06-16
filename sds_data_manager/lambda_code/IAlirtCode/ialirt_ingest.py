@@ -8,43 +8,16 @@ from pathlib import Path
 
 import boto3
 import botocore
+import numpy as np
+import xarray as xr
+from boto3.dynamodb.conditions import Key
 from imap_processing import imap_module_directory
+from imap_processing.ialirt.l0.process_hit import process_hit
+from imap_processing.ialirt.l0.process_swe import process_swe
 from imap_processing.utils import packet_file_to_datasets
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-def parse_packet(filename: str, bucket: str, key: str, download_dir: Path):
-    """Parse the packet.
-
-    Parameters
-    ----------
-    filename : str
-        The name of the file to be downloaded from S3.
-    bucket : str
-        The name of the S3 bucket.
-    key : str
-        The key of the file in the S3 bucket.
-    download_dir : Path
-        The directory where the file will be downloaded.
-
-    Returns
-    -------
-    datasets_by_apid : xr.Dataset
-        Parsed dataset.
-    """
-    local_path = os.path.join(download_dir, filename)
-
-    s3 = boto3.client("s3")
-    s3.download_file(bucket, key, local_path)
-    logger.info("Downloaded file to %s", local_path)
-
-    xtce = os.path.join(imap_module_directory, "ialirt.xml")
-
-    datasets_by_apid = packet_file_to_datasets(local_path, xtce)
-
-    return datasets_by_apid
 
 
 def query_filenames(bucket: str, region: str, now: datetime):
@@ -91,6 +64,7 @@ def query_filenames(bucket: str, region: str, now: datetime):
     for obj in objects:
         key = obj["Key"]
         timestamp_str = key.split("iois_1_packets_")[1]
+        timestamp_str = timestamp_str.removesuffix(".bin")
         timestamp = datetime.strptime(timestamp_str, "%Y_%j_%H_%M_%S")
         timestamp = timestamp.replace(tzinfo=timezone.utc)
 
@@ -98,6 +72,127 @@ def query_filenames(bucket: str, region: str, now: datetime):
             filenames.append(key)
 
     return filenames
+
+
+def parse_packets(filenames: list, bucket: str, download_dir: Path, apid=478):
+    """Get packets into datasets and combine.
+
+    This function is an event handler for s3 ingest bucket.
+    It is also used to ingest data to the DynamoDB table.
+
+    Parameters
+    ----------
+    filenames : list
+        List of file paths.
+    bucket : str
+        The name of the S3 bucket.
+    download_dir : Path
+        The directory where the file will be downloaded.
+    apid : int
+        The apid of the packet to be processed.
+
+    Returns
+    -------
+    combined : xr.Dataset
+        Combined dataset.
+    """
+    s3 = boto3.client("s3")
+    xtce_ialirt_path = (
+        imap_module_directory / "ialirt" / "packet_definitions" / "ialirt.xml"
+    )
+    datasets = []
+
+    for filename in filenames:
+        local_path = download_dir / Path(filename).name
+        s3.download_file(bucket, filename, str(local_path))
+        xarray_data = packet_file_to_datasets(local_path, xtce_ialirt_path)[apid]
+        datasets.append(xarray_data)
+
+    combined = xr.concat(datasets, dim="epoch")
+    # Drop duplicate epochs. This could happen if there are duplicate packets.
+    _, unique_idx = np.unique(combined["epoch"], return_index=True)
+    combined = combined.isel(epoch=sorted(unique_idx))
+
+    return combined
+
+
+def process_algorithms(combined: xr.Dataset, algorithm_table):
+    """Process the algorithms and insert data, as needed.
+
+    Parameters
+    ----------
+    combined : xr.Dataset
+        L0 parsed data.
+    algorithm_table : dynamodb.Table
+        The DynamoDB table to insert or update the data.
+    """
+    processors = [
+        ("hit", process_hit),
+        ("swe", process_swe),
+    ]
+
+    for instrument, process_func in processors:
+        insert_data(process_func(combined), algorithm_table, instrument)
+
+
+def insert_data(data: list[dict], algorithm_table, instrument: str):
+    """Insert or update database row, depending on content of item.
+
+    Parameters
+    ----------
+    data : list[dict]
+        Data product produced from processing respectively instrument.
+    algorithm_table : dynamodb.Table
+        The DynamoDB table to insert or update the data.
+    instrument : str
+        The prefix for the product name.
+    """
+    apid = data[0]["apid"]
+    mets = [item["met"] for item in data]
+    min_met = min(mets)
+    max_met = max(mets)
+
+    # Query existing items.
+    response = algorithm_table.query(
+        KeyConditionExpression=Key("apid").eq(apid)
+        & Key("met").between(min_met, max_met)
+    )
+
+    existing_items = {item["met"]: item for item in response.get("Items", [])}
+
+    # Insert or update as needed
+    for raw in data:
+        met = raw["met"]
+        key = {"apid": apid, "met": met}
+        existing = existing_items.get(met)
+        raw["insert_time"] = datetime.now(timezone.utc).isoformat()
+
+        if existing:
+            if any(key.startswith(instrument) for key in existing.keys()):
+                logger.info(f"{instrument.upper()} data already exists for met={met}.")
+                continue
+
+            update_expr = "SET " + ", ".join(
+                f"{field} = :{field}"
+                for field in raw
+                if field not in {"apid", "met", "utc", "ttj2000ns"}
+            )
+
+            expression_values = {
+                f":{field}": value
+                for field, value in raw.items()
+                if field not in {"apid", "met", "utc", "ttj2000ns"}
+            }
+
+            algorithm_table.update_item(
+                Key=key,
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expression_values,
+            )
+            logger.info(f"Updated met={met} with {instrument.upper()} data.")
+        else:
+            algorithm_table.put_item(Item=raw)
+            logger.info(f"Inserted new {instrument.upper()} item for met={met}.")
 
 
 def lambda_handler(event, context):
@@ -130,22 +225,22 @@ def lambda_handler(event, context):
     filename = os.path.basename(s3_filepath)
     logger.info("Retrieved filename: %s", filename)
 
-    # TODO: Each of these steps in temporary, but provides an idea
-    #  of how the lambda will be used.
-
-    # 1. Query s3 for packet filenames from past 5 minutes.
-    now = datetime.now(timezone.utc)
+    # Query s3 for packet filenames from past 5 minutes.
+    if "now" in event:
+        now = datetime.fromisoformat(event["now"].replace("Z", "")).replace(
+            tzinfo=timezone.utc
+        )
+    else:
+        now = datetime.now(timezone.utc)
     filenames = query_filenames(bucket, region, now)
-    print(filenames)
-    # TODO: will use filenames here.
 
-    # 2. After processing insert data into Algorithm Table.
-    item = {
-        "apid": 478,
-        "met": 123,
-        "insert_time": "2021-01-01T00:00:00Z",
-        "product_name": "hit_product_1",
-        "data_product_1": str(1234.56),
-    }
-    algorithm_table.put_item(Item=item)
-    logger.info("Successfully wrote item to DynamoDB: %s", item)
+    if filenames:
+        logger.info("Found %d files to process", len(filenames))
+        # Get packets into datasets and combine.
+        combined = parse_packets(filenames, bucket, Path("/tmp"))  # noqa: S108
+        # Process algorithms and insert new data.
+        process_algorithms(combined, algorithm_table)
+
+        logger.info("Successfully wrote all new items to DynamoDB")
+    else:
+        logger.info("No files found to process in the last 5 minutes.")
