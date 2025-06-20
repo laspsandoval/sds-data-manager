@@ -34,7 +34,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import 
     CadenceDays,
     determine_job_version,
     lambda_handler,
-    upload_cadence_file,
+    upload_dependency_file,
 )
 
 from .conftest import (
@@ -59,7 +59,7 @@ def _populate_processing_table(session):
     session.commit()
 
 
-def test_lambda_handler(session):
+def test_lambda_handler(session, s3_client):
     """Tests ``lambda_handler`` function."""
     _populate_file_catalog(session)
     events = {
@@ -72,11 +72,10 @@ def test_lambda_handler(session):
             }
         ]
     }
-    serialized_processing_input = [
-        {"type": "spice", "files": ["naif0012.tls", "imap_sclk_0000.tsc"]},
-        {"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]},
-    ]
-
+    processing_input = ProcessingInputCollection(
+        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
+        ScienceInput("imap_swe_l0_raw_20240110_v001.pkts"),
+    )
     context = {"context": "sample_context"}
 
     with (
@@ -103,16 +102,26 @@ def test_lambda_handler(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    json.dumps(serialized_processing_input),
+                    "imap_swe_l1a_sci_20240110_v001.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
-        mock_sqs_client.delete_message.assert_called_once()
+    mock_sqs_client.delete_message.assert_called_once()
+    # Verify the function was called with the correct upstream dependencies
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"},
+            dt.datetime(2024, 1, 10, 0, 0),
+            "v002",
+            processing_input.serialize(),
+        )
 
 
-def test_lambda_handler_multiple_events(session):
+def test_lambda_handler_multiple_events(session, s3_client):
     """Tests ``lambda_handler`` function with multiple events."""
     # Test Multiple Events:
     _populate_file_catalog(session)
@@ -174,8 +183,6 @@ def test_lambda_handler_ancillary_event(session):
                 "files": ["imap_swe_eu-conversion_20221231_v001.cdf"],
             },
         ]
-        dependencies = ProcessingInputCollection()
-        dependencies.deserialize(json.dumps(inputs))
         mock_batch_client.submit_job.assert_called_with(
             jobName="swe-l1b-sci-job-2",
             jobQueue="ProcessingJobQueue",
@@ -193,11 +200,22 @@ def test_lambda_handler_ancillary_event(session):
                     "--version",
                     "v002",
                     "--dependency",
-                    dependencies.serialize(),
+                    "imap_swe_l1b_sci_20240102_v002.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Assert that the try_to_submit_job function was called with the correct
+    # upstream dependencies
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "swe", "data_type": "l1b", "descriptor": "sci"},
+            dt.datetime(2024, 1, 2, 0, 0),
+            "v003",
+            json.dumps(inputs),
         )
 
 
@@ -539,11 +557,21 @@ def test_idex_l2b(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_idex_l2b_sci-1week_20230209_v001.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Verify the function was called with the correct upstream dependencies
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1week"},
+            dt.datetime(2023, 2, 9, 0, 0),
+            "v002",
+            expected_processing_input.serialize(),
         )
 
 
@@ -689,7 +717,7 @@ def test_ultra_l3_map(session, caplog):
                     "--version",
                     "v001",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo_20240201_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -698,6 +726,22 @@ def test_ultra_l3_map(session, caplog):
         # Assert that only one job is submitted.
         assert mock_batch_client.submit_job.call_count == 1
         assert "Already tried to submit job from a GLOWS l3e file." in caplog.text
+
+        # Assert that the try_to_submit_job function was called with the correct
+        # upstream dependencies
+        with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+            lambda_handler(events, context)
+            mock_submit.assert_called_with(
+                session,
+                {
+                    "data_source": "ultra",
+                    "data_type": "l3",
+                    "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
+                },
+                dt.datetime(2024, 2, 1, 0, 0),
+                "v002",
+                expected_processing_input.serialize(),
+            )
 
 
 def test_bulk_reprocessing_special_case(session):
@@ -813,7 +857,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_mag_l1c_norm-mago_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -881,11 +925,22 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v002",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_mag_l1c_norm-mago_20240101_v002.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Assert that the try_to_submit_job function was called with the correct
+    # upstream dependencies
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "mag", "data_type": "l1c", "descriptor": "norm-mago"},
+            dt.datetime(2024, 1, 1, 0, 0),
+            "v003",
+            expected_processing_input.serialize(),
         )
 
 
@@ -1011,7 +1066,7 @@ def test_cadence_to_datetime_range():
         assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
 
 
-def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
+def test_upload_dependency_file(s3_client, tmp_path, cadence_file, caplog):
     """Test uploading a cadence json file to S3."""
     caplog.set_level("INFO")
     dependencies = ProcessingInputCollection(
@@ -1022,7 +1077,7 @@ def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
     )
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
-        upload_cadence_file(cadence_dependency_path, dependencies)
+        upload_dependency_file(cadence_dependency_path, dependencies.serialize())
     assert "Cadence file uploaded successfully" in caplog.text
 
 
@@ -1352,9 +1407,19 @@ def test_spice_event(session, s3_client):
                     "--version",
                     "v001",
                     "--dependency",
-                    json.dumps(expected_dependency_input),
+                    "imap_idex_l1b_sci-1week_20250429_v001.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+
+    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+        lambda_handler(events, None)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "idex", "data_type": "l1b", "descriptor": "sci-1week"},
+            dt.datetime(2025, 4, 29, 0, 0),
+            "v002",
+            json.dumps(expected_dependency_input),
         )
