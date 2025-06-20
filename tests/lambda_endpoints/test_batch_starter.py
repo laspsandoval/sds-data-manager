@@ -479,102 +479,6 @@ def test_bulk_reprocessing_all_swe(session, caplog):
 
 
 ###### SPECIAL CASE TESTS #######
-def test_idex_l2b(session):
-    """Tests ``lambda_handler` for unique idex l2b case."""
-    _populate_file_catalog(session)
-    # Add 9 idex l1b evt files. Some of these will be used as dependencies for the job.
-    session.add_all(
-        [
-            ScienceFiles(
-                file_path=f"/path/to/imap_idex_l1b_evt_2023020{day}_v001.cdf",
-                instrument="idex",
-                data_level="l1b",
-                descriptor="evt",
-                start_date=datetime(2023, 2, day),
-                version="v001",
-                extension="cdf",
-                ingestion_date=datetime.strptime(
-                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-                ),
-            )
-            for day in range(1, 10)
-        ]
-    )
-    session.add_all(
-        [
-            ScienceFiles(
-                file_path=f"/path/to/imap_idex_{level}_sci-1week_2023020{day}_v001.cdf",
-                instrument="idex",
-                data_level=level,
-                descriptor="sci-1week",
-                start_date=datetime(2023, 2, day),
-                version="v001",
-                extension="cdf",
-                ingestion_date=datetime.strptime(
-                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-                ),
-            )
-            for day, level in zip([2, 9], ["l2b", "l2a"])
-        ]
-    )
-    session.commit()
-    events = {
-        "Records": [
-            {
-                "body": '{"detail": '
-                '{"object": {"key": "imap_idex_l2a_sci-1week_20230209_v001.cdf"}}'
-                "}"
-            }
-        ]
-    }
-    context = {"context": "sample_context"}
-    expected_processing_input = ProcessingInputCollection(
-        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
-        ScienceInput("imap_idex_l2a_sci-1week_20230209_v001.cdf"),
-    )
-    # There will be 6 l1b evt files that are used as dependencies for the job and
-    # None of them should be before the existing l2b file start_date.
-    l1b_files = [f"imap_idex_l1b_evt_2023020{day}_v001.cdf" for day in range(3, 10)]
-    expected_processing_input.add(ScienceInput(*l1b_files))
-
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
-        lambda_handler(events, context)
-        # Verify the function was called
-        mock_batch_client.submit_job.assert_called_with(
-            jobName="idex-l2b-sci-1week-job-1",
-            jobQueue="ProcessingJobQueue",
-            jobDefinition="ProcessingJob-idex",
-            containerOverrides={
-                "command": [
-                    "--instrument",
-                    "idex",
-                    "--data-level",
-                    "l2b",
-                    "--descriptor",
-                    "sci-1week",
-                    "--start-date",
-                    "20230209",
-                    "--version",
-                    "v001",
-                    "--dependency",
-                    "imap_idex_l2b_sci-1week_20230209_v001.json",
-                    "--upload-to-sdc",
-                ]
-            },
-            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
-        )
-    # Verify the function was called with the correct upstream dependencies
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
-        lambda_handler(events, context)
-        mock_submit.assert_called_with(
-            session,
-            {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1week"},
-            dt.datetime(2023, 2, 9, 0, 0),
-            "v002",
-            expected_processing_input.serialize(),
-        )
-
-
 def test_ultra_l3_map(session, caplog):
     """Tests ``lambda_handler` for unique ultra l3 map case."""
     # Add 6 months of glows l3e files and 1 ultra l2 map file. These are the
@@ -747,40 +651,41 @@ def test_ultra_l3_map(session, caplog):
 def test_bulk_reprocessing_special_case(session):
     """Tests ``lambda_handler`` for a special case in bulk reprocessing."""
     # Add test data to the database for the special case
-    # Add idex l1b evt files. Some of these will be used as dependencies for the job.
+    # Add hi l2 files. Some of these will be used as dependencies for the job.
     _populate_file_catalog(session)
+    # TODO fix dates to be more accurate
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_l1b_evt_2024020{day}_v001.cdf",
-                instrument="idex",
-                data_level="l1b",
-                descriptor="evt",
-                start_date=datetime(2024, 2, day),
+                file_path=f"/path/to/imap_hi_l2_h90-ena-h-sf-nsp-ram-hae-4deg-6mo_{date}_v001.cdf",
+                instrument="hi",
+                data_level="l2",
+                descriptor="h90-ena-h-sf-nsp-ram-hae-4deg-6mo",
+                start_date=datetime.strptime(date, "%Y%m%d"),
                 version="v001",
                 extension="cdf",
                 ingestion_date=datetime.strptime(
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for day in range(1, 3)
+            for date in ["20240202", "20240803"]
         ]
     )
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_{level}_sci-1week_2024020{day}_v001.cdf",
-                instrument="idex",
-                data_level=level,
-                descriptor="sci-1week",
-                start_date=datetime(2024, 2, day),
+                file_path=f"/path/to/imap_hi_l2_h90-ena-h-sf-nsp-anti-hae-4deg-6mo_{date}_v001.cdf",
+                instrument="hi",
+                data_level="l2",
+                descriptor="h90-ena-h-sf-nsp-anti-hae-4deg-6mo",
+                start_date=datetime.strptime(date, "%Y%m%d"),
                 version="v001",
                 extension="cdf",
                 ingestion_date=datetime.strptime(
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for day, level in zip([1, 2, 1, 2], ["l2b", "l2b", "l2a", "l2a"])
+            for date in ["20240202", "20240803"]
         ]
     )
     session.commit()
@@ -789,18 +694,18 @@ def test_bulk_reprocessing_special_case(session):
     events = {
         "queryStringParameters": {
             "reprocessing": "True",
-            "start_date": "20240201",
-            "end_date": "20240210",
-            "instrument": "idex",
-            "data_level": "l2b",
-            "descriptor": "sci-1week",
+            "start_date": "20240101",
+            "end_date": "20250210",
+            "instrument": "hi",
+            "data_level": "l3",
+            "descriptor": "h90-ena-h-sf-sp-full-hae-4deg-6mo",
         }
     }
     context = {"context": "None"}
 
     with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
         lambda_handler(events, context)
-        # Verify that 2 l2b jobs were reprocessed
+        # Verify that the hi l3 jobs were reprocessed
         assert mock_batch_client.submit_job.call_count == 2
 
 
@@ -1030,6 +935,108 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+
+
+def test_idex_l2b(session):
+    """Tests ``lambda_handler` for unique idex l2b case."""
+    _populate_file_catalog(session)
+    # Add 9 idex l1b evt files. All of these will be used as dependencies for the job.
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_idex_l1b_evt_2023020{day}_v001.cdf",
+                instrument="idex",
+                data_level="l1b",
+                descriptor="evt",
+                start_date=datetime(2023, 2, day),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for day in range(1, 10)
+        ]
+    )
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_idex_{level}_sci-1week_2023020{day}_v001.cdf",
+                instrument="idex",
+                data_level=level,
+                descriptor="sci-1week",
+                start_date=datetime(2023, 2, day),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for day, level in zip([2, 9], ["l2b", "l2a"])
+        ]
+    )
+    session.commit()
+    cadence_event = {
+        "cadence": "1mo",
+    }
+    expected_processing_input = ProcessingInputCollection(
+        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
+        ScienceInput("imap_idex_l2a_sci-1week_20230209_v001.cdf"),
+    )
+    # There will be 6 l1b evt files that are used as dependencies for the job.
+    l1b_files = [f"imap_idex_l1b_evt_2023020{day}_v001.cdf" for day in range(1, 10)]
+    expected_processing_input.add(ScienceInput(*l1b_files))
+
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
+            ".cadence_to_datetime_range"
+        ) as dt_mock,
+    ):
+        dt_mock.return_value = ("20230109", "20230209")
+        lambda_handler(cadence_event, None)
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="idex-l2b-sci-1mo-job-1",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-idex",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "idex",
+                    "--data-level",
+                    "l2b",
+                    "--descriptor",
+                    "sci-1mo",
+                    "--start-date",
+                    "20230109",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    "imap_idex_l2b_sci-1mo_20230109_v001.json",
+                    "--upload-to-sdc",
+                ]
+            },
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Verify the function was called with the correct upstream dependencies
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
+            ".cadence_to_datetime_range"
+        ) as dt_mock,
+    ):
+        dt_mock.return_value = ("20230109", "20230209")
+        lambda_handler(cadence_event, None)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1mo"},
+            dt.datetime(2023, 1, 9, 0, 0),
+            "v001",
+            expected_processing_input.serialize(),
         )
 
 
