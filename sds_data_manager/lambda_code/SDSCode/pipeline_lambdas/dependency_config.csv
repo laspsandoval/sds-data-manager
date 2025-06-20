@@ -99,7 +99,6 @@ glows, ancillary, uv-anisotropy-1CR, glows, l3b, ion-rate-profile, HARD, DOWNSTR
 glows, ancillary, WawHelioIonMP, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
 glows, ancillary, bad-days-list, glows, l3b, ion-rate-profile, HARD, DOWNSTREAM
 repoint, repoint, historical, glows, l3b, ion-rate-profile, HARD_NO_TRIGGER, DOWNSTREAM
-# science_frames, spice, historical, glows, l3b, ion-rate-profile, HARD_NO_TRIGGER, DOWNSTREAM
 
 
 glows, l3c, sw-profile, glows, l3d, solar-hist, HARD, DOWNSTREAM
@@ -126,9 +125,11 @@ glows, l3d, speed, glows, l3e, survival-probability-lo, HARD, DOWNSTREAM
 glows, l3d, uv-anis, glows, l3e, survival-probability-lo, HARD, DOWNSTREAM
 glows, l3d, e-dens, glows, l3e, survival-probability-lo, HARD, DOWNSTREAM
 glows, ancillary, pipeline-settings-l3bcde, glows, l3e, survival-probability-lo, HARD, DOWNSTREAM
-# science_frames, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 attitude_history, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+planetary_ephemeris, spice, best, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 repoint, repoint, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
@@ -144,9 +145,11 @@ glows, l3d, speed, glows, l3e, survival-probability-hi-45, HARD, DOWNSTREAM
 glows, l3d, uv-anis, glows, l3e, survival-probability-hi-45, HARD, DOWNSTREAM
 glows, l3d, e-dens, glows, l3e, survival-probability-hi-45, HARD, DOWNSTREAM
 glows, ancillary, pipeline-settings-l3bcde, glows, l3e, survival-probability-hi-45, HARD, DOWNSTREAM
-# science_frames, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 attitude_history, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+planetary_ephemeris, spice, best, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
 repoint, repoint, historical, glows, l3e, survival-probability-hi-45, HARD_NO_TRIGGER, DOWNSTREAM
@@ -162,9 +165,11 @@ glows, l3d, speed, glows, l3e, survival-probability-hi-90, HARD, DOWNSTREAM
 glows, l3d, uv-anis, glows, l3e, survival-probability-hi-90, HARD, DOWNSTREAM
 glows, l3d, e-dens, glows, l3e, survival-probability-hi-90, HARD, DOWNSTREAM
 glows, ancillary, pipeline-settings-l3bcde, glows, l3e, survival-probability-hi-90, HARD, DOWNSTREAM
-# science_frames, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 attitude_history, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+planetary_ephemeris, spice, best, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
 repoint, repoint, historical, glows, l3e, survival-probability-hi-90, HARD_NO_TRIGGER, DOWNSTREAM
@@ -181,9 +186,11 @@ glows, l3d, speed, glows, l3e, survival-probability-ul, HARD, DOWNSTREAM
 glows, l3d, uv-anis, glows, l3e, survival-probability-ul, HARD, DOWNSTREAM
 glows, l3d, e-dens, glows, l3e, survival-probability-ul, HARD, DOWNSTREAM
 glows, ancillary, pipeline-settings-l3bcde, glows, l3e, survival-probability-ul, HARD, DOWNSTREAM
-# science_frames, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 attitude_history, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
+planetary_ephemeris, spice, best, glows, l3e, survival-probability-lo, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
 repoint, repoint, historical, glows, l3e, survival-probability-ul, HARD_NO_TRIGGER, DOWNSTREAM
@@ -598,9 +605,10 @@ swapi, ancillary, density-of-neutral-helium-lut, swapi, l3a, proton-sw, HARD, DO
 ephemeris_reconstructed, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
 attitude_history, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
-#imap_frames, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
-# science_frames, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, swapi, l3a, proton-sw, HARD_NO_TRIGGER, DOWNSTREAM
 
 swapi, l2, sci, swapi, l3a, pui-he, HARD, DOWNSTREAM
 swapi, ancillary, clock-angle-and-flow-deflection-lut, swapi, l3a, pui-he, HARD, DOWNSTREAM
@@ -613,6 +621,8 @@ ephemeris_reconstructed, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER,
 attitude_history, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER, DOWNSTREAM
+imap_frames, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, swapi, l3a, pui-he, HARD_NO_TRIGGER, DOWNSTREAM
 
 swapi, l2, sci, swapi, l3b, combined, HARD, DOWNSTREAM
 swapi, ancillary, efficiency-lut, swapi, l3b, combined, HARD, DOWNSTREAM
@@ -639,6 +649,8 @@ swe, l2, sci, swe, l3, sci, HARD, DOWNSTREAM
 swe, ancillary, config, swe, l3, sci, HARD, DOWNSTREAM
 swapi, l3a, proton-sw, swe, l3, sci, HARD, DOWNSTREAM
 mag, l1d, norm-mago, swe, l3, sci, HARD, DOWNSTREAM
+imap_frames, spice, historical, swe, l3, sci, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, swe, l3, sci, HARD_NO_TRIGGER, DOWNSTREAM
 ephemeris_reconstructed, spice, historical, swe, l3, sci, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, swe, l3, sci, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, swe, l3, sci, HARD_NO_TRIGGER, DOWNSTREAM
