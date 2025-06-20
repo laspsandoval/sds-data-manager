@@ -749,12 +749,12 @@ def bulk_reprocessing_event(session, events):
 
 
 def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
-    """Upload a JSON file containing a cadence job's dependencies to S3.
+    """Upload a JSON file containing a job's dependencies to S3.
 
     Parameters
     ----------
     dependency_file_path : Path
-        The cadence JSON file to upload.
+        The dependency JSON file to upload.
     serialized_dependencies : str
         The serialized upstream dependencies to upload.
     """
@@ -769,9 +769,10 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
     )
     if signed_url["statusCode"] != 200:
         logger.error(
-            f"Failed to get signed URL for cadence file upload: {signed_url['body']}, "
-            f"with status code: {signed_url['statusCode']}. Cadence file upload failed "
-            f"the job did not get kicked off."
+            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
+            f"As a result, failed to kick off job. "
+            f"Error message: {signed_url['body']}, "
+            f"with status code: {signed_url['statusCode']}."
         )
         return None
     try:
