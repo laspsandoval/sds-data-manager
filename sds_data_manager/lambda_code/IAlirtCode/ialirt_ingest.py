@@ -22,7 +22,9 @@ from imap_data_access.processing_input import (
 from imap_processing import imap_module_directory
 from imap_processing.cdf.utils import load_cdf
 from imap_processing.ialirt.l0.parse_mag import process_packet
+from imap_processing.ialirt.l0.process_codice import process_codice
 from imap_processing.ialirt.l0.process_hit import process_hit
+from imap_processing.ialirt.l0.process_swapi import process_swapi_ialirt
 from imap_processing.ialirt.l0.process_swe import process_swe
 from imap_processing.utils import packet_file_to_datasets
 
@@ -245,6 +247,9 @@ def process_algorithms(combined: xr.Dataset, algorithm_table):
         ("hit", process_hit),
         ("swe", process_swe),
         ("mag", process_packet),
+        ("codicelo", process_codice),
+        ("codicehi", process_codice),
+        ("swapi", process_swapi_ialirt),
     ]
 
     for instrument, process_func in processors:
@@ -255,11 +260,21 @@ def process_algorithms(combined: xr.Dataset, algorithm_table):
             download_path = get_ancillary(instrument, "l1b-calibration")
             calibration_data = load_cdf(download_path)
             result, _ = process_func(combined, calibration_data)
+        elif instrument == "codicelo":
+            result, _ = process_func(combined)
+        elif instrument == "codicehi":
+            _, result = process_func(combined)
         else:
             result = process_func(combined)
 
         logger.info("%s result: %s", instrument, result)
-        if result:
+        # TODO: remove this once we fix codice and swapi
+        #  in imap_processing to use int(met).
+        for item in result:
+            if isinstance(item.get("met"), np.generic):
+                item["met"] = int(item["met"])
+
+        if any(result) and all(result):
             insert_data(result, algorithm_table, instrument)
 
 
