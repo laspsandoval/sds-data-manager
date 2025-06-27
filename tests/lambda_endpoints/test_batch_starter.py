@@ -941,30 +941,43 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
 def test_idex_l2b(session):
     """Tests ``lambda_handler` for unique idex l2b case."""
     _populate_file_catalog(session)
-    # Add 9 idex l1b evt files. All of these will be used as dependencies for the job.
+    # Add 2 idex l1b evt files. Although the second file is out of the month range,
+    # It should be included in the ProcessingInputCollection because IDEX l2b jobs
+    # need housekeeping files that may be before the start date of the cadence job.
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_l1b_evt_2023020{day}_v001.cdf",
+                file_path="/path/to/imap_idex_l1b_evt_20230201_v001.cdf",
                 instrument="idex",
                 data_level="l1b",
                 descriptor="evt",
-                start_date=datetime(2023, 2, day),
+                start_date=datetime(2023, 2, 1),
                 version="v001",
                 extension="cdf",
                 ingestion_date=datetime.strptime(
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
-            )
-            for day in range(1, 10)
+            ),
+            ScienceFiles(
+                file_path="/path/to/imap_idex_l1b_evt_20230101_v001.cdf",
+                instrument="idex",
+                data_level="l1b",
+                descriptor="evt",
+                start_date=datetime(2023, 1, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
         ]
     )
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_{level}_sci-1week_2023020{day}_v001.cdf",
+                file_path=f"/path/to/imap_idex_l2a_sci-1week_2023020{day}_v001.cdf",
                 instrument="idex",
-                data_level=level,
+                data_level="l2a",
                 descriptor="sci-1week",
                 start_date=datetime(2023, 2, day),
                 version="v001",
@@ -973,7 +986,7 @@ def test_idex_l2b(session):
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for day, level in zip([2, 9], ["l2b", "l2a"])
+            for day in [2, 9]
         ]
     )
     session.commit()
@@ -982,11 +995,15 @@ def test_idex_l2b(session):
     }
     expected_processing_input = ProcessingInputCollection(
         SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
-        ScienceInput("imap_idex_l2a_sci-1week_20230209_v001.cdf"),
+        ScienceInput("imap_idex_l2a_sci-1week_20230202_v001.cdf"),
+        # There will be 2 science inputs containing l1b evt dependencies.
+        # The second input should include both l1b housekeeping files. THe IDEX
+        # l2b processing code will deduplicate all of the inputs
+        ScienceInput("imap_idex_l1b_evt_20230201_v001.cdf"),
+        ScienceInput(
+            "imap_idex_l1b_evt_20230201_v001.cdf", "imap_idex_l1b_evt_20230101_v001.cdf"
+        ),
     )
-    # There will be 6 l1b evt files that are used as dependencies for the job.
-    l1b_files = [f"imap_idex_l1b_evt_2023020{day}_v001.cdf" for day in range(1, 10)]
-    expected_processing_input.add(ScienceInput(*l1b_files))
 
     with (
         patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
@@ -995,7 +1012,7 @@ def test_idex_l2b(session):
             ".cadence_to_datetime_range"
         ) as dt_mock,
     ):
-        dt_mock.return_value = ("20230109", "20230209")
+        dt_mock.return_value = ("20230209", "20230309")
         lambda_handler(cadence_event, None)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
@@ -1029,7 +1046,7 @@ def test_idex_l2b(session):
             ".cadence_to_datetime_range"
         ) as dt_mock,
     ):
-        dt_mock.return_value = ("20230109", "20230209")
+        dt_mock.return_value = ("20230209", "20230309")
         lambda_handler(cadence_event, None)
         mock_submit.assert_called_with(
             session,

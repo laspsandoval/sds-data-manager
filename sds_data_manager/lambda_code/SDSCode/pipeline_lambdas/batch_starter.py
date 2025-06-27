@@ -256,10 +256,6 @@ def get_special_case_date_range(session, job_node, start_date):
 
     start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
 
-    # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
-    # These jobs require both l2 map files and corresponding GLOWS l3e files.
-    # Find the most recent l2 map file and use its date range to query GLOWS l3e
-    # files.
     deps = get_jobs(
         dependency_type="UPSTREAM",
         relationship="HARD",
@@ -267,6 +263,10 @@ def get_special_case_date_range(session, job_node, start_date):
         data_type=job_node["data_type"],
         descriptor=job_node["descriptor"],
     )
+    # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
+    # These jobs require both l2 map files and corresponding GLOWS l3e files.
+    # Find the most recent l2 map file and use its date range to query GLOWS l3e
+    # files.
     # Get the l2 upstream dependency (there should only be one).
     l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
     if l2_dep is None:
@@ -284,7 +284,8 @@ def get_special_case_date_range(session, job_node, start_date):
     if cadence_key not in CadenceDays.valid_cadence_str():
         raise ValueError(
             f"Invalid cadence '{cadence_key}' from descriptor"
-            f"'{job_node['descriptor']}'."
+            f"'{job_node['descriptor']}'. Valid cadences are: "
+            f"{CadenceDays.valid_cadence_str()}"
         )
     map_days = CadenceDays.str_lookup(cadence_key).value
     # Use the date range of the l2 map as the query range for the l3 job.
@@ -798,6 +799,44 @@ def cadence_processing_event(session, events):
     logger.info(f"Using {start_date=} and {end_date=} for cadence jobs.")
 
     for job_node in potential_jobs:
+        if job_node[0] == "idex" and job_node[1] == "l2b":
+            # IDEX l2b jobs are dependent on idex l1b evt housekeeping files. The job
+            # should be offset by 1 month to allow for all the event message
+            # packets to be processed for the corresponding l2a files. L2b jobs also
+            # depend on l1b evt housekeeping files that might be before the cadence job
+            # start date. To account for this, we will query for all the l1b evt files
+            # including those two weeks before the cadence job start date. This should
+            # ensure that all the l1b evt files are available for the l2b job.
+            offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
+            start_date = (
+                datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
+            )
+            end_date = (
+                datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
+            ).strftime("%Y%m%d")
+            # Subtract two weeks from the start date to get all the necessary hk files.
+            l1b_evt_start_date = (start_date - datetime.timedelta(weeks=2)).strftime(
+                "%Y%m%d"
+            )
+            start_date = start_date.strftime("%Y%m%d")
+            upstream_extended_idex_deps = dependency.get_jobs(
+                data_source=job_node[0],
+                data_type=job_node[1],
+                descriptor=job_node[2],
+                dependency_type="UPSTREAM",
+                relationship="ALL",
+                start_date=l1b_evt_start_date,
+                end_date=end_date,
+            )
+            if not upstream_extended_idex_deps:
+                continue
+            # Extract only the processing input for the idex l2b evt files
+            additional_input = upstream_extended_idex_deps.get_processing_inputs(
+                source="idex", data_type="l1b", descriptor="evt"
+            )
+        else:
+            additional_input = None
+
         upstream_dependencies = dependency.get_jobs(
             data_source=job_node[0],
             data_type=job_node[1],
@@ -809,6 +848,9 @@ def cadence_processing_event(session, events):
         )
         if not upstream_dependencies:
             continue
+        if additional_input:
+            # If there are additional inputs, add them to the upstream dependencies.
+            upstream_dependencies.add(additional_input)
 
         logger.info(f"All required dependencies found for the dependency: {job_node}")
         job_version = determine_job_version(
