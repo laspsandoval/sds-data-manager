@@ -649,8 +649,6 @@ def s3_processing_event(session, events):
         if sqs_queue_url:
             # When the record from the sqs event has been processed, it can safely be
             # deleted from the queue.
-            print(f"QUEUE URL : {sqs_queue_url}")
-
             SQS_CLIENT.delete_message(
                 QueueUrl=sqs_queue_url,
                 ReceiptHandle=event["receiptHandle"],

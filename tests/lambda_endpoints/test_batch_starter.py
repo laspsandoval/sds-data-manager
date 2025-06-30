@@ -6,7 +6,7 @@ import logging
 import pathlib
 from datetime import datetime
 from os.path import basename
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import imap_data_access
 import pytest
@@ -134,6 +134,58 @@ def test_lambda_handler(session, s3_client):
             dt.datetime(2024, 1, 10, 0, 0),
             "v002",
             processing_input.serialize(),
+        )
+
+
+def test_different_queues(session, s3_client):
+    """Tests events from multiple queues."""
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                "}",
+                "receiptHandle": "testingtesting123",
+                "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
+                "testing-queue-url.fifo",
+            },
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                "}",
+                "receiptHandle": "testingtesting222",
+                "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
+                "delay-queue-url.fifo",
+            },
+        ]
+    }
+    context = {"context": "sample_context"}
+    mock_sqs_client = Mock()
+    mock_sqs_client.delete_message.return_value = {
+        "ResponseMetadata": {"HTTPStatusCode": 200}
+    }
+
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()),
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter.SQS_CLIENT",
+            mock_sqs_client,
+        ),
+    ):
+        lambda_handler(events, context)
+        # Both events need to be removed from the correct queue
+        mock_sqs_client.delete_message.assert_has_calls(
+            [
+                call(
+                    QueueUrl="https://sqs.us-west-2.amazonaws.com/123456789012/testing-queue-url.fifo",
+                    ReceiptHandle="testingtesting123",
+                ),
+                call(
+                    QueueUrl="https://sqs.us-west-2.amazonaws.com/123456789012/delay-queue-url.fifo",
+                    ReceiptHandle="testingtesting222",
+                ),
+            ]
         )
 
 
