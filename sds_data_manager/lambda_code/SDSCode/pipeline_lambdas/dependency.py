@@ -375,20 +375,20 @@ class DependencyConfig:
         Parameters
         ----------
         cadence : str
-            Cadence string. Either "3mo", "6mo", or "1yr".
+            Cadence string. Either "1mo", "3mo", "6mo", or "1yr".
 
         Returns
         -------
         list
             List of cadence jobs.
         """
-        # Cadence jobs are only at data level l2 and contain either "3mo", "6mo", or
-        # "1yr" strings as the last part of the descriptor.
+        # Cadence jobs are only at data level l2 and contain either "1mo", "3mo", "6mo",
+        # or "1yr" strings as the last part of the descriptor.
 
         return [
             node
             for node in self.get_all_nodes("DOWNSTREAM")
-            if node[1] == "l2" and cadence == node[2].split("-")[-1]
+            if node[1] in ["l2", "l2b"] and cadence == node[2].split("-")[-1]
         ]
 
 

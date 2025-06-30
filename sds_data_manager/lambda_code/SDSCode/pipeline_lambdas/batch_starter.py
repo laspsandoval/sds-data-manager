@@ -61,7 +61,6 @@ SPECIAL_CASE_JOBS = [
         "data_type": "l3",
         "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
     },
-    {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1week"},
 ]
 
 
@@ -73,7 +72,7 @@ def cadence_to_datetime_range(
     Parameters
     ----------
     cadence : str
-        The cadence string (e.g. "3mo", "6mo", "1yr").
+        The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
     as_str : bool
         If True, return the start and end dates as strings. Default is False.
 
@@ -97,13 +96,14 @@ class CadenceDays(float, Enum):
     """Enum for a cadence value and the corresponding days."""
 
     ONE_YEAR = 365.25
+    ONE_MONTH = ONE_YEAR / 12
     THREE_MONTHS = ONE_YEAR / 4
     SIX_MONTHS = ONE_YEAR / 2
 
     @staticmethod
     def valid_cadence_str():
         """Get a list of valid cadence strings."""
-        return ["3mo", "6mo", "1yr"]
+        return ["1mo", "3mo", "6mo", "1yr"]
 
     @classmethod
     def str_lookup(cls, cadence_str: str):
@@ -112,7 +112,7 @@ class CadenceDays(float, Enum):
         Parameters
         ----------
         cadence_str : str
-            The cadence string (e.g. "3mo", "6mo", "1yr").
+            The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
 
         Returns
         -------
@@ -124,9 +124,12 @@ class CadenceDays(float, Enum):
                 f"Invalid cadence: {cadence_str}. Valid cadences are:"
                 f" {cls.valid_cadence_str}"
             )
-        return {"3mo": cls.THREE_MONTHS, "6mo": cls.SIX_MONTHS, "1yr": cls.ONE_YEAR}[
-            cadence_str
-        ]
+        return {
+            "1mo": cls.ONE_MONTH,
+            "3mo": cls.THREE_MONTHS,
+            "6mo": cls.SIX_MONTHS,
+            "1yr": cls.ONE_YEAR,
+        }[cadence_str]
 
 
 def determine_job_version(
@@ -195,11 +198,11 @@ def determine_job_version(
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
 
-def get_special_case_date_range(session, job_node, start_date, end_date):
+def get_special_case_date_range(session, job_node, start_date):
     """Determine the start and end dates for special case jobs.
 
     This function is used to handle unique processing jobs where the normal method of
-    determining the start and end date for the upstream dependencies is insufficient.
+    determining the start and end date for the upstream dependencies is not enough.
     For example, l3 survival probability correlated maps for HI, LO, and ULTRA
     depend on their respective l2 maps and multiple GLOWS l3e files (containing the
     survival probabilities) covering the date of the l2 map. We cannot simply use the
@@ -218,8 +221,6 @@ def get_special_case_date_range(session, job_node, start_date, end_date):
         Dictionary containing job details: data source, data type, and descriptor.
     start_date : str
         Start date for querying data in the format 'YYYYMMDD'.
-    end_date : str
-        End date for querying data in the format 'YYYYMMDD'.
 
     Returns
     -------
@@ -254,61 +255,41 @@ def get_special_case_date_range(session, job_node, start_date, end_date):
         )
 
     start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
-    if job_node["data_source"] == "idex":
-        # Special case for IDEX l2b jobs:
-        # IDEX l2b requires all l1b event datasets since the last l2b job.
-        # Since a l2a file can only trigger IDEX l2b, (l1b files are HARD_NO_TRIGGER)
-        # the start_date is from the current l2a file. This means we need to subtract
-        # one day from the query to 'find_most_recent_start_date' to get the last l2b
-        # job before the current l2a file.
-        one_day = datetime.timedelta(days=1)
-        new_start_date = find_most_recent_start_date(job_node, start_date - one_day)
-        if not new_start_date:
-            # If there are no l2b jobs, subtract 7 days from the start date.
-            new_start_date = start_date - datetime.timedelta(days=7)
-        # Add one day from the most recent l2b job start date since we need IDEX l1b evt
-        # files AFTER the last l2b job.
-        new_start_date = (new_start_date + one_day).strftime("%Y%m%d")
-        # The end date stays the same since we want the cutoff of the query to be the
-        # end_date (for in-situ science files besides GLOWS, the start_date is the same
-        # as the end_date for normal processing) of the current l2a file.
-        new_end_date = end_date
-    else:
-        # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
-        # These jobs require both l2 map files and corresponding GLOWS l3e files.
-        # Find the most recent l2 map file and use its date range to query GLOWS l3e
-        # files.
-        deps = get_jobs(
-            dependency_type="UPSTREAM",
-            relationship="HARD",
-            data_source=job_node["data_source"],
-            data_type=job_node["data_type"],
-            descriptor=job_node["descriptor"],
+
+    deps = get_jobs(
+        dependency_type="UPSTREAM",
+        relationship="HARD",
+        data_source=job_node["data_source"],
+        data_type=job_node["data_type"],
+        descriptor=job_node["descriptor"],
+    )
+    # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
+    # These jobs require both l2 map files and corresponding GLOWS l3e files.
+    # Find the most recent l2 map file and use its date range to query GLOWS l3e
+    # files.
+    # Get the l2 upstream dependency (there should only be one).
+    l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
+    if l2_dep is None:
+        raise ValueError(f"Missing required l2 dependency for job: {job_node}.")
+    # Find the most recent l2 map file start_date.
+    new_start_date = find_most_recent_start_date(l2_dep, start_date)
+    if not new_start_date:
+        raise ValueError(
+            f"No l2 map files found for {l2_dep['data_source']} "
+            f"{l2_dep['data_type']} {l2_dep['descriptor']}."
         )
-        # Get the l2 upstream dependency (there should only be one).
-        l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
-        if l2_dep is None:
-            raise ValueError(f"Missing required l2 dependency for job: {job_node}.")
-        # Find the most recent l2 map file start_date.
-        new_start_date = find_most_recent_start_date(l2_dep, start_date)
-        if not new_start_date:
-            raise ValueError(
-                f"No l2 map files found for {l2_dep['data_source']} "
-                f"{l2_dep['data_type']} {l2_dep['descriptor']}."
-            )
-        new_start_date = new_start_date.strftime("%Y%m%d")
-        # Determine the number of days the map was created for based on the cadence.
-        cadence_key = job_node["descriptor"].split("-")[-1]
-        if cadence_key not in CadenceDays.valid_cadence_str():
-            raise ValueError(
-                f"Invalid cadence '{cadence_key}' from descriptor"
-                f"'{job_node['descriptor']}'."
-            )
-        map_days = CadenceDays.str_lookup(cadence_key).value
-        # Use the date range of the l2 map as the query range for the l3 job.
-        new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
-            "%Y%m%d"
+    new_start_date = new_start_date.strftime("%Y%m%d")
+    # Determine the number of days the map was created for based on the cadence.
+    cadence_key = job_node["descriptor"].split("-")[-1]
+    if cadence_key not in CadenceDays.valid_cadence_str():
+        raise ValueError(
+            f"Invalid cadence '{cadence_key}' from descriptor"
+            f"'{job_node['descriptor']}'. Valid cadences are: "
+            f"{CadenceDays.valid_cadence_str()}"
         )
+    map_days = CadenceDays.str_lookup(cadence_key).value
+    # Use the date range of the l2 map as the query range for the l3 job.
+    new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime("%Y%m%d")
     return new_start_date, new_end_date
 
 
@@ -436,8 +417,9 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
     filter_dependencies : bool
         If True, filter the upstream dependencies to only include the files valid for
         upstream primary science start_date. There are a few special cases where we do
-        not want to filter any dependencies out, for example, IDEX l2b needs all of the
-        l1b housekeeping datasets in the collection. Default is set to True.
+        not want to filter any dependencies out, for example, ULTRA l3
+        "u90-ena-h-sf-sp-full-hae-4deg-3mo" needs all the psets in the collection.
+        Default is set to True.
 
 
     """
@@ -634,11 +616,10 @@ def s3_processing_event(session, events):
             job.pop("relationship")
             if job in SPECIAL_CASE_JOBS:
                 start_date, end_date = get_special_case_date_range(
-                    session, job, start_date, end_date
+                    session, job, start_date
                 )
                 logger.info(
-                    f"Found a special case job. Using date range: "
-                    f"{start_date} - {end_date}"
+                    f"Found a special case job: {job}. Using start_date: {start_date}"
                 )
                 filter_dependencies = False
             else:
@@ -699,7 +680,7 @@ def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_dat
         # For each file to reprocess we need to determine the correct
         # start and end date to use for the job.
         start_date, end_date = get_special_case_date_range(
-            session, job_node, filepath.start_date, filepath.start_date
+            session, job_node, filepath.start_date
         )
         submit_all_jobs(
             session, job_node, start_date, end_date, filter_dependencies=False
@@ -836,12 +817,50 @@ def cadence_processing_event(session, events):
     dep_config = DependencyConfig()
     # Get jobs for specified cadence. Sort them for testing purposes.
     potential_jobs = sorted(dep_config.get_cadence_jobs(cadence), key=lambda x: x[2])
-    logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
+    logger.info(f"Found {len(potential_jobs)} potential cadence jobs: {potential_jobs}")
     # Get the start and end dates for this job
     start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
     logger.info(f"Using {start_date=} and {end_date=} for cadence jobs.")
 
     for job_node in potential_jobs:
+        if job_node[0] == "idex" and job_node[1] == "l2b":
+            # IDEX l2b jobs are dependent on idex l1b evt housekeeping files. The job
+            # should be offset by 1 month to allow for all the event message
+            # packets to be processed for the corresponding l2a files. L2b jobs also
+            # depend on l1b evt housekeeping files that might be before the cadence job
+            # start date. To account for this, we will query for all the l1b evt files
+            # including those two weeks before the cadence job start date. This should
+            # ensure that all the l1b evt files are available for the l2b job.
+            offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
+            start_date = (
+                datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
+            )
+            end_date = (
+                datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
+            ).strftime("%Y%m%d")
+            # Subtract two weeks from the start date to get all the necessary hk files.
+            l1b_evt_start_date = (start_date - datetime.timedelta(weeks=2)).strftime(
+                "%Y%m%d"
+            )
+            start_date = start_date.strftime("%Y%m%d")
+            upstream_extended_idex_deps = dependency.get_jobs(
+                data_source=job_node[0],
+                data_type=job_node[1],
+                descriptor=job_node[2],
+                dependency_type="UPSTREAM",
+                relationship="ALL",
+                start_date=l1b_evt_start_date,
+                end_date=end_date,
+            )
+            if not upstream_extended_idex_deps:
+                continue
+            # Extract only the processing input for the idex l2b evt files
+            additional_input = upstream_extended_idex_deps.get_processing_inputs(
+                source="idex", data_type="l1b", descriptor="evt"
+            )
+        else:
+            additional_input = None
+
         upstream_dependencies = dependency.get_jobs(
             data_source=job_node[0],
             data_type=job_node[1],
@@ -853,6 +872,9 @@ def cadence_processing_event(session, events):
         )
         if not upstream_dependencies:
             continue
+        if additional_input:
+            # If there are additional inputs, add them to the upstream dependencies.
+            upstream_dependencies.add(additional_input)
 
         logger.info(f"All required dependencies found for the dependency: {job_node}")
         job_version = determine_job_version(
@@ -865,8 +887,8 @@ def cadence_processing_event(session, events):
         # Submit the map job with all of the upstream dependencies in the date range
         node = {
             "data_source": job_node[0],
-            "descriptor": job_node[2],
             "data_type": job_node[1],
+            "descriptor": job_node[2],
         }
         try_to_submit_job(
             session,
@@ -912,7 +934,7 @@ def lambda_handler(events: dict, context):
     5. Event of a cron job cadence trigger.
         Example event:
             {
-                "cadence": 3mo, 1yr, or 6mo
+                "cadence": 1mo, 3mo, 1yr, or 6mo
             }
 
     Parameters
