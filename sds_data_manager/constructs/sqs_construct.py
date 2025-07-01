@@ -94,23 +94,23 @@ class SqsConstruct(Construct):
 
             if instrument_name in delayed_cases:
                 data_level = delayed_cases[instrument_name]
-                # Don't send L1B events to the main queue, they go to the delay queue
+                # Update main queue filters to not send delay queue events.
                 instrument_event_match["object"]["data_level"] = [
                     {"anything-but": data_level}
                 ]
 
-                # Create another rule for L1B MAG events
-                mag_l1b_event = events.Rule(
+                # Create another rule for delayed events based on instrument+level.
+                delay_event = events.Rule(
                     self,
-                    "MagFileArrivedL1B",
-                    rule_name="mag_file_arrived_l1b",
+                    f"{instrument_name}FileArrived{data_level.upper()}",
+                    rule_name=f"{instrument_name}_file_arrived_{data_level}",
                     event_pattern=events.EventPattern(
                         source=["imap.lambda"],
                         detail_type=["Processed File"],
                         detail={
                             "object": {
                                 "key": [{"exists": True}],
-                                "instrument": ["mag"],
+                                "instrument": [instrument_name],
                                 "data_level": [data_level],
                             },
                         },
@@ -119,7 +119,7 @@ class SqsConstruct(Construct):
 
                 group_id = f"{instrument_name}_{data_level}"
 
-                mag_l1b_event.add_target(
+                delay_event.add_target(
                     targets.SqsQueue(self.delay_queue, message_group_id=group_id)
                 )
 

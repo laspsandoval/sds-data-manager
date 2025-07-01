@@ -121,7 +121,7 @@ def send_event_from_indexer(file_obj):
         }
     }
 
-    # used to filter MAG L1B events later
+    # used to filter science file events in SQS
     if isinstance(file_obj, ScienceFilePath):
         detail["object"]["data_level"] = file_obj.data_level
 

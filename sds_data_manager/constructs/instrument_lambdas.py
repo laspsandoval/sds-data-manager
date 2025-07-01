@@ -60,7 +60,7 @@ class BatchStarterLambda(Construct):
             RDS security group.
         vpc : ec2.Vpc
             VPC into which to put the resources that require networking.
-        sqs_queues: sqs.Queue
+        sqs_queues: list[sqs.Queue]
             A FIFO queue to trigger the lambda with.
         layers : list
             List of Lambda layers cdk.cdfnOutput names.
