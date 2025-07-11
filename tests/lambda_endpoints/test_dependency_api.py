@@ -12,8 +12,8 @@ from imap_data_access.processing_input import (
     ProcessingInputCollection,
     ScienceInput,
 )
-from moto.dynamodb import models
 
+from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
     ScienceFiles,
     SpinTable,
@@ -82,6 +82,7 @@ def test_soft_dependencies(session):
         end_date="20241201",
         relationship="SOFT_TRIGGER",
         dependency_type="UPSTREAM",
+        science_file_trigger=True,
     )
     # There should be two science inputs: one for mag_l1b_burst-mago and
     # mag_l1b_norm-mago
@@ -91,6 +92,15 @@ def test_soft_dependencies(session):
         ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
     )
     assert dependency_response.serialize() == expected_processing_input.serialize()
+    # Assert both upstream science files have a crid associated with it now.
+    l1b_norm_mago = session.get(
+        ScienceFiles, "/path/to/imap_mag_l1b_norm-mago_20240101_v002.cdf"
+    )
+    l1b_burst_mago = session.get(
+        ScienceFiles, "/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf"
+    )
+    assert l1b_norm_mago.crid
+    assert l1b_burst_mago.crid
 
 
 def test_missing_soft_dependencies(session):
@@ -313,10 +323,10 @@ def test_get_primary_science_files(session):
     """Tests the get_file function for science files."""
     _populate_file_catalog(session)
 
-    dep = ("mag", "l1b", "burst-mago")
+    dep = {"data_source": "mag", "data_type": "l1b", "descriptor": "burst-mago"}
     record = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2024, 1, 1),
         end_date=datetime(2024, 1, 1),
     )[0]
@@ -330,7 +340,7 @@ def test_get_primary_science_files(session):
     # Non-existent record should return an empty list
     record = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2009, 1, 5),
         end_date=datetime(2009, 1, 5),
     )
@@ -360,10 +370,10 @@ def test_get_science_files_date_range(session):
     _populate_file_catalog(session)
     # Test with larger date_range
     # It should return two swe records
-    dep = ("swe", "l1a", "sci")
+    dep = {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"}
     records_1 = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2024, 1, 2),
         end_date=datetime(2024, 1, 3),
     )
@@ -374,10 +384,14 @@ def test_get_ancillary_files(session):
     """Tests the get_file function."""
     _populate_file_catalog(session)
 
-    dep = ("swe", "ancillary", "l1b-in-flight-cal")
+    dep = {
+        "data_source": "swe",
+        "data_type": "ancillary",
+        "descriptor": "l1b-in-flight-cal",
+    }
     record = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2023, 1, 1),
         end_date=datetime(2023, 1, 1),
     )[0]
@@ -390,7 +404,7 @@ def test_get_ancillary_files(session):
     # There are three ancillary files valid for this range.
     record = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2024, 1, 2),
         end_date=datetime(2024, 1, 10),
     )
@@ -402,10 +416,10 @@ def test_get_ancillary_files(session):
 def test_get_files_max_version(session):
     """Test get_files returns the max version."""
     _populate_file_catalog(session)
-    dep = ("swe", "l1a", "sci")
+    dep = {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"}
     records = get_files(
         session,
-        *dep,
+        dependency=dep,
         start_date=datetime(2024, 1, 1),
         end_date=datetime(2024, 1, 3),
     )
@@ -699,11 +713,14 @@ def test_calculate_crid(session):
     # The CRID associated with a file is made up of the filepath and the
     # Upstream file versions sorted by the filename
     # imap_swe_l1b_sci_20240102_v001.cdf has a total of 3 upstream dependency files:
-    #  - imap_swe_l0_sci_20240101_v001.cdf
-    #  - imap_swe_l1a_sci_20240101_v001.cdf
-    #  - imap_swe_l1b_in-flight-cal_20240101_v002.cdf
+    # - imap_swe_l0_raw_20240101_v001.pkts
+    # - imap_swe_l1a_sci_20240101_v010.cdf
+    # - imap_swe_l1b-in-flight-cal_20230102_v001.cdf
+    # - imap_swe_esa-lut_20221231_v001.cdf
+    # - imap_swe_eu-conversion_20221231_v001.cdf
+
     # the upstream versions should be in order of the filenames alphabetically
-    crid_string = f"{record.file_path}v001v001v002"
+    crid_string = f"{record.file_path}v001v001v001v010v001"
     expected_crid = hashlib.sha256(crid_string.encode()).hexdigest()
     assert expected_crid == crid
 
@@ -716,7 +733,7 @@ def test_calculate_crid_l0(session):
         session.query(models.ScienceFiles)
         .filter(
             models.ScienceFiles.file_path
-            == "/path/to/imap_swe_l0_raw_20240110_v001.pkts"
+            == "/path/to/imap_swe_l0_raw_20240101_v001.pkts"
         )
         .first()
     )

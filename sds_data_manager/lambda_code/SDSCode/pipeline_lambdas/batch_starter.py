@@ -401,7 +401,14 @@ def try_to_submit_job(
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies=True):
+def submit_all_jobs(
+    session,
+    job_node,
+    start_date,
+    end_date,
+    science_file_trigger=False,
+    filter_dependencies=True,
+):
     """Submit all jobs for the given job and upstream dependencies.
 
     Parameters
@@ -414,6 +421,9 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         Start date to query the data.
     end_date : str
         End date to query the data.
+    science_file_trigger : bool
+        True if the file that triggered the job is a science file, False if it is SPICE
+        or ancillary.
     filter_dependencies : bool
         If True, filter the upstream dependencies to only include the files valid for
         upstream primary science start_date. There are a few special cases where we do
@@ -434,6 +444,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         relationship="ALL",
         start_date=start_date,
         end_date=end_date,
+        science_file_trigger=science_file_trigger,
     )
     if not upstream_dependencies:
         logger.info(
@@ -480,6 +491,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
                 relationship="ALL",
                 start_date=filepath.start_date,
                 end_date=filepath.start_date,
+                science_file_trigger=science_file_trigger,
             )
             if not upstream_deps_for_job:
                 logger.info(
@@ -612,6 +624,8 @@ def s3_processing_event(session, events):
             logger.info(f"No downstream dependencies found for the file: {filename}")
             continue
 
+        # Boolean to determine if the file that triggered the job is a science file.
+        science_file_trigger = isinstance(file_obj, ScienceFilePath)
         for job in potential_jobs + potential_soft_jobs:
             job.pop("relationship")
             if job in SPECIAL_CASE_JOBS:
@@ -625,7 +639,14 @@ def s3_processing_event(session, events):
             else:
                 filter_dependencies = True
 
-            submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
+            submit_all_jobs(
+                session,
+                job,
+                start_date,
+                end_date,
+                science_file_trigger,
+                filter_dependencies,
+            )
 
         if sqs_queue_url:
             # When the record from the sqs event has been processed, it can safely be

@@ -238,7 +238,7 @@ def test_invalid_query(session):
         + "Valid query parameters are: "
         + "['file_path', 'instrument', 'data_level', 'descriptor', "
         "'start_date', 'repointing', 'version', 'extension', 'ingestion_date', "
-        + "'cr', 'end_date', 'ingestion_start_date', 'ingestion_end_date', 'crid']"
+        + "'cr', 'crid', 'end_date', 'ingestion_start_date', 'ingestion_end_date']"
     )
     returned_query = query_api.lambda_handler(event=event, context={})
 
