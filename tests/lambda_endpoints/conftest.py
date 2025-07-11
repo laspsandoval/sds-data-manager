@@ -299,12 +299,13 @@ def _populate_file_catalog(session):
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
+            crid="8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
         ),
         ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_sci_20240101_v002.cdf",
+            file_path="/path/to/imap_lo_l1b_de_20240101_v002.cdf",
             instrument="lo",
-            data_level="l1a",
-            descriptor="sci",
+            data_level="l1b",
+            descriptor="de",
             start_date=datetime(2010, 1, 1),
             version="v002",
             extension="cdf",
@@ -313,10 +314,10 @@ def _populate_file_catalog(session):
             ),
         ),
         ScienceFiles(
-            file_path="/path/to/imap_lo_l1a_sci_20240102_v002.cdf",
+            file_path="/path/to/imap_lo_l1a_de_20240102_v002.cdf",
             instrument="lo",
             data_level="l1a",
-            descriptor="sci",
+            descriptor="de",
             start_date=datetime(2010, 1, 2),
             version="v003",
             extension="cdf",

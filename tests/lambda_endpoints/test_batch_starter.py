@@ -1566,3 +1566,32 @@ def test_spice_event(session, s3_client):
             "v002",
             json.dumps(expected_dependency_input),
         )
+
+
+def test_lambda_unexpected_crid(session, mock_urlopen, caplog):
+    """Test that processing stops when the calculated CRID is unexpected.
+
+    This indicates that a new upstream file is expected.
+    """
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_lo_l1a_de_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with caplog.at_level(logging.DEBUG) and patch.object(
+        batch_starter, "try_to_submit_job"
+    ) as mock_submit:
+        lambda_handler(events, context)
+    log = (
+        "Found unexpected CRID for /path/to/imap_lo_l1a_de_20240101_v001.cdf. This"
+        " indicates that we are expecting a reprocessing for this file."
+    )
+    # Verify the job was skipped
+    assert log in caplog.text
+    assert mock_submit.call_count == 0

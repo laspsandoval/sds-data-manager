@@ -1,5 +1,6 @@
 """Dependency tracking module."""
 
+import hashlib
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
+from ..database.models import AncillaryFiles, SPICEFiles
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -473,6 +475,154 @@ def primary_science_dep(query_params: dict, dependency: dict) -> bool:
     )
 
 
+def get_upstream_versions(session, record, versions) -> dict:
+    """Recursively retrieves all upstream versions for a given record.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles, models.AncillaryFiles or models.SPICEFiles
+        The current record for which upstream versions are being retrieved.
+    versions : list
+        A list to store all of the upstream versions.
+
+    Returns
+    -------
+    dict
+        All upstream versions and their filenames.
+    """
+    if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
+        # Ancillary and SPICE files have no upstream dependencies
+        return versions
+
+    dep_node = {
+        "data_source": record.instrument,
+        "data_type": record.data_level,
+        "descriptor": record.descriptor,
+    }
+    upstream_deps = []
+    for relationship in Relationship().valid_relationship:
+        upstream_deps.extend(
+            get_dependencies(
+                tuple(dep_node.values()),
+                "UPSTREAM",
+                relationship,
+            )
+        )
+    if not upstream_deps:
+        return versions
+    else:
+        for upstream_dep in upstream_deps:
+            primary_sci_dep = primary_science_dep(upstream_dep, dep_node)
+            upstream_records = get_files(
+                session,
+                upstream_dep["data_source"],
+                upstream_dep["data_type"],
+                upstream_dep["descriptor"],
+                record.start_date,
+                primary_sci_dep=primary_sci_dep,
+            )
+            if not upstream_records:
+                # TODO: How to handle this case
+                logger.warning(
+                    f"Could not find upstream dep for {record} during CRID calculation."
+                )
+                return versions
+
+            # TODO if we have multiple records e.g. for a map file. Revisit
+            # for now take the most recent start date:
+            upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[
+                0
+            ]
+            # Add the record version to the dicrionary.
+            versions[upstream_record.file_path] = upstream_record.version
+            get_upstream_versions(session, upstream_record, versions)
+
+
+def calculate_crid(session, record) -> str:
+    """Calculate a CRID (Composite Release ID) for a file.
+
+    The CRID is calculated as a hash of the file name and the versions of all its
+    upstream dependency files. It is unique to a file.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles, models.AncillaryFiles, or models.SPICEFiles
+        The record for which the CRID is being calculated.
+
+    Returns
+    -------
+    str
+        The calculated CRID as a SHA-256 hash.
+    """
+    upstream_versions = {}
+    get_upstream_versions(session, record, upstream_versions)
+    sorted_versions = [
+        v for path, v in sorted(upstream_versions.items(), key=lambda x: x[0])
+    ]
+    return hashlib.sha256(
+        f"{record.file_path}{''.join(sorted_versions)}".encode()
+    ).hexdigest()
+
+
+def expected_crids_exist(session, records) -> bool:
+    """Check if the expected CRIDs exist for the given records.
+
+    A difference between the expected CRID of an upstream dependency and the actual CRID
+    of the file retrieved for processing, indicates that a new version of that file is
+    expected based on the files in S3.
+
+    In the case above, Batch starter will skip processing the current job, as it
+    expects that the reprocessed upstream file will soon be uploaded to S3,
+    triggering a new batch job run (we want to avoid needless reprocessing).
+    If the CRID matches the calculated CRID, we will continue with processing.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    records : list[Union[models.ScienceFiles, models.AncillaryFiles, models.SPICEFiles]]
+        List of records to check for CRIDs.
+
+    Returns
+    -------
+    bool
+        True if all expected CRIDs exist or are successfully set, False otherwise.
+    """
+    for upstream_record in records:
+        if isinstance(upstream_record, AncillaryFiles):
+            # Ancillary files do not have CRIDs.
+            continue
+
+        # Calculate CRID
+        crid = calculate_crid(session, upstream_record)
+
+        existing_crid = upstream_record.crid
+        if existing_crid:
+            # Check if the CRID already exists in the database
+            if existing_crid == crid:
+                logger.info(
+                    f"Found expected CRID for {upstream_record.file_path}. Continuing.."
+                )
+            else:
+                logger.info(
+                    f"Found unexpected CRID for {upstream_record.file_path}. "
+                    f"This indicates that we are expecting a reprocessing for"
+                    f" this file."
+                )
+                return False
+        else:
+            # If no existing CRID, insert CRID into the database for the record.
+            upstream_record.crid = crid
+            session.commit()
+            logger.info(f"Set CRID for {upstream_record.file_path}.")
+
+    return True
+
+
 def combine_kernel_sources(dependency: dict) -> str:
     """Combine kernel sources.
 
@@ -616,11 +766,12 @@ def get_latest_repoint_file(end_date: datetime) -> Optional[str]:
     return basename(latest[2])
 
 
-# ruff: noqa: PLR0915
+# ruff: noqa: PLR0915, PLR0912
 def get_upstream_dependency_inputs(
     dependencies: list,
     start_date: datetime,
     end_date: datetime,
+    trigger_type: Optional[str, None] = None,
 ):
     """Construct a ProcessingInputCollection of dependency files.
 
@@ -636,6 +787,8 @@ def get_upstream_dependency_inputs(
         Start date to find dependent files with.
     end_date : datetime
         End date to find dependent files with.
+    trigger_type : str, optional
+        The type of file that triggerd the batch starter.
 
     Returns
     -------
@@ -755,6 +908,10 @@ def get_upstream_dependency_inputs(
             elif not records:
                 continue
 
+            if trigger_type not in [DataType.ANCILLARY, DataType.SPICE]:
+                if not expected_crids_exist(session, records):
+                    return None
+
             filenames = [basename(record.file_path) for record in records]
 
             # Create a processingInput instance and add it to the collection
@@ -772,7 +929,9 @@ def get_upstream_dependency_inputs(
 
 def get_files(
     session: db.Session,
-    dependency: dict,
+    data_source: str,
+    data_type: str,
+    descriptor: str,
     start_date: datetime,
     end_date: datetime,
 ):
@@ -782,14 +941,12 @@ def get_files(
     ----------
     session : orm session
         Database session.
-    dependency : dict
-        dictionary containing:
-        data_source : str
-            Source name.
-        data_type : str
-            Data type.
-        descriptor : str
-            Data descriptor.
+    data_source : str
+        Source name.
+    data_type : str
+        Data type.
+    descriptor : str
+        Data descriptor.
     start_date : datetime
         Start date of the event data.
     end_date: datetime
@@ -801,7 +958,7 @@ def get_files(
         The ScienceFiles or AncillaryFiles records matching the query criteria.
     """
     type_specific_conditions = []
-    if dependency["data_type"] == DataType.ANCILLARY:
+    if data_type == DataType.ANCILLARY:
         table = models.AncillaryFiles
         # Query for ancillary files where the start_date is less than or equal to
         # the input end_date, and the end_date is either greater than or equal to the
@@ -816,7 +973,7 @@ def get_files(
         )
     else:
         table = models.ScienceFiles
-        type_specific_conditions.append(table.data_level == dependency["data_type"])
+        type_specific_conditions.append(table.data_level == data_type)
         # Find files with start dates in the start_date and end_date range
         type_specific_conditions.append(
             and_(
@@ -825,8 +982,8 @@ def get_files(
             )
         )
     filter_conditions = [
-        table.instrument == dependency["data_source"],
-        table.descriptor == dependency["descriptor"],
+        table.instrument == data_source,
+        table.descriptor == descriptor,
         *type_specific_conditions,
     ]
     # Group by start_date
@@ -859,7 +1016,7 @@ def get_files(
     )
 
     # If the dependency is ancillary, only return the one with the latest start_date.
-    if dependency["data_type"] == DataType.ANCILLARY:
+    if data_type == DataType.ANCILLARY:
         records = sorted(records, key=lambda x: x.start_date, reverse=True)[0:1]
 
     return records
@@ -873,6 +1030,7 @@ def get_jobs(
     descriptor: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    trigger_type: Optional[str] = None,
 ) -> list | ProcessingInputCollection | None:
     """Get dependencies for the given inputs.
 
@@ -895,6 +1053,8 @@ def get_jobs(
     end_date : str, optional
         End date to find dependent files with, in YYYYMMDD format. Required if
         start_date is provided.
+    trigger_type : str, optional
+        File type that triggered the batch starter.
 
     Returns
     -------
@@ -972,13 +1132,21 @@ def get_jobs(
         raise ValueError(
             "end_date not found. If 'start_date' is supplied, 'end_date' is required."
         )
+    if not trigger_type:
+        raise ValueError(
+            "trigger_type not found. If 'start_date' is supplied, "
+            "'trigger_type' is required."
+        )
+
     end_date = datetime.strptime(end_date, "%Y%m%d")
 
     upstream_dependencies_output = get_upstream_dependency_inputs(
-        dependencies=dependencies,
-        start_date=start_date,
-        end_date=end_date,
+        dependencies,
+        start_date,
+        trigger_type,
+        end_date,
     )
+
     if upstream_dependencies_output is None:
         logger.info(
             f"No dependencies found for {start_date=} - {end_date=}: {dependencies}"
