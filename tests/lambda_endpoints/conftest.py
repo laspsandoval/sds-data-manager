@@ -385,6 +385,7 @@ def _populate_file_catalog(session):
         # Write leapseconds and sclk kernel files
         SPICEFiles(
             file_name="naif0012.tls",
+            file_path="path/to/naif0012.tls",
             ingestion_date=datetime.strptime(
                 "2025-04-30 18:24:00+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
@@ -409,6 +410,7 @@ def _populate_file_catalog(session):
         ),
         SPICEFiles(
             file_name="imap_sclk_0000.tsc",
+            file_path="path/to/imap_sclk_0000.tsc",
             ingestion_date=datetime.strptime(
                 "2025-04-30 18:24:01+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
