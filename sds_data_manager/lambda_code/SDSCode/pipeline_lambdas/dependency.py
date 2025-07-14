@@ -1,6 +1,6 @@
 """Dependency tracking module."""
 
-import hashlib
+import base64
 import json
 import logging
 import os
@@ -669,13 +669,12 @@ def get_upstream_versions(session, record, versions) -> dict:
             upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[
                 0
             ]
-            print(upstream_record.file_path)
             # Add the record version to the dicrionary.
             versions[upstream_record.file_path] = upstream_record.version
             get_upstream_versions(session, upstream_record, versions)
 
 
-def calculate_crid(session, record) -> str:
+def calculate_crid(session, record) -> bytes:
     """Calculate a CRID (Composite Release ID) for a file.
 
     The CRID is calculated as a hash of the file name and the versions of all its
@@ -695,20 +694,20 @@ def calculate_crid(session, record) -> str:
     """
     upstream_versions = {}
     get_upstream_versions(session, record, upstream_versions)
-    sorted_versions = [
-        v for path, v in sorted(upstream_versions.items(), key=lambda x: x[0])
-    ]
-    return hashlib.sha256(
-        f"{record.file_path}{''.join(sorted_versions)}".encode()
-    ).hexdigest()
+    # Sort the upstream versions by file path
+    sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
+    # Pack the version numbers into 2 bytes
+    sorted_bytes = b"".join([int(v[1:]).to_bytes(2) for path, v in sorted_dict])
+    # Encode the file path and the sorted bytes
+    return base64.a85encode(record.file_path.encode() + sorted_bytes)
 
 
 def matching_crids_exist(session, records) -> bool:
     """Check if the matching CRIDs exist for the given records.
 
-    A difference between the matching CRID of an upstream dependency and the actual CRID
-    of the file retrieved for processing, indicates that a new version of that file is
-    expected based on the files in S3.
+    A difference between the calculated CRID of an upstream dependency and the actual
+    CRID of the file retrieved for processing, indicates that a new version of that file
+    is expected based on the files in S3.
 
     In the case above, Batch starter will skip processing the current job, as it
     expects that the reprocessed upstream file will soon be uploaded to S3,

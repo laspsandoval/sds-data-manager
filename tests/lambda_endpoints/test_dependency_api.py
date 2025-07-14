@@ -1,6 +1,6 @@
 """Test data dependency functions."""
 
-import hashlib
+import base64
 import os
 from datetime import datetime
 from unittest.mock import patch
@@ -711,7 +711,7 @@ def test_calculate_crid(session):
     )
     crid = calculate_crid(session, record)
     # The CRID associated with a file is made up of the filepath and the
-    # Upstream file versions sorted by the filename
+    # Upstream file versions numbers packed into 2 bytes and sorted by the filename
     # imap_swe_l1b_sci_20240102_v001.cdf has a total of 3 upstream dependency files:
     # - imap_swe_l0_raw_20240101_v001.pkts
     # - imap_swe_l1a_sci_20240101_v010.cdf
@@ -720,9 +720,12 @@ def test_calculate_crid(session):
     # - imap_swe_eu-conversion_20221231_v001.cdf
 
     # the upstream versions should be in order of the filenames alphabetically
-    crid_string = f"{record.file_path}v001v001v001v010v001"
-    expected_crid = hashlib.sha256(crid_string.encode()).hexdigest()
+    upstream_versions = b"".join([v.to_bytes(2) for v in [1, 1, 1, 10, 1]])
+    expected_crid = base64.a85encode(record.file_path.encode() + upstream_versions)
     assert expected_crid == crid
+
+    # Test that we can decode the CRID to see what upstream versions were used.
+    assert base64.a85decode(crid)
 
 
 def test_calculate_crid_l0(session):
@@ -739,5 +742,5 @@ def test_calculate_crid_l0(session):
     )
     crid = calculate_crid(session, record)
     # L0 files have no upstream dependencies, so the crid is just a hash of the filepath
-    expected_crid = hashlib.sha256(record.file_path.encode()).hexdigest()
+    expected_crid = base64.a85encode(record.file_path.encode())
     assert expected_crid == crid
