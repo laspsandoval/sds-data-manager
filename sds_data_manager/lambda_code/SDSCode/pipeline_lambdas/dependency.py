@@ -904,8 +904,13 @@ def get_upstream_dependency_inputs(
 
             elif not records:
                 continue
-
-            if science_file_trigger:
+            # Skip CRID checks for glows l3 products. Menlo is handling this in their
+            # processing code.
+            if (
+                science_file_trigger
+                and dep["data_source"] != "glows"
+                and "l3" not in dep["data_type"]
+            ):
                 if not matching_crids_exist(session, records):
                     return None
 
