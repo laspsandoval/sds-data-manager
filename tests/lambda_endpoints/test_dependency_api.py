@@ -15,6 +15,7 @@ from imap_data_access.processing_input import (
 
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
+    AncillaryFiles,
     ScienceFiles,
     SpinTable,
 )
@@ -23,6 +24,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import (
     DependencyConfig,
     calculate_crid,
     get_files,
+    matching_crids_exist,
 )
 from tests.lambda_endpoints.conftest import (
     _populate_file_catalog,
@@ -744,3 +746,74 @@ def test_calculate_crid_l0(session):
     # L0 files have no upstream dependencies, so the crid is just a hash of the filepath
     expected_crid = base64.a85encode(record.file_path.encode())
     assert expected_crid == crid
+
+
+def test_matching_crid(session):
+    """Test CRID check."""
+    _populate_file_catalog(session)
+
+    records = [
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
+            instrument="swe",
+            descriptor="l1b-in-flight-cal",
+            start_date=datetime(2024, 1, 5),
+            end_date=datetime(2025, 1, 4),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        # Add a science file with a CRID that will not match the calculated CRID
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1b_sci_20240102_v001.cdf",
+            instrument="swe",
+            data_level="l1b",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+            crid="testing",
+        ),
+    ]
+    assert not matching_crids_exist(session, records)
+    # Update the CRID of the science file to match the calculated CRID
+    records[
+        1
+    ].crid = "05t?ABJ4IG05593E*m[1ARB7.@UF1dBjWVL1,L[>0J[!Y0JG46@q90O!<<-#!<<H,!<"
+    assert matching_crids_exist(session, records)
+
+
+def test_new_crid(session):
+    """Test that a new CRID is generated for a file with no CRID."""
+    _populate_file_catalog(session)
+
+    filename = "/path/to/imap_swe_l1b_sci_20240102_v001.cdf"
+    records = [
+        # Add a science file with no CRID
+        ScienceFiles(
+            file_path=filename,
+            instrument="swe",
+            data_level="l1b",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+    ]
+    matching_crids_exist(session, records)
+    # Now query for that record.
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(models.ScienceFiles.file_path == filename)
+        .first()
+    )
+    # Assert that the record now has a CRID associated with it.
+    assert record.crid

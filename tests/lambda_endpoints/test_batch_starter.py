@@ -1574,8 +1574,8 @@ def test_spice_event(session, s3_client):
         )
 
 
-def test_lambda_unexpected_crid(session, caplog):
-    """Test that processing stops when the calculated CRID is unexpected.
+def test_lambda_skip_processing_due_to_crid_check(session, caplog):
+    """Test that processing stops when the calculated CRID is mismatched.
 
     This indicates that a new upstream file is expected.
     """

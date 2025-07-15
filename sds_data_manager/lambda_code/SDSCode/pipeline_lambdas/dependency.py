@@ -635,6 +635,8 @@ def get_upstream_versions(session, record, versions) -> dict:
     dict
         All upstream versions and their filenames.
     """
+    # Make a copy of the dictionary to avoid modifying the original
+    versions = versions.copy()
     if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
         # Ancillary and SPICE files have no upstream dependencies
         return versions
@@ -649,29 +651,26 @@ def get_upstream_versions(session, record, versions) -> dict:
         "UPSTREAM",
         "ALL",
     )
-    if not upstream_deps:
-        return versions
-    else:
-        for upstream_dep in upstream_deps:
-            upstream_records = get_files(
-                session,
-                upstream_dep,
-                record.start_date,
-                record.start_date,
+    for upstream_dep in upstream_deps:
+        upstream_records = get_files(
+            session,
+            upstream_dep,
+            record.start_date,
+            record.start_date,
+        )
+        if not upstream_records:
+            logger.warning(
+                f"Could not find upstream dep for {record} during CRID calculation."
             )
-            if not upstream_records:
-                logger.warning(
-                    f"Could not find upstream dep for {record} during CRID calculation."
-                )
-                return versions
+            return versions
 
-            # for now take the most recent start date:
-            upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[
-                0
-            ]
-            # Add the record version to the dicrionary.
-            versions[upstream_record.file_path] = upstream_record.version
-            get_upstream_versions(session, upstream_record, versions)
+        # for now take the most recent start date:
+        upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[0]
+        # Add the record version to the dictionary.
+        versions[upstream_record.file_path] = upstream_record.version
+        versions = get_upstream_versions(session, upstream_record, versions)
+
+    return versions
 
 
 def calculate_crid(session, record) -> bytes:
@@ -692,8 +691,7 @@ def calculate_crid(session, record) -> bytes:
     str
         The calculated CRID as a SHA-256 hash.
     """
-    upstream_versions = {}
-    get_upstream_versions(session, record, upstream_versions)
+    upstream_versions = get_upstream_versions(session, record, {})
     # Sort the upstream versions by file path
     sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
     # Pack the version numbers into 2 bytes
@@ -732,8 +730,8 @@ def matching_crids_exist(session, records) -> bool:
             # Ancillary files do not have CRIDs.
             continue
 
-        # Calculate CRID
-        crid = calculate_crid(session, upstream_record)
+        # Calculate CRID and convert to string
+        crid = calculate_crid(session, upstream_record).decode("ascii")
 
         existing_crid = upstream_record.crid
         if existing_crid:
