@@ -19,7 +19,7 @@ from imap_data_access.file_validation import CadenceFilePath
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
-from ..api_lambdas import upload_api
+from ..api_lambdas import download_api, upload_api
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -293,6 +293,60 @@ def get_special_case_date_range(session, job_node, start_date):
     return new_start_date, new_end_date
 
 
+def duplicate_job(
+    instrument, data_level, descriptor, start_date, version, dependencies
+):
+    """Determine if the current job is a duplicate of the most recent job.
+
+    Parameters
+    ----------
+    instrument : str
+        Instrument.
+    data_level : str
+        Data level.
+    descriptor : str
+        Data descriptor.
+    start_date : str
+        Start date.
+    version : str
+        The previous version of the job
+    dependencies : ProcessingInputCollection
+        The upstream dependencies of the job.
+
+    Returns
+    -------
+    str or None
+        The file path of the duplicate job if it exists, otherwise None.
+    """
+    # TODO replace CadenceFilePath with DependencyFilePath after new imap-data-access
+    previous_dependency_file = CadenceFilePath.generate_from_inputs(
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_time=start_date,
+        version=version,
+        extension="json",
+    )
+    previous_dependency_path = previous_dependency_file.construct_path()
+    # Get the dependency s3 path
+    relative_path = previous_dependency_path.relative_to(
+        imap_data_access.config["DATA_DIR"]
+    )
+    previous_dependency_str = download_dependency_file(relative_path)
+    if previous_dependency_str is None:
+        logger.error(
+            f"Failed to download previous dependency file: {previous_dependency_path}. "
+            f"Skipping duplicate job check."
+        )
+        return False
+    # If the previous dependency string is the same as the current, this is a duplicate
+    # job.
+    if previous_dependency_str == dependencies:
+        return True
+
+    return False
+
+
 def try_to_submit_job(
     session: db.Session,
     job_info: dict,
@@ -310,7 +364,7 @@ def try_to_submit_job(
         Dictionary containing components with dates and versions appended.
     start_date : datetime
         Start date of the data.
-    version : str
+    version : strf
         Version of the job.
     serialized_dependencies : str
         The serialized ProcessingInputCollection of the upstream
@@ -320,6 +374,33 @@ def try_to_submit_job(
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
     start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
+
+    # Search for any duplicate jobs that have the same exact dependencies for this
+    # instrument, data level, descriptor, and start date by checking the CRID.
+    # Only check for duplicates if this is a reprocessing job.
+    # We know this is a reprocessing job if the version is not "v001".
+    if version != "v001":
+        previous_version = f"v{int(version[1:]) - 1:03d}"
+        if duplicate_job(
+            instrument,
+            data_level,
+            descriptor,
+            start_date_str,
+            previous_version,
+            serialized_dependencies,
+        ):
+            filepath = ScienceFilePath.generate_from_inputs(
+                instrument=instrument,
+                data_level=data_level,
+                descriptor=descriptor,
+                start_time=start_date_str,
+                version=previous_version,
+            )
+            logger.info(
+                f"This job is a duplicate of the previous job. See file: "
+                f"{filepath.filename!s}. Skipping submission."
+            )
+            return
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -777,6 +858,45 @@ def bulk_reprocessing_event(session, events):
             handle_special_case_reprocessing_jobs(session, job, start_date, end_date)
         else:
             submit_all_jobs(session, job, start_date, end_date)
+
+
+def download_dependency_file(dependency_file_path: Path):
+    """Download a JSON file containing a job's dependencies from S3.
+
+    Parameters
+    ----------
+    dependency_file_path : Path
+        The dependency JSON file to download.
+
+    Returns
+    -------
+    str or None
+        The contents of the dependency file if successful, otherwise None.
+    """
+    response = download_api.lambda_handler(
+        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
+    )
+    if response["statusCode"] != 302:
+        logger.error(
+            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
+            f"Error message: {response['body']}, "
+            f"with status code: {response['statusCode']}."
+        )
+        return None
+    try:
+        download_url = json.loads(response["body"])["download_url"]
+        response = requests.get(download_url, timeout=60.0)
+        logger.info(
+            f"Dependency file downloaded successfully from s3 with status code: "
+            f"{response.status_code}"
+        )
+        return response.text
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during dependency file download: {e}. "
+            f"Dependency file download failed."
+        )
+        return None
 
 
 def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
