@@ -673,7 +673,7 @@ def get_upstream_versions(session, record, versions) -> dict:
     return versions
 
 
-def calculate_crid(session, record) -> bytes:
+def calculate_crid(session, record) -> str:
     """Calculate a CRID (Composite Release ID) for a file.
 
     The CRID is calculated as a hash of the file name and the versions of all its
@@ -696,8 +696,12 @@ def calculate_crid(session, record) -> bytes:
     sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
     # Pack the version numbers into 2 bytes
     sorted_bytes = b"".join([int(v[1:]).to_bytes(2) for path, v in sorted_dict])
+    logger.info(
+        f"Calculating CRID using upstream versions: {sorted_dict} and "
+        f"filepath {record.file_path}"
+    )
     # Encode the file path and the sorted bytes
-    return base64.a85encode(record.file_path.encode() + sorted_bytes)
+    return base64.a85encode(record.file_path.encode() + sorted_bytes).decode("ascii")
 
 
 def matching_crids_exist(session, records) -> bool:
@@ -731,7 +735,7 @@ def matching_crids_exist(session, records) -> bool:
             continue
 
         # Calculate CRID and convert to string
-        crid = calculate_crid(session, upstream_record).decode("ascii")
+        crid = calculate_crid(session, upstream_record)
 
         existing_crid = upstream_record.crid
         if existing_crid:
@@ -761,7 +765,7 @@ def get_upstream_dependency_inputs(
     dependencies: list,
     start_date: datetime,
     end_date: datetime,
-    science_file_trigger: bool,
+    calculate_crids: bool,
 ):
     """Construct a ProcessingInputCollection of dependency files.
 
@@ -777,13 +781,12 @@ def get_upstream_dependency_inputs(
         Start date to find dependent files with.
     end_date : datetime
         End date to find dependent files with.
-    science_file_trigger : bool
-        If True, the file that triggered the processing is a science file. In this case,
-        we will check if the expected CRIDs exist for the upstream dependencies. If so,
-        processing will continue. If not, it will return None. This check is only done
-        for jobs that were triggered by a science file because if this indicates that
-        there may be a reprocessing of an upstream file, and we want to avoid multiple
-        reprocessing of the same file.
+    calculate_crids : bool
+        If True, we will check if the expected CRIDs exist for the upstream
+        dependencies. If so, processing will continue. If not, it will return None.
+        This check should only be done for jobs that were triggered by a science file
+        because this indicates that there may be a reprocessing of an upstream file,
+        and we want to avoid multiple reprocessing of the same file.
 
     Returns
     -------
@@ -905,7 +908,7 @@ def get_upstream_dependency_inputs(
             # Skip CRID checks for glows l3 products. Menlo is handling this in their
             # processing code.
             if (
-                science_file_trigger
+                calculate_crids
                 and dep["data_source"] != "glows"
                 and "l3" not in dep["data_type"]
             ):
@@ -1030,7 +1033,7 @@ def get_jobs(
     descriptor: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    science_file_trigger: bool = False,
+    calculate_crids: bool = False,
 ) -> list | ProcessingInputCollection | None:
     """Get dependencies for the given inputs.
 
@@ -1053,13 +1056,12 @@ def get_jobs(
     end_date : str, optional
         End date to find dependent files with, in YYYYMMDD format. Required if
         start_date is provided.
-    science_file_trigger : bool, optional
-        If True, the file that triggered the processing is a science file. In this case,
-        we will check if the expected CRIDs exist for the upstream dependencies. If so,
-        processing will continue. If not, it will return None. This check is only done
-        for jobs that were triggered by a science file because if this indicates that
-        there may be a reprocessing of an upstream file, and we want to avoid multiple
-        reprocessing of the same file. Default is False.
+    calculate_crids : bool, optional
+        If True, we will check if the expected CRIDs exist for the upstream
+        dependencies. If so, processing will continue. If not, it will return None.
+        This check should only be done for jobs that were triggered by a science file
+        because this indicates that there may be a reprocessing of an upstream file,
+        and we want to avoid multiple reprocessing of the same file. Default is False.
 
     Returns
     -------
@@ -1143,7 +1145,7 @@ def get_jobs(
         dependencies=dependencies,
         start_date=start_date,
         end_date=end_date,
-        science_file_trigger=science_file_trigger,
+        calculate_crids=calculate_crids,
     )
     if upstream_dependencies_output is None:
         logger.info(

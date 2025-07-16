@@ -23,7 +23,7 @@ from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
 from . import dependency
-from .dependency import DependencyConfig, get_jobs
+from .dependency import DependencyConfig, calculate_crid, get_jobs
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -406,7 +406,7 @@ def submit_all_jobs(
     job_node,
     start_date,
     end_date,
-    science_file_trigger=False,
+    calculate_crids=False,
     filter_dependencies=True,
 ):
     """Submit all jobs for the given job and upstream dependencies.
@@ -421,7 +421,7 @@ def submit_all_jobs(
         Start date to query the data.
     end_date : str
         End date to query the data.
-    science_file_trigger : bool
+    calculate_crids : bool
         True if the file that triggered the job is a science file, False if it is SPICE
         or ancillary.
     filter_dependencies : bool
@@ -444,7 +444,7 @@ def submit_all_jobs(
         relationship="ALL",
         start_date=start_date,
         end_date=end_date,
-        science_file_trigger=science_file_trigger,
+        calculate_crids=calculate_crid,
     )
     if not upstream_dependencies:
         logger.info(
@@ -491,7 +491,7 @@ def submit_all_jobs(
                 relationship="ALL",
                 start_date=filepath.start_date,
                 end_date=filepath.start_date,
-                science_file_trigger=science_file_trigger,
+                calculate_crids=False,
             )
             if not upstream_deps_for_job:
                 logger.info(
@@ -625,7 +625,12 @@ def s3_processing_event(session, events):
             continue
 
         # Boolean to determine if the file that triggered the job is a science file.
-        science_file_trigger = isinstance(file_obj, ScienceFilePath)
+        # If True, we will check if the expected CRIDs exist for the upstream
+        # dependencies. If so, processing will continue. If not, it will return None.
+        # This check should only be done for jobs that were triggered by a science file
+        # because this indicates that there may be a reprocessing of an upstream file,
+        # and we want to avoid multiple reprocessing of the same file.
+        calculate_crids = isinstance(file_obj, ScienceFilePath)
         for job in potential_jobs + potential_soft_jobs:
             job.pop("relationship")
             if job in SPECIAL_CASE_JOBS:
@@ -644,7 +649,7 @@ def s3_processing_event(session, events):
                 job,
                 start_date,
                 end_date,
-                science_file_trigger,
+                calculate_crids,
                 filter_dependencies,
             )
 
@@ -809,14 +814,14 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
             timeout=60.0,
         )
         logger.info(
-            f"Cadence file uploaded successfully to s3 with status code: "
+            f"Dependency file uploaded successfully to s3 with status code: "
             f"{response.status_code}"
         )
         return response
     except Exception as e:
         logger.error(
             f"Unexpected error during cadence file upload: {e}. "
-            f"Cadence file upload failed and the job did not get kicked off."
+            f"Dependency file upload failed and the job did not get kicked off."
         )
         return None
 
