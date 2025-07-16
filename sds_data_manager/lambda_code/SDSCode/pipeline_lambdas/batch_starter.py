@@ -23,7 +23,7 @@ from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
 from . import dependency
-from .dependency import DependencyConfig, calculate_crid, get_jobs
+from .dependency import DependencyConfig, get_jobs
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -444,7 +444,7 @@ def submit_all_jobs(
         relationship="ALL",
         start_date=start_date,
         end_date=end_date,
-        calculate_crids=calculate_crid,
+        calculate_crids=calculate_crids,
     )
     if not upstream_dependencies:
         logger.info(

@@ -84,7 +84,7 @@ def test_soft_dependencies(session):
         end_date="20241201",
         relationship="SOFT_TRIGGER",
         dependency_type="UPSTREAM",
-        science_file_trigger=True,
+        calculate_crids=True,
     )
     # There should be two science inputs: one for mag_l1b_burst-mago and
     # mag_l1b_norm-mago
@@ -724,7 +724,7 @@ def test_calculate_crid(session):
     # the upstream versions should be in order of the filenames alphabetically
     upstream_versions = b"".join([v.to_bytes(2) for v in [1, 1, 1, 10, 1]])
     expected_crid = base64.a85encode(record.file_path.encode() + upstream_versions)
-    assert expected_crid == crid
+    assert expected_crid.decode("ascii") == crid
 
     # Test that we can decode the CRID to see what upstream versions were used.
     assert base64.a85decode(crid)
@@ -744,7 +744,7 @@ def test_calculate_crid_l0(session):
     )
     crid = calculate_crid(session, record)
     # L0 files have no upstream dependencies, so the crid is just a hash of the filepath
-    expected_crid = base64.a85encode(record.file_path.encode())
+    expected_crid = base64.a85encode(record.file_path.encode()).decode("ascii")
     assert expected_crid == crid
 
 

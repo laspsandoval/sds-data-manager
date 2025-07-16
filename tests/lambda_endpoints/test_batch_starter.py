@@ -1219,7 +1219,7 @@ def test_upload_dependency_file(s3_client, tmp_path, cadence_file, caplog):
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
         upload_dependency_file(cadence_dependency_path, dependencies.serialize())
-    assert "Cadence file uploaded successfully" in caplog.text
+    assert "Dependency file uploaded successfully" in caplog.text
 
 
 def test_determine_max_version(session):
