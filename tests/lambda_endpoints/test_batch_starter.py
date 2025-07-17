@@ -65,7 +65,7 @@ def test_lambda_handler(session, s3_client):
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                '{"object": {"key": "imap_swe_l0_raw_20240101_v001.pkts"}}'
                 "}",
                 "receiptHandle": "testingtesting123",
                 "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
@@ -75,7 +75,7 @@ def test_lambda_handler(session, s3_client):
     }
     processing_input = ProcessingInputCollection(
         SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
-        ScienceInput("imap_swe_l0_raw_20240110_v001.pkts"),
+        ScienceInput("imap_swe_l0_raw_20240101_v001.pkts"),
     )
     context = {"context": "sample_context"}
     mock_sqs_client = Mock()
@@ -105,11 +105,11 @@ def test_lambda_handler(session, s3_client):
                     "--descriptor",
                     "sci",
                     "--start-date",
-                    "20240110",
+                    "20240101",
                     "--version",
-                    "v001",
+                    "v011",
                     "--dependency",
-                    "imap_swe_l1a_sci_20240110_v001.json",
+                    "imap_swe_l1a_sci_20240101_v011.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -131,8 +131,8 @@ def test_lambda_handler(session, s3_client):
         mock_submit.assert_called_with(
             session,
             {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"},
-            dt.datetime(2024, 1, 10, 0, 0),
-            "v002",
+            dt.datetime(2024, 1, 1, 0, 0),
+            "v012",
             processing_input.serialize(),
         )
 
@@ -197,7 +197,7 @@ def test_lambda_handler_multiple_events(session, s3_client):
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                '{"object": {"key": "imap_swe_l0_raw_20240101_v001.pkts"}}'
                 "}"
             },
             {
@@ -272,9 +272,9 @@ def test_lambda_handler_ancillary_event(session):
                     "--start-date",
                     "20240102",
                     "--version",
-                    "v002",
+                    "v001",
                     "--dependency",
-                    "imap_swe_l1b_sci_20240102_v002.json",
+                    "imap_swe_l1b_sci_20240102_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -291,7 +291,7 @@ def test_lambda_handler_ancillary_event(session):
             session,
             {"data_source": "swe", "data_type": "l1b", "descriptor": "sci"},
             dt.datetime(2024, 1, 2, 0, 0),
-            "v003",
+            "v002",
             json.dumps(inputs),
         )
 
@@ -387,6 +387,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
         [
             SPICEFiles(
                 file_name="naif0012.tls",
+                file_path="path/to/naif0012.tls",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:00+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -411,6 +412,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
             ),
             SPICEFiles(
                 file_name="imap_sclk_0000.tsc",
+                file_path="path/to/imap_sclk_0000.tsc",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:01+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -615,6 +617,7 @@ def test_ultra_l3_map(session, caplog):
             ),
             SPICEFiles(
                 file_name="naif0012.tls",
+                file_path="path/to/naif0012.tls",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:00+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -639,6 +642,7 @@ def test_ultra_l3_map(session, caplog):
             ),
             SPICEFiles(
                 file_name="imap_sclk_0000.tsc",
+                file_path="path/to/imap_sclk_0000.tsc",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:01+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -1215,7 +1219,7 @@ def test_upload_dependency_file(s3_client, tmp_path, cadence_file, caplog):
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
         upload_dependency_file(cadence_dependency_path, dependencies.serialize())
-    assert "Cadence file uploaded successfully" in caplog.text
+    assert "Dependency file uploaded successfully" in caplog.text
 
 
 def test_determine_max_version(session):
@@ -1449,6 +1453,7 @@ def test_spice_event(session, s3_client):
             SPICEFiles(
                 # 2025028 to 2025030
                 file_name="imap_2025_118_2025_120_02.ah.bc",
+                file_path="/path/to/imap_2025_118_2025_120_02.ah.bc",
                 ingestion_date=datetime.now(),
                 file_root="imap_2025_118_2025_120_.ah.bc",
                 kernel_type="attitude_history",
@@ -1467,6 +1472,7 @@ def test_spice_event(session, s3_client):
             ),
             SPICEFiles(
                 file_name="imap_recon_20250428_20250430_v02.bsp",
+                file_path="/path/to/imap_recon_20250428_20250430_v02.bsp",
                 ingestion_date=datetime.now(),
                 file_root="imap_recon_20250428_20250430_v.bsp",
                 kernel_type="ephemeris_reconstructed",
@@ -1566,3 +1572,34 @@ def test_spice_event(session, s3_client):
             "v002",
             json.dumps(expected_dependency_input),
         )
+
+
+def test_lambda_skip_processing_due_to_crid_check(session, caplog):
+    """Test that processing stops when the calculated CRID is mismatched.
+
+    This indicates that a new upstream file is expected.
+    """
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_lo_l1a_de_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with (
+        caplog.at_level(logging.DEBUG)
+        and patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+    log = (
+        "Found mismatched CRID for /path/to/imap_lo_l1a_de_20240101_v001.cdf. This"
+        " indicates that we are expecting a reprocessing for this file."
+    )
+    # Verify the job was skipped
+    assert log in caplog.text
+    assert mock_submit.call_count == 0

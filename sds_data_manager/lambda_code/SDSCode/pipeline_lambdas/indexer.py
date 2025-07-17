@@ -10,6 +10,7 @@ from imap_data_access import AncillaryFilePath, ImapFilePath, ScienceFilePath
 
 from ..database import database as db
 from ..database import models
+from .dependency import calculate_crid
 from .lambda_custom_events import IMAPLambdaPutEvent
 
 # Logger setup
@@ -190,7 +191,10 @@ def s3_event_handler(event):
 
         sci_params["ingestion_date"] = ingestion_date_object
         with db.Session() as session, session.begin():
-            session.add(models.ScienceFiles(**sci_params))
+            science_file = models.ScienceFiles(**sci_params)
+            session.add(science_file)
+            crid = calculate_crid(session, science_file)
+            science_file.crid = crid
         logger.info("Wrote data to the ScienceFiles table")
     except ImapFilePath.InvalidImapFileError:
         logger.info(

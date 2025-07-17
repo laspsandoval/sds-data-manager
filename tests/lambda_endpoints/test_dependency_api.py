@@ -1,5 +1,6 @@
 """Test data dependency functions."""
 
+import base64
 import os
 from datetime import datetime
 from unittest.mock import patch
@@ -12,14 +13,18 @@ from imap_data_access.processing_input import (
     ScienceInput,
 )
 
+from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.database.models import (
+    AncillaryFiles,
     ScienceFiles,
     SpinTable,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import dependency
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.dependency import (
     DependencyConfig,
+    calculate_crid,
     get_files,
+    matching_crids_exist,
 )
 from tests.lambda_endpoints.conftest import (
     _populate_file_catalog,
@@ -79,6 +84,7 @@ def test_soft_dependencies(session):
         end_date="20241201",
         relationship="SOFT_TRIGGER",
         dependency_type="UPSTREAM",
+        calculate_crids=True,
     )
     # There should be two science inputs: one for mag_l1b_burst-mago and
     # mag_l1b_norm-mago
@@ -88,6 +94,15 @@ def test_soft_dependencies(session):
         ScienceInput("imap_mag_l1b_burst-mago_20240101_v001.cdf"),
     )
     assert dependency_response.serialize() == expected_processing_input.serialize()
+    # Assert both upstream science files have a crid associated with it now.
+    l1b_norm_mago = session.get(
+        ScienceFiles, "/path/to/imap_mag_l1b_norm-mago_20240101_v002.cdf"
+    )
+    l1b_burst_mago = session.get(
+        ScienceFiles, "/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf"
+    )
+    assert l1b_norm_mago.crid
+    assert l1b_burst_mago.crid
 
 
 def test_missing_soft_dependencies(session):
@@ -677,3 +692,128 @@ def test_get_cadence_jobs():
     for node in all_nodes:
         assert node[1] == "l2"
         assert node[2].split("-")[-1] in ["1yr"]
+
+
+#####################################
+# CRID TESTS
+#####################################
+
+
+def test_calculate_crid(session):
+    """Test CRID calculation."""
+    _populate_file_catalog(session)
+
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(
+            models.ScienceFiles.file_path
+            == "/path/to/imap_swe_l1b_sci_20240102_v001.cdf"
+        )
+        .first()
+    )
+    crid = calculate_crid(session, record)
+    # The CRID associated with a file is made up of the filepath and the
+    # Upstream file versions numbers packed into 2 bytes and sorted by the filename
+    # imap_swe_l1b_sci_20240102_v001.cdf has a total of 3 upstream dependency files:
+    # - imap_swe_l0_raw_20240101_v001.pkts
+    # - imap_swe_l1a_sci_20240101_v010.cdf
+    # - imap_swe_l1b-in-flight-cal_20230102_v001.cdf
+    # - imap_swe_esa-lut_20221231_v001.cdf
+    # - imap_swe_eu-conversion_20221231_v001.cdf
+
+    # the upstream versions should be in order of the filenames alphabetically
+    upstream_versions = b"".join([v.to_bytes(2) for v in [1, 1, 1, 10, 1]])
+    expected_crid = base64.a85encode(record.file_path.encode() + upstream_versions)
+    assert expected_crid.decode("ascii") == crid
+
+    # Test that we can decode the CRID to see what upstream versions were used.
+    assert base64.a85decode(crid)
+
+
+def test_calculate_crid_l0(session):
+    """Test CRID calculation."""
+    _populate_file_catalog(session)
+
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(
+            models.ScienceFiles.file_path
+            == "/path/to/imap_swe_l0_raw_20240101_v001.pkts"
+        )
+        .first()
+    )
+    crid = calculate_crid(session, record)
+    # L0 files have no upstream dependencies, so the crid is just a hash of the filepath
+    expected_crid = base64.a85encode(record.file_path.encode()).decode("ascii")
+    assert expected_crid == crid
+
+
+def test_matching_crid(session):
+    """Test CRID check."""
+    _populate_file_catalog(session)
+
+    records = [
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
+            instrument="swe",
+            descriptor="l1b-in-flight-cal",
+            start_date=datetime(2024, 1, 5),
+            end_date=datetime(2025, 1, 4),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        # Add a science file with a CRID that will not match the calculated CRID
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1b_sci_20240102_v001.cdf",
+            instrument="swe",
+            data_level="l1b",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+            crid="testing",
+        ),
+    ]
+    assert not matching_crids_exist(session, records)
+    # Update the CRID of the science file to match the calculated CRID
+    records[
+        1
+    ].crid = "05t?ABJ4IG05593E*m[1ARB7.@UF1dBjWVL1,L[>0J[!Y0JG46@q90O!<<-#!<<H,!<"
+    assert matching_crids_exist(session, records)
+
+
+def test_new_crid(session):
+    """Test that a new CRID is generated for a file with no CRID."""
+    _populate_file_catalog(session)
+
+    filename = "/path/to/imap_swe_l1b_sci_20240102_v001.cdf"
+    records = [
+        # Add a science file with no CRID
+        ScienceFiles(
+            file_path=filename,
+            instrument="swe",
+            data_level="l1b",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+    ]
+    matching_crids_exist(session, records)
+    # Now query for that record.
+    record = (
+        session.query(models.ScienceFiles)
+        .filter(models.ScienceFiles.file_path == filename)
+        .first()
+    )
+    # Assert that the record now has a CRID associated with it.
+    assert record.crid
