@@ -294,8 +294,8 @@ def get_special_case_date_range(session, job_node, start_date):
 
 
 def duplicate_job(
-    instrument, data_level, descriptor, start_date, version, dependencies
-):
+    instrument, data_level, descriptor, start_date, version, serialized_dependencies
+) -> bool:
     """Determine if the current job is a duplicate of the most recent job.
 
     Parameters
@@ -310,13 +310,13 @@ def duplicate_job(
         Start date.
     version : str
         The previous version of the job
-    dependencies : ProcessingInputCollection
-        The upstream dependencies of the job.
+    serialized_dependencies : str
+        The serialized upstream dependencies of the job.
 
     Returns
     -------
-    str or None
-        The file path of the duplicate job if it exists, otherwise None.
+    bool
+        True if the job is a duplicate, False otherwise.
     """
     # TODO switch to DependencyFilePath
     previous_dependency_file = CadenceFilePath.generate_from_inputs(
@@ -341,7 +341,7 @@ def duplicate_job(
         return False
     # If the previous dependency string is the same as the current, this is a duplicate
     # job.
-    if previous_dependency_str == dependencies:
+    if previous_dependency_str == serialized_dependencies:
         return True
 
     return False
