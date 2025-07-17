@@ -15,7 +15,7 @@ from imap_data_access import (
     ScienceFilePath,
     SPICEFilePath,
 )
-from imap_data_access.file_validation import CadenceFilePath
+from imap_data_access.file_validation import DependencyFilePath
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -318,8 +318,7 @@ def duplicate_job(
     str or None
         The file path of the duplicate job if it exists, otherwise None.
     """
-    # TODO replace CadenceFilePath with DependencyFilePath after new imap-data-access
-    previous_dependency_file = CadenceFilePath.generate_from_inputs(
+    previous_dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
         descriptor=descriptor,
@@ -429,9 +428,8 @@ def try_to_submit_job(
     # Serialize the upstream dependencies and write them to a JSON file. The Imap
     # processing code will read the JSON file and deserialize the dependencies. This is
     # to avoid passing a large string through the batch job command line.
-    # TODO replace CadenceFilePath with DependencyFilePath after new imap-data-access
     # release
-    dependency_file = CadenceFilePath.generate_from_inputs(
+    dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
         descriptor=descriptor,
