@@ -364,7 +364,7 @@ def try_to_submit_job(
         Dictionary containing components with dates and versions appended.
     start_date : datetime
         Start date of the data.
-    version : strf
+    version : str
         Version of the job.
     serialized_dependencies : str
         The serialized ProcessingInputCollection of the upstream
