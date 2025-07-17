@@ -146,6 +146,7 @@ class ScienceFiles(Base):
     extension = Column(EXTENSIONS, nullable=False)
     ingestion_date = Column(DateTime(timezone=True))
     cr = Column(Integer, nullable=True)
+    crid = Column(String, nullable=True)
 
 
 class SPICEFiles(Base):
