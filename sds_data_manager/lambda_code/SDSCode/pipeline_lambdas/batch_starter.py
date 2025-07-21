@@ -294,7 +294,12 @@ def get_special_case_date_range(session, job_node, start_date):
 
 
 def duplicate_job(
-    instrument, data_level, descriptor, start_date, version, serialized_dependencies
+    instrument,
+    data_level,
+    descriptor,
+    start_date,
+    previous_version,
+    serialized_dependencies,
 ) -> bool:
     """Determine if the current job is a duplicate of the most recent job.
 
@@ -308,7 +313,7 @@ def duplicate_job(
         Data descriptor.
     start_date : str
         Start date.
-    version : str
+    previous_version : str
         The previous version of the job
     serialized_dependencies : str
         The serialized upstream dependencies of the job.
@@ -324,7 +329,7 @@ def duplicate_job(
         data_level=data_level,
         descriptor=descriptor,
         start_time=start_date,
-        version=version,
+        version=previous_version,
         extension="json",
     )
     previous_dependency_path = previous_dependency_file.construct_path()
@@ -332,7 +337,7 @@ def duplicate_job(
     relative_path = previous_dependency_path.relative_to(
         imap_data_access.config["DATA_DIR"]
     )
-    previous_dependency_str = download_dependency_file(relative_path)
+    previous_dependency_str = get_previous_dependency_str(relative_path)
     if previous_dependency_str is None:
         logger.error(
             f"Failed to download previous dependency file: {previous_dependency_path}. "
@@ -860,8 +865,8 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def download_dependency_file(dependency_file_path: Path):
-    """Download a JSON file containing a job's dependencies from S3.
+def get_previous_dependency_str(dependency_file_path: Path):
+    """Download a JSON file containing a dependencies from S3 and return its contents.
 
     Parameters
     ----------
