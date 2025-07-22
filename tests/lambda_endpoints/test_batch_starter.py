@@ -489,7 +489,6 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
     ):
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 0
-    print(caplog.text)
     # Check that the expected message was logged.
     expected_log = (
         "Skipping job submission for {'data_source': 'mag', 'data_type': "
@@ -964,6 +963,80 @@ def test_lambda_handler_mag_l1c_case(session):
             "v003",
             expected_processing_input.serialize(),
         )
+
+
+def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
+    """Tests ``lambda_handler` skips processing for a duplicate job."""
+    # Mock the situation where mag l1b files trigger batch starter back to back but
+    # with the same exact dependencies.
+    # We should expect the duplicate job to be skipped.
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
+                instrument="mag",
+                data_level="l1b",
+                descriptor="burst-mago",
+                start_date=datetime(2024, 1, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1b_norm-mago_20240101_v003.cdf",
+                instrument="mag",
+                data_level="l1b",
+                descriptor="norm-mago",
+                start_date=datetime(2024, 1, 1),
+                version="v003",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+        ]
+    )
+    session.commit()
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_mag_l1b_burst-mago_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_once()
+
+        events = {
+            "Records": [
+                {
+                    "body": '{"detail": '
+                    '{"object": {"key": "imap_mag_l1b_norm-mago_20240101_v003.cdf"}}'
+                    "}"
+                }
+            ]
+        }
+        # Reset call count
+        mock_batch_client.submit_job.call_count = 0
+        lambda_handler(events, context)
+        # Verify the function not called
+        assert mock_batch_client.submit_job.call_count == 0
+
+        assert (
+            "This job is a duplicate of the previous job. See file:"
+            " imap_mag_l1c_norm-mago_20240101_v001.cdf."
+            " Skipping submission."
+        ) in caplog.text
 
 
 ### TEST CADENCE EVENT
