@@ -692,7 +692,6 @@ def calculate_crid(session, record) -> str:
         The calculated CRID as a SHA-256 hash.
     """
     upstream_versions = get_upstream_versions(session, record, {})
-    print(upstream_versions)
     # Sort the upstream versions by file path
     sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
     # Pack the version numbers into 2 bytes

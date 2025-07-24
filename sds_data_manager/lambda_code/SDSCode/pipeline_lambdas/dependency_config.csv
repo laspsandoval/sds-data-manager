@@ -552,10 +552,19 @@ mag, ancillary, l2-calibration, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-calibration, mag, l2, burst-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-norm-offsets, mag, l2, norm-srf, HARD, DOWNSTREAM
 mag, ancillary, l2-burst-offsets, mag, l2, burst-srf, HARD, DOWNSTREAM
+
+imap_frames, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, mag, l2, norm-srf, HARD, DOWNSTREAM
 leapseconds, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+
+imap_frames, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+science_frames, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+pointing_attitude, spice, historical, mag, l2, burst-srf, HARD, DOWNSTREAM
 leapseconds, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+
 
 # <---- Spacecraft Dependencies ---->
 # Quaternions
