@@ -224,7 +224,7 @@ class ApiGateway(Construct):
         lambda_function : lambda_.Function
             Lambda function to trigger when this route is hit.
         """
-        #normalize root route
+        # normalize root route
         if route in ["", "/"]:
             route = "/"
 

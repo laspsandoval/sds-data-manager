@@ -9,22 +9,22 @@ from constructs import Construct
 from .api_gateway_construct import ApiGateway
 
 
-def add_stable_route(api, base_path, http_method, lambda_function, prefix_list=[""]):
+def add_stable_route(api, base_path, http_method, lambda_function, prefix_list):
     """Ensure each variation of route is handled.
 
-        Parameters
-        ----------
-        api : obj
-            The APIGateway stack.
-        base_path : str
-            The base route path (e.g., "/upload").
-        http_method : str
-            The HTTP method to allow (e.g., "GET", "POST").
-        lambda_function : obj
-            The lambda function.
-        prefix_list : list[str]
-            List of route prefixes.
-        """
+    Parameters
+    ----------
+    api : obj
+        The APIGateway stack.
+    base_path : str
+        The base route path (e.g., "/upload").
+    http_method : str
+        The HTTP method to allow (e.g., "GET", "POST").
+    lambda_function : obj
+        The lambda function.
+    prefix_list : list[str]
+        List of route prefixes.
+    """
     for prefix in prefix_list:
         clean = f"{prefix}{base_path}"
         trailing = f"{prefix}{base_path}/"
@@ -97,7 +97,7 @@ class SdsApiManager(Construct):
                 f"{data_bucket.bucket_arn}/*",
             ],
         )
-        #root lambda
+        # root lambda
         root_handler_lambda = lambda_.Function(
             self,
             id="RootAPILambda",
