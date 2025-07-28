@@ -16,13 +16,10 @@ from imap_data_access import (
     SPICEFilePath,
 )
 from imap_data_access.file_validation import CadenceFilePath
-from imap_data_access.processing_input import (
-    ProcessingInputCollection,
-)
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
-from ..api_lambdas import upload_api
+from ..api_lambdas import download_api, upload_api
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -64,7 +61,6 @@ SPECIAL_CASE_JOBS = [
         "data_type": "l3",
         "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
     },
-    {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1week"},
 ]
 
 
@@ -76,7 +72,7 @@ def cadence_to_datetime_range(
     Parameters
     ----------
     cadence : str
-        The cadence string (e.g. "3mo", "6mo", "1yr").
+        The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
     as_str : bool
         If True, return the start and end dates as strings. Default is False.
 
@@ -100,13 +96,14 @@ class CadenceDays(float, Enum):
     """Enum for a cadence value and the corresponding days."""
 
     ONE_YEAR = 365.25
+    ONE_MONTH = ONE_YEAR / 12
     THREE_MONTHS = ONE_YEAR / 4
     SIX_MONTHS = ONE_YEAR / 2
 
     @staticmethod
     def valid_cadence_str():
         """Get a list of valid cadence strings."""
-        return ["3mo", "6mo", "1yr"]
+        return ["1mo", "3mo", "6mo", "1yr"]
 
     @classmethod
     def str_lookup(cls, cadence_str: str):
@@ -115,7 +112,7 @@ class CadenceDays(float, Enum):
         Parameters
         ----------
         cadence_str : str
-            The cadence string (e.g. "3mo", "6mo", "1yr").
+            The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
 
         Returns
         -------
@@ -127,9 +124,12 @@ class CadenceDays(float, Enum):
                 f"Invalid cadence: {cadence_str}. Valid cadences are:"
                 f" {cls.valid_cadence_str}"
             )
-        return {"3mo": cls.THREE_MONTHS, "6mo": cls.SIX_MONTHS, "1yr": cls.ONE_YEAR}[
-            cadence_str
-        ]
+        return {
+            "1mo": cls.ONE_MONTH,
+            "3mo": cls.THREE_MONTHS,
+            "6mo": cls.SIX_MONTHS,
+            "1yr": cls.ONE_YEAR,
+        }[cadence_str]
 
 
 def determine_job_version(
@@ -198,11 +198,11 @@ def determine_job_version(
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
 
-def get_special_case_date_range(session, job_node, start_date, end_date):
+def get_special_case_date_range(session, job_node, start_date):
     """Determine the start and end dates for special case jobs.
 
     This function is used to handle unique processing jobs where the normal method of
-    determining the start and end date for the upstream dependencies is insufficient.
+    determining the start and end date for the upstream dependencies is not enough.
     For example, l3 survival probability correlated maps for HI, LO, and ULTRA
     depend on their respective l2 maps and multiple GLOWS l3e files (containing the
     survival probabilities) covering the date of the l2 map. We cannot simply use the
@@ -221,8 +221,6 @@ def get_special_case_date_range(session, job_node, start_date, end_date):
         Dictionary containing job details: data source, data type, and descriptor.
     start_date : str
         Start date for querying data in the format 'YYYYMMDD'.
-    end_date : str
-        End date for querying data in the format 'YYYYMMDD'.
 
     Returns
     -------
@@ -257,62 +255,101 @@ def get_special_case_date_range(session, job_node, start_date, end_date):
         )
 
     start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
-    if job_node["data_source"] == "idex":
-        # Special case for IDEX l2b jobs:
-        # IDEX l2b requires all l1b event datasets since the last l2b job.
-        # Since a l2a file can only trigger IDEX l2b, (l1b files are HARD_NO_TRIGGER)
-        # the start_date is from the current l2a file. This means we need to subtract
-        # one day from the query to 'find_most_recent_start_date' to get the last l2b
-        # job before the current l2a file.
-        one_day = datetime.timedelta(days=1)
-        new_start_date = find_most_recent_start_date(job_node, start_date - one_day)
-        if not new_start_date:
-            # If there are no l2b jobs, subtract 7 days from the start date.
-            new_start_date = start_date - datetime.timedelta(days=7)
-        # Add one day from the most recent l2b job start date since we need IDEX l1b evt
-        # files AFTER the last l2b job.
-        new_start_date = (new_start_date + one_day).strftime("%Y%m%d")
-        # The end date stays the same since we want the cutoff of the query to be the
-        # end_date (for in-situ science files besides GLOWS, the start_date is the same
-        # as the end_date for normal processing) of the current l2a file.
-        new_end_date = end_date
-    else:
-        # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
-        # These jobs require both l2 map files and corresponding GLOWS l3e files.
-        # Find the most recent l2 map file and use its date range to query GLOWS l3e
-        # files.
-        deps = get_jobs(
-            dependency_type="UPSTREAM",
-            relationship="HARD",
-            data_source=job_node["data_source"],
-            data_type=job_node["data_type"],
-            descriptor=job_node["descriptor"],
+
+    deps = get_jobs(
+        dependency_type="UPSTREAM",
+        relationship="HARD",
+        data_source=job_node["data_source"],
+        data_type=job_node["data_type"],
+        descriptor=job_node["descriptor"],
+    )
+    # Special case for l3 sp-correlated HI, LO, and ULTRA map jobs:
+    # These jobs require both l2 map files and corresponding GLOWS l3e files.
+    # Find the most recent l2 map file and use its date range to query GLOWS l3e
+    # files.
+    # Get the l2 upstream dependency (there should only be one).
+    l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
+    if l2_dep is None:
+        raise ValueError(f"Missing required l2 dependency for job: {job_node}.")
+    # Find the most recent l2 map file start_date.
+    new_start_date = find_most_recent_start_date(l2_dep, start_date)
+    if not new_start_date:
+        raise ValueError(
+            f"No l2 map files found for {l2_dep['data_source']} "
+            f"{l2_dep['data_type']} {l2_dep['descriptor']}."
         )
-        # Get the l2 upstream dependency (there should only be one).
-        l2_dep = next((dep for dep in deps if dep["data_type"] == "l2"), None)
-        if l2_dep is None:
-            raise ValueError(f"Missing required l2 dependency for job: {job_node}.")
-        # Find the most recent l2 map file start_date.
-        new_start_date = find_most_recent_start_date(l2_dep, start_date)
-        if not new_start_date:
-            raise ValueError(
-                f"No l2 map files found for {l2_dep['data_source']} "
-                f"{l2_dep['data_type']} {l2_dep['descriptor']}."
-            )
-        new_start_date = new_start_date.strftime("%Y%m%d")
-        # Determine the number of days the map was created for based on the cadence.
-        cadence_key = job_node["descriptor"].split("-")[-1]
-        if cadence_key not in CadenceDays.valid_cadence_str():
-            raise ValueError(
-                f"Invalid cadence '{cadence_key}' from descriptor"
-                f"'{job_node['descriptor']}'."
-            )
-        map_days = CadenceDays.str_lookup(cadence_key).value
-        # Use the date range of the l2 map as the query range for the l3 job.
-        new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(
-            "%Y%m%d"
+    new_start_date = new_start_date.strftime("%Y%m%d")
+    # Determine the number of days the map was created for based on the cadence.
+    cadence_key = job_node["descriptor"].split("-")[-1]
+    if cadence_key not in CadenceDays.valid_cadence_str():
+        raise ValueError(
+            f"Invalid cadence '{cadence_key}' from descriptor"
+            f"'{job_node['descriptor']}'. Valid cadences are: "
+            f"{CadenceDays.valid_cadence_str()}"
         )
+    map_days = CadenceDays.str_lookup(cadence_key).value
+    # Use the date range of the l2 map as the query range for the l3 job.
+    new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime("%Y%m%d")
     return new_start_date, new_end_date
+
+
+def duplicate_job(
+    instrument,
+    data_level,
+    descriptor,
+    start_date,
+    previous_version,
+    serialized_dependencies,
+) -> bool:
+    """Determine if the current job is a duplicate of the most recent job.
+
+    Parameters
+    ----------
+    instrument : str
+        Instrument.
+    data_level : str
+        Data level.
+    descriptor : str
+        Data descriptor.
+    start_date : str
+        Start date.
+    previous_version : str
+        The previous version of the job
+    serialized_dependencies : str
+        The serialized upstream dependencies of the job.
+
+    Returns
+    -------
+    bool
+        True if the job is a duplicate, False otherwise.
+    """
+    # TODO switch to DependencyFilePath
+    previous_dependency_file = CadenceFilePath.generate_from_inputs(
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_time=start_date,
+        version=previous_version,
+        extension="json",
+    )
+    previous_dependency_path = previous_dependency_file.construct_path()
+    # Get the dependency s3 path
+    relative_path = previous_dependency_path.relative_to(
+        imap_data_access.config["DATA_DIR"]
+    )
+    previous_dependency_str = get_previous_dependency_str(relative_path)
+    if previous_dependency_str is None:
+        logger.error(
+            f"Failed to download previous dependency file: {previous_dependency_path}. "
+            f"Skipping duplicate job check."
+        )
+        return False
+    # If the previous dependency string is the same as the current, this is a duplicate
+    # job.
+    if previous_dependency_str == serialized_dependencies:
+        return True
+
+    return False
 
 
 def try_to_submit_job(
@@ -320,7 +357,7 @@ def try_to_submit_job(
     job_info: dict,
     start_date: datetime,
     version: str,
-    upstream_dependencies: ProcessingInputCollection | str,
+    serialized_dependencies: str,
 ):
     """Try to submit a batch job with the given job information.
 
@@ -334,15 +371,41 @@ def try_to_submit_job(
         Start date of the data.
     version : str
         Version of the job.
-    upstream_dependencies : ProcessingInputCollection or str
-        Either a filename string of a JSON file containing the serialized upstream
-        dependencies. Otherwise, a ProcessingInputCollection of the upstream
+    serialized_dependencies : str
+        The serialized ProcessingInputCollection of the upstream
         dependencies.
     """
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
     start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
+
+    # Search for any duplicate jobs that have the same exact dependencies for this
+    # instrument, data level, descriptor, and start date by checking the CRID.
+    # Only check for duplicates if this is a reprocessing job.
+    # We know this is a reprocessing job if the version is not "v001".
+    if version != "v001":
+        previous_version = f"v{int(version[1:]) - 1:03d}"
+        if duplicate_job(
+            instrument,
+            data_level,
+            descriptor,
+            start_date_str,
+            previous_version,
+            serialized_dependencies,
+        ):
+            filepath = ScienceFilePath.generate_from_inputs(
+                instrument=instrument,
+                data_level=data_level,
+                descriptor=descriptor,
+                start_time=start_date_str,
+                version=previous_version,
+            )
+            logger.info(
+                f"This job is a duplicate of the previous job. See file: "
+                f"{filepath.filename!s}. Skipping submission."
+            )
+            return
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -366,16 +429,26 @@ def try_to_submit_job(
     logger.info(
         f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
     )
-
-    # Reformat the upstream dependencies from dependency call to match
-    # what batch job expects.
     # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
 
-    # If upstream dependencies are a ProcessingInputCollection, serialize them into a
-    # string. Otherwise, it should be a string representing the filename of a JSON file
-    # containing the serialized upstream dependencies.
-    if isinstance(upstream_dependencies, ProcessingInputCollection):
-        upstream_dependencies = upstream_dependencies.serialize()
+    # Serialize the upstream dependencies and write them to a JSON file. The Imap
+    # processing code will read the JSON file and deserialize the dependencies. This is
+    # to avoid passing a large string through the batch job command line.
+    # release
+    # TODO switch to DependencyFilePath
+    dependency_file = CadenceFilePath.generate_from_inputs(
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_time=start_date.strftime("%Y%m%d"),
+        version=version,
+        extension="json",
+    )
+    dependency_file_path = dependency_file.construct_path()
+    response = upload_dependency_file(dependency_file_path, serialized_dependencies)
+    # If response is None, then the upload failed and we should skip submitting the job.
+    if not response:
+        return
 
     batch_command = [
         "--instrument",
@@ -389,7 +462,7 @@ def try_to_submit_job(
         "--version",
         version,
         "--dependency",
-        upstream_dependencies,
+        dependency_file_path.name,
         "--upload-to-sdc",
     ]
 
@@ -414,7 +487,14 @@ def try_to_submit_job(
     logger.info(f"Submitted job {job_name} with this command: {batch_command}")
 
 
-def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies=True):
+def submit_all_jobs(
+    session,
+    job_node,
+    start_date,
+    end_date,
+    calculate_crids=False,
+    filter_dependencies=True,
+):
     """Submit all jobs for the given job and upstream dependencies.
 
     Parameters
@@ -427,11 +507,15 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         Start date to query the data.
     end_date : str
         End date to query the data.
+    calculate_crids : bool
+        True if the file that triggered the job is a science file, False if it is SPICE
+        or ancillary.
     filter_dependencies : bool
         If True, filter the upstream dependencies to only include the files valid for
         upstream primary science start_date. There are a few special cases where we do
-        not want to filter any dependencies out, for example, IDEX l2b needs all of the
-        l1b housekeeping datasets in the collection. Default is set to True.
+        not want to filter any dependencies out, for example, ULTRA l3
+        "u90-ena-h-sf-sp-full-hae-4deg-3mo" needs all the psets in the collection.
+        Default is set to True.
 
 
     """
@@ -446,6 +530,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         relationship="ALL",
         start_date=start_date,
         end_date=end_date,
+        calculate_crids=calculate_crids,
     )
     if not upstream_dependencies:
         logger.info(
@@ -492,6 +577,7 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
                 relationship="ALL",
                 start_date=filepath.start_date,
                 end_date=filepath.start_date,
+                calculate_crids=False,
             )
             if not upstream_deps_for_job:
                 logger.info(
@@ -502,8 +588,39 @@ def submit_all_jobs(session, job_node, start_date, end_date, filter_dependencies
         else:
             upstream_deps_for_job = upstream_dependencies
         try_to_submit_job(
-            session, job_node, job_start_date, job_version, upstream_deps_for_job
+            session,
+            job_node,
+            job_start_date,
+            job_version,
+            upstream_deps_for_job.serialize(),
         )
+
+
+def generate_queue_url(event):
+    """Generate the SQS queue URL from the input event.
+
+    Each SQS event includes an "eventSourceARN" field which contains all the
+    information needed to construct the queue URL.
+
+    Parameters
+    ----------
+    event : dict
+        Input event from events["Records"] which contains information for one event.
+
+    Returns
+    -------
+    str
+        The SQS queue URL constructed from the event's "eventSourceARN". This is either
+        the normal file arrived queue or the delay queue.
+    """
+    source_arn = event[
+        "eventSourceARN"
+    ]  # e.g., arn:aws:sqs:us-east-1:123456789012:my-queue-name.fifo
+    queue_name = source_arn.split(":")[-1]
+    region = source_arn.split(":")[3]
+    account_id = source_arn.split(":")[4]
+    queue_url = f"https://sqs.{region}.amazonaws.com/{account_id}/{queue_name}"
+    return queue_url
 
 
 def s3_processing_event(session, events):
@@ -524,13 +641,10 @@ def s3_processing_event(session, events):
     # GLOWS l3 processing might produce ~30 files at once. We only want one to trigger
     # one downstream l3 survival probability map job in this case.
     triggered_from_glows_l3e = False
-    sqs_queue_url = os.getenv("SQS_URL")
-    if not sqs_queue_url:
-        logger.warning(
-            "SQS_URL environment variable is not set. Messages will not"
-            " be deleted from the SQS."
-        )
+
     for event in events["Records"]:
+        sqs_queue_url = generate_queue_url(event)
+
         # Event details:
         logger.info("Individual event: " + json.dumps(event, indent=2))
         body = json.loads(event["body"])
@@ -596,21 +710,34 @@ def s3_processing_event(session, events):
             logger.info(f"No downstream dependencies found for the file: {filename}")
             continue
 
+        # Boolean to determine if the file that triggered the job is a science file.
+        # If True, we will check if the expected CRIDs exist for the upstream
+        # dependencies. If so, processing will continue. If not, it will return None.
+        # This check should only be done for jobs that were triggered by a science file
+        # because this indicates that there may be a reprocessing of an upstream file,
+        # and we want to avoid multiple reprocessing of the same file.
+        calculate_crids = isinstance(file_obj, ScienceFilePath)
         for job in potential_jobs + potential_soft_jobs:
             job.pop("relationship")
             if job in SPECIAL_CASE_JOBS:
                 start_date, end_date = get_special_case_date_range(
-                    session, job, start_date, end_date
+                    session, job, start_date
                 )
                 logger.info(
-                    f"Found a special case job. Using date range: "
-                    f"{start_date} - {end_date}"
+                    f"Found a special case job: {job}. Using start_date: {start_date}"
                 )
                 filter_dependencies = False
             else:
                 filter_dependencies = True
 
-            submit_all_jobs(session, job, start_date, end_date, filter_dependencies)
+            submit_all_jobs(
+                session,
+                job,
+                start_date,
+                end_date,
+                calculate_crids,
+                filter_dependencies,
+            )
 
         if sqs_queue_url:
             # When the record from the sqs event has been processed, it can safely be
@@ -665,7 +792,7 @@ def handle_special_case_reprocessing_jobs(session, job_node, start_date, end_dat
         # For each file to reprocess we need to determine the correct
         # start and end date to use for the job.
         start_date, end_date = get_special_case_date_range(
-            session, job_node, filepath.start_date, filepath.start_date
+            session, job_node, filepath.start_date
         )
         submit_all_jobs(
             session, job_node, start_date, end_date, filter_dependencies=False
@@ -738,43 +865,88 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def upload_cadence_file(cadence_file_path: Path, upstream_dependencies):
-    """Upload a JSON file containing a cadence job's dependencies to S3.
+def get_previous_dependency_str(dependency_file_path: Path):
+    """Download a JSON file containing a dependencies from S3 and return its contents.
 
     Parameters
     ----------
-    cadence_file_path : Path
-        The cadence JSON file to upload.
-    upstream_dependencies : ProcessingInputCollection
-        The upstream dependencies to serialize and upload.
+    dependency_file_path : Path
+        The dependency JSON file to download.
+
+    Returns
+    -------
+    str or None
+        The contents of the dependency file if successful, otherwise None.
+    """
+    response = download_api.lambda_handler(
+        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
+    )
+    if response["statusCode"] != 302:
+        logger.error(
+            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
+            f"Error message: {response['body']}, "
+            f"with status code: {response['statusCode']}."
+        )
+        return None
+    try:
+        download_url = json.loads(response["body"])["download_url"]
+        response = requests.get(download_url, timeout=60.0)
+        logger.info(
+            f"Dependency file downloaded successfully from s3 with status code: "
+            f"{response.status_code}"
+        )
+        return response.text
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during dependency file download: {e}. "
+            f"Dependency file download failed."
+        )
+        return None
+
+
+def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
+    """Upload a JSON file containing a job's dependencies to S3.
+
+    Parameters
+    ----------
+    dependency_file_path : Path
+        The dependency JSON file to upload.
+    serialized_dependencies : str
+        The serialized upstream dependencies to upload.
     """
     # Check if the file already exists
-    if os.path.isfile(cadence_file_path):
-        raise KeyError(f"{cadence_file_path} already exists, cannot create JSON file.")
+    if os.path.isfile(dependency_file_path):
+        raise KeyError(
+            f"{dependency_file_path} already exists, cannot create JSON file."
+        )
     # call the upload API handler directly
     signed_url = upload_api.lambda_handler(
-        {"pathParameters": {"proxy": cadence_file_path.as_posix()}}, None
+        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
     )
+    if signed_url["statusCode"] != 200:
+        logger.error(
+            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
+            f"As a result, failed to kick off job. "
+            f"Error message: {signed_url['body']}, "
+            f"with status code: {signed_url['statusCode']}."
+        )
+        return None
     try:
         response = requests.put(
             signed_url["body"].strip('"'),
-            data=upstream_dependencies.serialize(),
+            data=serialized_dependencies,
             headers={"Content-Type": "application/json"},
             timeout=60.0,
         )
         logger.info(
-            f"Cadence file uploaded successfully to s3 with status code: "
+            f"Dependency file uploaded successfully to s3 with status code: "
             f"{response.status_code}"
         )
         return response
-    except requests.exceptions.MissingSchema as e:
-        logger.error(f"Schema error in signed url: {signed_url['body']}. Error: {e}")
-        # Log the error but do not raise, so processing continues for other jobs
-        return None
     except Exception as e:
         logger.error(
             f"Unexpected error during cadence file upload: {e}. "
-            f"Cadence file upload failed Job will not be kicked off."
+            f"Dependency file upload failed and the job did not get kicked off."
         )
         return None
 
@@ -790,18 +962,65 @@ def cadence_processing_event(session, events):
         Event input from an Event Bridge rule.
     """
     cadence = events.get("cadence")
+    # TODO: remove start_date and end_date handling after SIT-4.
+    start_date = events.get("start_date")
+    end_date = events.get("end_date")
     logger.info(f"A cadence event was triggered with the parameters: {cadence=}")
     if not cadence:
         raise ValueError("Cadence event must include 'cadence' key.")
     dep_config = DependencyConfig()
     # Get jobs for specified cadence. Sort them for testing purposes.
     potential_jobs = sorted(dep_config.get_cadence_jobs(cadence), key=lambda x: x[2])
-    logger.info(f"Found {len(potential_jobs)} potential L2 map jobs: {potential_jobs}")
+    logger.info(f"Found {len(potential_jobs)} potential cadence jobs: {potential_jobs}")
     # Get the start and end dates for this job
-    start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
+    if not start_date and not end_date:
+        start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
+    elif not start_date or not end_date:
+        raise ValueError(
+            "Cadence event must include both 'start_date' and 'end_date' if either is"
+            " provided."
+        )
     logger.info(f"Using {start_date=} and {end_date=} for cadence jobs.")
 
     for job_node in potential_jobs:
+        if job_node[0] == "idex" and job_node[1] == "l2b":
+            # IDEX l2b jobs are dependent on idex l1b evt housekeeping files. The job
+            # should be offset by 1 month to allow for all the event message
+            # packets to be processed for the corresponding l2a files. L2b jobs also
+            # depend on l1b evt housekeeping files that might be before the cadence job
+            # start date. To account for this, we will query for all the l1b evt files
+            # including those two weeks before the cadence job start date. This should
+            # ensure that all the l1b evt files are available for the l2b job.
+            offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
+            start_date = (
+                datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
+            )
+            end_date = (
+                datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
+            ).strftime("%Y%m%d")
+            # Subtract two weeks from the start date to get all the necessary hk files.
+            l1b_evt_start_date = (start_date - datetime.timedelta(weeks=2)).strftime(
+                "%Y%m%d"
+            )
+            start_date = start_date.strftime("%Y%m%d")
+            upstream_extended_idex_deps = dependency.get_jobs(
+                data_source=job_node[0],
+                data_type=job_node[1],
+                descriptor=job_node[2],
+                dependency_type="UPSTREAM",
+                relationship="ALL",
+                start_date=l1b_evt_start_date,
+                end_date=end_date,
+            )
+            if not upstream_extended_idex_deps:
+                continue
+            # Extract only the processing input for the idex l2b evt files
+            additional_input = upstream_extended_idex_deps.get_processing_inputs(
+                source="idex", data_type="l1b", descriptor="evt"
+            )
+        else:
+            additional_input = None
+
         upstream_dependencies = dependency.get_jobs(
             data_source=job_node[0],
             data_type=job_node[1],
@@ -813,6 +1032,9 @@ def cadence_processing_event(session, events):
         )
         if not upstream_dependencies:
             continue
+        if additional_input:
+            # If there are additional inputs, add them to the upstream dependencies.
+            upstream_dependencies.add(additional_input)
 
         logger.info(f"All required dependencies found for the dependency: {job_node}")
         job_version = determine_job_version(
@@ -822,37 +1044,18 @@ def cadence_processing_event(session, events):
             descriptor=job_node[2],
             start_date=start_date,
         )
-        # Serialize the upstream dependencies to a JSON file. This is necessary for map
-        # jobs with many dependencies to avoid passing a long list of dependencies
-        # directly to the batch job. Imap processing code will read the JSON file and
-        # deserialize the dependencies.
-        cadence_dependency_path = CadenceFilePath.generate_from_inputs(
-            instrument=job_node[0],
-            data_level=job_node[1],
-            descriptor=job_node[2],
-            start_time=start_date,
-            version=job_version,
-            extension="json",
-        )
-        cadence_dependency_path = Path(cadence_dependency_path.construct_path())
-        response = upload_cadence_file(cadence_dependency_path, upstream_dependencies)
-        # If response is None, then the upload failed and we should continue to the
-        # next job.
-        if not response:
-            continue
         # Submit the map job with all of the upstream dependencies in the date range
-        # (as JSON file).
         node = {
             "data_source": job_node[0],
-            "descriptor": job_node[2],
             "data_type": job_node[1],
+            "descriptor": job_node[2],
         }
         try_to_submit_job(
             session,
             node,
             datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
-            os.path.basename(cadence_dependency_path),
+            upstream_dependencies.serialize(),
         )
 
 
@@ -891,7 +1094,7 @@ def lambda_handler(events: dict, context):
     5. Event of a cron job cadence trigger.
         Example event:
             {
-                "cadence": 3mo, 1yr, or 6mo
+                "cadence": 1mo, 3mo, 1yr, or 6mo
             }
 
     Parameters

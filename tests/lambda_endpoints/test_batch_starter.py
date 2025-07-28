@@ -3,11 +3,10 @@
 import datetime as dt
 import json
 import logging
-import os
 import pathlib
 from datetime import datetime
 from os.path import basename
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import imap_data_access
 import pytest
@@ -34,7 +33,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import 
     CadenceDays,
     determine_job_version,
     lambda_handler,
-    upload_cadence_file,
+    upload_dependency_file,
 )
 
 from .conftest import (
@@ -59,30 +58,37 @@ def _populate_processing_table(session):
     session.commit()
 
 
-def test_lambda_handler(session):
+def test_lambda_handler(session, s3_client):
     """Tests ``lambda_handler`` function."""
     _populate_file_catalog(session)
     events = {
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                '{"object": {"key": "imap_swe_l0_raw_20240101_v001.pkts"}}'
                 "}",
                 "receiptHandle": "testingtesting123",
+                "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
+                "testing-queue-url.fifo",
             }
         ]
     }
-    serialized_processing_input = [
-        {"type": "spice", "files": ["naif0012.tls", "imap_sclk_0000.tsc"]},
-        {"type": "science", "files": ["imap_swe_l0_raw_20240110_v001.pkts"]},
-    ]
-
+    processing_input = ProcessingInputCollection(
+        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
+        ScienceInput("imap_swe_l0_raw_20240101_v001.pkts"),
+    )
     context = {"context": "sample_context"}
+    mock_sqs_client = Mock()
+    mock_sqs_client.delete_message.return_value = {
+        "ResponseMetadata": {"HTTPStatusCode": 200}
+    }
 
     with (
         patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
-        patch.dict(os.environ, {"SQS_URL": "testing-queue-url.fifo"}),
-        patch.object(batch_starter, "SQS_CLIENT", Mock()) as mock_sqs_client,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter.SQS_CLIENT",
+            mock_sqs_client,
+        ),
     ):
         lambda_handler(events, context)
         mock_batch_client.submit_job.assert_called_once()
@@ -99,20 +105,91 @@ def test_lambda_handler(session):
                     "--descriptor",
                     "sci",
                     "--start-date",
-                    "20240110",
+                    "20240101",
                     "--version",
-                    "v001",
+                    "v011",
                     "--dependency",
-                    json.dumps(serialized_processing_input),
+                    "imap_swe_l1a_sci_20240101_v011.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
-        mock_sqs_client.delete_message.assert_called_once()
+    mock_sqs_client.delete_message.assert_called_once_with(
+        QueueUrl="https://sqs.us-west-2.amazonaws.com/123456789012/testing-queue-url.fifo",
+        ReceiptHandle="testingtesting123",
+    )  # Verify the function was called with the correct upstream dependencies
+
+    with (
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter.SQS_CLIENT",
+            mock_sqs_client,
+        ),
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+    ):
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"},
+            dt.datetime(2024, 1, 1, 0, 0),
+            "v012",
+            processing_input.serialize(),
+        )
 
 
-def test_lambda_handler_multiple_events(session):
+def test_different_queues(session, s3_client):
+    """Tests events from multiple queues."""
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                "}",
+                "receiptHandle": "testingtesting123",
+                "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
+                "testing-queue-url.fifo",
+            },
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                "}",
+                "receiptHandle": "testingtesting222",
+                "eventSourceARN": "arn:aws:sqs:us-west-2:123456789012:"
+                "delay-queue-url.fifo",
+            },
+        ]
+    }
+    context = {"context": "sample_context"}
+    mock_sqs_client = Mock()
+    mock_sqs_client.delete_message.return_value = {
+        "ResponseMetadata": {"HTTPStatusCode": 200}
+    }
+
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()),
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter.SQS_CLIENT",
+            mock_sqs_client,
+        ),
+    ):
+        lambda_handler(events, context)
+        # Both events need to be removed from the correct queue
+        mock_sqs_client.delete_message.assert_has_calls(
+            [
+                call(
+                    QueueUrl="https://sqs.us-west-2.amazonaws.com/123456789012/testing-queue-url.fifo",
+                    ReceiptHandle="testingtesting123",
+                ),
+                call(
+                    QueueUrl="https://sqs.us-west-2.amazonaws.com/123456789012/delay-queue-url.fifo",
+                    ReceiptHandle="testingtesting222",
+                ),
+            ]
+        )
+
+
+def test_lambda_handler_multiple_events(session, s3_client):
     """Tests ``lambda_handler`` function with multiple events."""
     # Test Multiple Events:
     _populate_file_catalog(session)
@@ -120,7 +197,7 @@ def test_lambda_handler_multiple_events(session):
         "Records": [
             {
                 "body": '{"detail": '
-                '{"object": {"key": "imap_swe_l0_raw_20240110_v001.pkts"}}'
+                '{"object": {"key": "imap_swe_l0_raw_20240101_v001.pkts"}}'
                 "}"
             },
             {
@@ -131,7 +208,10 @@ def test_lambda_handler_multiple_events(session):
         ]
     }
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 2
 
@@ -151,7 +231,10 @@ def test_lambda_handler_ancillary_event(session):
     }
 
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         # There should be 2 different jobs submitted for one swe l1b ancillary file
         assert mock_batch_client.submit_job.call_count == 2
@@ -174,8 +257,6 @@ def test_lambda_handler_ancillary_event(session):
                 "files": ["imap_swe_eu-conversion_20221231_v001.cdf"],
             },
         ]
-        dependencies = ProcessingInputCollection()
-        dependencies.deserialize(json.dumps(inputs))
         mock_batch_client.submit_job.assert_called_with(
             jobName="swe-l1b-sci-job-2",
             jobQueue="ProcessingJobQueue",
@@ -191,13 +272,27 @@ def test_lambda_handler_ancillary_event(session):
                     "--start-date",
                     "20240102",
                     "--version",
-                    "v002",
+                    "v001",
                     "--dependency",
-                    dependencies.serialize(),
+                    "imap_swe_l1b_sci_20240102_v001.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Assert that the try_to_submit_job function was called with the correct
+    # upstream dependencies
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "swe", "data_type": "l1b", "descriptor": "sci"},
+            dt.datetime(2024, 1, 2, 0, 0),
+            "v002",
+            json.dumps(inputs),
         )
 
 
@@ -215,7 +310,10 @@ def test_lambda_handler_no_dependencies(session):
         ]
     }
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         # Verify the function was not called
         assert mock_submit.call_count == 0
@@ -240,7 +338,10 @@ def test_lambda_handler_no_dependencies_multiple_files(session):
         ]
     }
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         # Verify the function was not called
         assert mock_submit.call_count == 1
@@ -260,7 +361,10 @@ def test_lambda_handler_missing_upstream_dependency(session, caplog):
         ]
     }
     context = {"context": "sample_context"}
-    with caplog.at_level(logging.DEBUG):
+    with (
+        caplog.at_level(logging.DEBUG),
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         log_str = (
             "No records found for dependency: "
@@ -283,6 +387,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
         [
             SPICEFiles(
                 file_name="naif0012.tls",
+                file_path="path/to/naif0012.tls",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:00+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -307,6 +412,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
             ),
             SPICEFiles(
                 file_name="imap_sclk_0000.tsc",
+                file_path="path/to/imap_sclk_0000.tsc",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:01+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -377,10 +483,12 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
     }
     caplog.set_level("INFO")
     context = {"context": "sample_context"}
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(multiple_events, context)
         assert mock_batch_client.submit_job.call_count == 0
-    print(caplog.text)
     # Check that the expected message was logged.
     expected_log = (
         "Skipping job submission for {'data_source': 'mag', 'data_type': "
@@ -410,7 +518,10 @@ def test_bulk_reprocessing_data_level(session, caplog):
         lambda_handler(events, context)
     # Add instrument and try again
     events["queryStringParameters"]["instrument"] = "swe"
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
     # There should be 4 different jobs submitted for swe l1b sci because there are 4
     # upstream swe l1a sci files with start dates in the reprocessing range.
@@ -431,7 +542,10 @@ def test_bulk_reprocessing_all(session, caplog):
     }
     context = {"context": "sample_context"}
     # Add instrument and try again
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
     # There should be two jobs submitted, one for swe, one for lo based off the existing
     # l0 files
@@ -454,99 +568,16 @@ def test_bulk_reprocessing_all_swe(session, caplog):
     }
     context = {"context": "sample_context"}
     # Add instrument and try again
-    with patch.object(batch_starter, "try_to_submit_job") as mock_submit:
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
     # There should be one job submitted for swe
     assert mock_submit.call_count == 1
 
 
 ###### SPECIAL CASE TESTS #######
-def test_idex_l2b(session):
-    """Tests ``lambda_handler` for unique idex l2b case."""
-    _populate_file_catalog(session)
-    # Add 9 idex l1b evt files. Some of these will be used as dependencies for the job.
-    session.add_all(
-        [
-            ScienceFiles(
-                file_path=f"/path/to/imap_idex_l1b_evt_2023020{day}_v001.cdf",
-                instrument="idex",
-                data_level="l1b",
-                descriptor="evt",
-                start_date=datetime(2023, 2, day),
-                version="v001",
-                extension="cdf",
-                ingestion_date=datetime.strptime(
-                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-                ),
-            )
-            for day in range(1, 10)
-        ]
-    )
-    session.add_all(
-        [
-            ScienceFiles(
-                file_path=f"/path/to/imap_idex_{level}_sci-1week_2023020{day}_v001.cdf",
-                instrument="idex",
-                data_level=level,
-                descriptor="sci-1week",
-                start_date=datetime(2023, 2, day),
-                version="v001",
-                extension="cdf",
-                ingestion_date=datetime.strptime(
-                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
-                ),
-            )
-            for day, level in zip([2, 9], ["l2b", "l2a"])
-        ]
-    )
-    session.commit()
-    events = {
-        "Records": [
-            {
-                "body": '{"detail": '
-                '{"object": {"key": "imap_idex_l2a_sci-1week_20230209_v001.cdf"}}'
-                "}"
-            }
-        ]
-    }
-    context = {"context": "sample_context"}
-    expected_processing_input = ProcessingInputCollection(
-        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
-        ScienceInput("imap_idex_l2a_sci-1week_20230209_v001.cdf"),
-    )
-    # There will be 6 l1b evt files that are used as dependencies for the job and
-    # None of them should be before the existing l2b file start_date.
-    l1b_files = [f"imap_idex_l1b_evt_2023020{day}_v001.cdf" for day in range(3, 10)]
-    expected_processing_input.add(ScienceInput(*l1b_files))
-
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
-        lambda_handler(events, context)
-        # Verify the function was called
-        mock_batch_client.submit_job.assert_called_with(
-            jobName="idex-l2b-sci-1week-job-1",
-            jobQueue="ProcessingJobQueue",
-            jobDefinition="ProcessingJob-idex",
-            containerOverrides={
-                "command": [
-                    "--instrument",
-                    "idex",
-                    "--data-level",
-                    "l2b",
-                    "--descriptor",
-                    "sci-1week",
-                    "--start-date",
-                    "20230209",
-                    "--version",
-                    "v001",
-                    "--dependency",
-                    expected_processing_input.serialize(),
-                    "--upload-to-sdc",
-                ]
-            },
-            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
-        )
-
-
 def test_ultra_l3_map(session, caplog):
     """Tests ``lambda_handler` for unique ultra l3 map case."""
     # Add 6 months of glows l3e files and 1 ultra l2 map file. These are the
@@ -585,6 +616,7 @@ def test_ultra_l3_map(session, caplog):
             ),
             SPICEFiles(
                 file_name="naif0012.tls",
+                file_path="path/to/naif0012.tls",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:00+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -609,6 +641,7 @@ def test_ultra_l3_map(session, caplog):
             ),
             SPICEFiles(
                 file_name="imap_sclk_0000.tsc",
+                file_path="path/to/imap_sclk_0000.tsc",
                 ingestion_date=datetime.strptime(
                     "2025-04-30 18:24:01+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
@@ -669,7 +702,10 @@ def test_ultra_l3_map(session, caplog):
             "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-4deg-3mo_20240201_v001.cdf"
         )
     )
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
@@ -689,7 +725,7 @@ def test_ultra_l3_map(session, caplog):
                     "--version",
                     "v001",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo_20240201_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -699,44 +735,64 @@ def test_ultra_l3_map(session, caplog):
         assert mock_batch_client.submit_job.call_count == 1
         assert "Already tried to submit job from a GLOWS l3e file." in caplog.text
 
+        # Assert that the try_to_submit_job function was called with the correct
+        # upstream dependencies
+        with (
+            patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+            patch.object(batch_starter, "generate_queue_url", return_value=False),
+        ):
+            lambda_handler(events, context)
+            mock_submit.assert_called_with(
+                session,
+                {
+                    "data_source": "ultra",
+                    "data_type": "l3",
+                    "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
+                },
+                dt.datetime(2024, 2, 1, 0, 0),
+                "v002",
+                expected_processing_input.serialize(),
+            )
+
 
 def test_bulk_reprocessing_special_case(session):
     """Tests ``lambda_handler`` for a special case in bulk reprocessing."""
     # Add test data to the database for the special case
-    # Add idex l1b evt files. Some of these will be used as dependencies for the job.
+    # Add hi l2 files. Some of these will be used as dependencies for the job.
     _populate_file_catalog(session)
+    # TODO fix dates to be more accurate
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_l1b_evt_2024020{day}_v001.cdf",
-                instrument="idex",
-                data_level="l1b",
-                descriptor="evt",
-                start_date=datetime(2024, 2, day),
+                file_path=f"/path/to/imap_hi_l2_h90-ena-h-sf-nsp-ram-hae-4deg-6mo_{date}_v001.cdf",
+                instrument="hi",
+                data_level="l2",
+                descriptor="h90-ena-h-sf-nsp-ram-hae-4deg-6mo",
+                start_date=datetime.strptime(date, "%Y%m%d"),
                 version="v001",
                 extension="cdf",
                 ingestion_date=datetime.strptime(
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for day in range(1, 3)
+            for date in ["20240202", "20240803"]
         ]
     )
     session.add_all(
         [
             ScienceFiles(
-                file_path=f"/path/to/imap_idex_{level}_sci-1week_2024020{day}_v001.cdf",
-                instrument="idex",
-                data_level=level,
-                descriptor="sci-1week",
-                start_date=datetime(2024, 2, day),
+                file_path=f"/path/to/imap_hi_l2_h90-ena-h-sf-nsp-anti-hae-4deg-6mo_{date}_v001.cdf",
+                instrument="hi",
+                data_level="l2",
+                descriptor="h90-ena-h-sf-nsp-anti-hae-4deg-6mo",
+                start_date=datetime.strptime(date, "%Y%m%d"),
                 version="v001",
                 extension="cdf",
                 ingestion_date=datetime.strptime(
                     "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
                 ),
             )
-            for day, level in zip([1, 2, 1, 2], ["l2b", "l2b", "l2a", "l2a"])
+            for date in ["20240202", "20240803"]
         ]
     )
     session.commit()
@@ -745,18 +801,21 @@ def test_bulk_reprocessing_special_case(session):
     events = {
         "queryStringParameters": {
             "reprocessing": "True",
-            "start_date": "20240201",
-            "end_date": "20240210",
-            "instrument": "idex",
-            "data_level": "l2b",
-            "descriptor": "sci-1week",
+            "start_date": "20240101",
+            "end_date": "20250210",
+            "instrument": "hi",
+            "data_level": "l3",
+            "descriptor": "h90-ena-h-sf-sp-full-hae-4deg-6mo",
         }
     }
     context = {"context": "None"}
 
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
-        # Verify that 2 l2b jobs were reprocessed
+        # Verify that the hi l3 jobs were reprocessed
         assert mock_batch_client.submit_job.call_count == 2
 
 
@@ -793,7 +852,10 @@ def test_lambda_handler_mag_l1c_case(session):
     expected_processing_input = ProcessingInputCollection(
         ScienceInput("imap_mag_l1b_norm-mago_20240101_v001.cdf"),
     )
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
@@ -813,7 +875,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_mag_l1c_norm-mago_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -881,12 +943,100 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v002",
                     "--dependency",
-                    expected_processing_input.serialize(),
+                    "imap_mag_l1c_norm-mago_20240101_v002.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
+    # Assert that the try_to_submit_job function was called with the correct
+    # upstream dependencies
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "mag", "data_type": "l1c", "descriptor": "norm-mago"},
+            dt.datetime(2024, 1, 1, 0, 0),
+            "v003",
+            expected_processing_input.serialize(),
+        )
+
+
+def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
+    """Tests ``lambda_handler` skips processing for a duplicate job."""
+    # Mock the situation where mag l1b files trigger batch starter back to back but
+    # with the same exact dependencies.
+    # We should expect the duplicate job to be skipped.
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1b_burst-mago_20240101_v001.cdf",
+                instrument="mag",
+                data_level="l1b",
+                descriptor="burst-mago",
+                start_date=datetime(2024, 1, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+            ScienceFiles(
+                file_path="/path/to/imap_mag_l1b_norm-mago_20240101_v003.cdf",
+                instrument="mag",
+                data_level="l1b",
+                descriptor="norm-mago",
+                start_date=datetime(2024, 1, 1),
+                version="v003",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+        ]
+    )
+    session.commit()
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_mag_l1b_burst-mago_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_once()
+
+        events = {
+            "Records": [
+                {
+                    "body": '{"detail": '
+                    '{"object": {"key": "imap_mag_l1b_norm-mago_20240101_v003.cdf"}}'
+                    "}"
+                }
+            ]
+        }
+        # Reset call count
+        mock_batch_client.submit_job.call_count = 0
+        lambda_handler(events, context)
+        # Verify the function not called
+        assert mock_batch_client.submit_job.call_count == 0
+
+        assert (
+            "This job is a duplicate of the previous job. See file:"
+            " imap_mag_l1c_norm-mago_20240101_v001.cdf."
+            " Skipping submission."
+        ) in caplog.text
 
 
 ### TEST CADENCE EVENT
@@ -978,6 +1128,125 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
         )
 
 
+def test_idex_l2b(session):
+    """Tests ``lambda_handler` for unique idex l2b case."""
+    _populate_file_catalog(session)
+    # Add 2 idex l1b evt files. Although the second file is out of the month range,
+    # It should be included in the ProcessingInputCollection because IDEX l2b jobs
+    # need housekeeping files that may be before the start date of the cadence job.
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path="/path/to/imap_idex_l1b_evt_20230201_v001.cdf",
+                instrument="idex",
+                data_level="l1b",
+                descriptor="evt",
+                start_date=datetime(2023, 2, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+            ScienceFiles(
+                file_path="/path/to/imap_idex_l1b_evt_20230101_v001.cdf",
+                instrument="idex",
+                data_level="l1b",
+                descriptor="evt",
+                start_date=datetime(2023, 1, 1),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            ),
+        ]
+    )
+    session.add_all(
+        [
+            ScienceFiles(
+                file_path=f"/path/to/imap_idex_l2a_sci-1week_2023020{day}_v001.cdf",
+                instrument="idex",
+                data_level="l2a",
+                descriptor="sci-1week",
+                start_date=datetime(2023, 2, day),
+                version="v001",
+                extension="cdf",
+                ingestion_date=datetime.strptime(
+                    "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+                ),
+            )
+            for day in [2, 9]
+        ]
+    )
+    session.commit()
+    cadence_event = {
+        "cadence": "1mo",
+    }
+    expected_processing_input = ProcessingInputCollection(
+        SPICEInput("naif0012.tls", "imap_sclk_0000.tsc"),
+        ScienceInput("imap_idex_l2a_sci-1week_20230202_v001.cdf"),
+        # There will be 2 science inputs containing l1b evt dependencies.
+        # The second input should include both l1b housekeeping files. THe IDEX
+        # l2b processing code will deduplicate all of the inputs
+        ScienceInput("imap_idex_l1b_evt_20230201_v001.cdf"),
+        ScienceInput(
+            "imap_idex_l1b_evt_20230201_v001.cdf", "imap_idex_l1b_evt_20230101_v001.cdf"
+        ),
+    )
+
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
+            ".cadence_to_datetime_range"
+        ) as dt_mock,
+    ):
+        dt_mock.return_value = ("20230209", "20230309")
+        lambda_handler(cadence_event, None)
+        # Verify the function was called
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="idex-l2b-sci-1mo-job-1",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-idex",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "idex",
+                    "--data-level",
+                    "l2b",
+                    "--descriptor",
+                    "sci-1mo",
+                    "--start-date",
+                    "20230109",
+                    "--version",
+                    "v001",
+                    "--dependency",
+                    "imap_idex_l2b_sci-1mo_20230109_v001.json",
+                    "--upload-to-sdc",
+                ]
+            },
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+    # Verify the function was called with the correct upstream dependencies
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch(
+            "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter"
+            ".cadence_to_datetime_range"
+        ) as dt_mock,
+    ):
+        dt_mock.return_value = ("20230209", "20230309")
+        lambda_handler(cadence_event, None)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "idex", "data_type": "l2b", "descriptor": "sci-1mo"},
+            dt.datetime(2023, 1, 9, 0, 0),
+            "v001",
+            expected_processing_input.serialize(),
+        )
+
+
 def test_invalid_cadence(session):
     """Test that an invalid cadence raises a ValueError."""
     cadence_event = {
@@ -1011,7 +1280,7 @@ def test_cadence_to_datetime_range():
         assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
 
 
-def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
+def test_upload_dependency_file(s3_client, tmp_path, cadence_file, caplog):
     """Test uploading a cadence json file to S3."""
     caplog.set_level("INFO")
     dependencies = ProcessingInputCollection(
@@ -1022,8 +1291,8 @@ def test_upload_cadence_file(s3_client, tmp_path, cadence_file, caplog):
     )
     with patch("imap_data_access.config", {"DATA_DIR": tmp_path}):
         cadence_dependency_path = pathlib.Path(cadence_file.construct_path())
-        upload_cadence_file(cadence_dependency_path, dependencies)
-    assert "Cadence file uploaded successfully" in caplog.text
+        upload_dependency_file(cadence_dependency_path, dependencies.serialize())
+    assert "Dependency file uploaded successfully" in caplog.text
 
 
 def test_determine_max_version(session):
@@ -1257,6 +1526,7 @@ def test_spice_event(session, s3_client):
             SPICEFiles(
                 # 2025028 to 2025030
                 file_name="imap_2025_118_2025_120_02.ah.bc",
+                file_path="/path/to/imap_2025_118_2025_120_02.ah.bc",
                 ingestion_date=datetime.now(),
                 file_root="imap_2025_118_2025_120_.ah.bc",
                 kernel_type="attitude_history",
@@ -1275,6 +1545,7 @@ def test_spice_event(session, s3_client):
             ),
             SPICEFiles(
                 file_name="imap_recon_20250428_20250430_v02.bsp",
+                file_path="/path/to/imap_recon_20250428_20250430_v02.bsp",
                 ingestion_date=datetime.now(),
                 file_root="imap_recon_20250428_20250430_v.bsp",
                 kernel_type="ephemeris_reconstructed",
@@ -1332,7 +1603,10 @@ def test_spice_event(session, s3_client):
             ],
         },
     ]
-    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+    with (
+        patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
         lambda_handler(events, None)
         mock_batch_client.submit_job.assert_called_once()
         mock_batch_client.submit_job.assert_called_with(
@@ -1352,9 +1626,53 @@ def test_spice_event(session, s3_client):
                     "--version",
                     "v001",
                     "--dependency",
-                    json.dumps(expected_dependency_input),
+                    "imap_idex_l1b_sci-1week_20250429_v001.json",
                     "--upload-to-sdc",
                 ]
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
+
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, None)
+        mock_submit.assert_called_with(
+            session,
+            {"data_source": "idex", "data_type": "l1b", "descriptor": "sci-1week"},
+            dt.datetime(2025, 4, 29, 0, 0),
+            "v002",
+            json.dumps(expected_dependency_input),
+        )
+
+
+def test_lambda_skip_processing_due_to_crid_check(session, caplog):
+    """Test that processing stops when the calculated CRID is mismatched.
+
+    This indicates that a new upstream file is expected.
+    """
+    _populate_file_catalog(session)
+    events = {
+        "Records": [
+            {
+                "body": '{"detail": '
+                '{"object": {"key": "imap_lo_l1a_de_20240101_v001.cdf"}}'
+                "}"
+            }
+        ]
+    }
+    context = {"context": "sample_context"}
+    with (
+        caplog.at_level(logging.DEBUG)
+        and patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+        patch.object(batch_starter, "generate_queue_url", return_value=False),
+    ):
+        lambda_handler(events, context)
+    log = (
+        "Found mismatched CRID for /path/to/imap_lo_l1a_de_20240101_v001.cdf. This"
+        " indicates that we are expecting a reprocessing for this file."
+    )
+    # Verify the job was skipped
+    assert log in caplog.text
+    assert mock_submit.call_count == 0

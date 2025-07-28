@@ -1,5 +1,6 @@
 """Dependency tracking module."""
 
+import base64
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
+from ..database.models import AncillaryFiles, SPICEFiles
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -375,20 +377,20 @@ class DependencyConfig:
         Parameters
         ----------
         cadence : str
-            Cadence string. Either "3mo", "6mo", or "1yr".
+            Cadence string. Either "1mo", "3mo", "6mo", or "1yr".
 
         Returns
         -------
         list
             List of cadence jobs.
         """
-        # Cadence jobs are only at data level l2 and contain either "3mo", "6mo", or
-        # "1yr" strings as the last part of the descriptor.
+        # Cadence jobs are only at data level l2 and contain either "1mo", "3mo", "6mo",
+        # or "1yr" strings as the last part of the descriptor.
 
         return [
             node
             for node in self.get_all_nodes("DOWNSTREAM")
-            if node[1] == "l2" and cadence == node[2].split("-")[-1]
+            if node[1] in ["l2", "l2b"] and cadence == node[2].split("-")[-1]
         ]
 
 
@@ -616,11 +618,154 @@ def get_latest_repoint_file(end_date: datetime) -> Optional[str]:
     return basename(latest[2])
 
 
-# ruff: noqa: PLR0915
+def get_upstream_versions(session, record, versions) -> dict:
+    """Recursively retrieves all upstream versions for a given record.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles, models.AncillaryFiles or models.SPICEFiles
+        The current record for which upstream versions are being retrieved.
+    versions : dict
+        A dict to store all of the upstream versions.
+
+    Returns
+    -------
+    dict
+        All upstream versions and their filenames.
+    """
+    # Make a copy of the dictionary to avoid modifying the original
+    versions = versions.copy()
+    if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
+        # Ancillary and SPICE files have no upstream dependencies
+        return versions
+
+    dep_node = {
+        "data_source": record.instrument,
+        "data_type": record.data_level,
+        "descriptor": record.descriptor,
+    }
+    upstream_deps = get_dependencies(
+        tuple(dep_node.values()),
+        "UPSTREAM",
+        "ALL",
+    )
+    for upstream_dep in upstream_deps:
+        upstream_records = get_files(
+            session,
+            upstream_dep,
+            record.start_date,
+            record.start_date,
+        )
+        if not upstream_records:
+            logger.warning(
+                f"Could not find upstream dep for {record} during CRID calculation."
+            )
+            return versions
+
+        # for now take the most recent start date:
+        upstream_record = sorted(upstream_records, key=lambda rec: rec.start_date)[0]
+        # Add the record version to the dictionary.
+        versions[upstream_record.file_path] = upstream_record.version
+        versions = get_upstream_versions(session, upstream_record, versions)
+
+    return versions
+
+
+def calculate_crid(session, record) -> str:
+    """Calculate a CRID (Composite Release ID) for a file.
+
+    The CRID is calculated as a hash of the file name and the versions of all its
+    upstream dependency files. It is unique to a file.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    record : models.ScienceFiles, models.AncillaryFiles, or models.SPICEFiles
+        The record for which the CRID is being calculated.
+
+    Returns
+    -------
+    str
+        The calculated CRID as a SHA-256 hash.
+    """
+    upstream_versions = get_upstream_versions(session, record, {})
+    # Sort the upstream versions by file path
+    sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
+    # Pack the version numbers into 2 bytes
+    sorted_bytes = b"".join([int(v[1:]).to_bytes(2) for path, v in sorted_dict])
+    logger.info(
+        f"Calculating CRID using upstream versions: {sorted_dict} and "
+        f"filepath {record.file_path}"
+    )
+    # Encode the file path and the sorted bytes
+    return base64.a85encode(record.file_path.encode() + sorted_bytes).decode("ascii")
+
+
+def matching_crids_exist(session, records) -> bool:
+    """Check if the matching CRIDs exist for the given records.
+
+    A difference between the calculated CRID of an upstream dependency and the actual
+    CRID of the file retrieved for processing, indicates that a new version of that file
+    is expected based on the files in S3.
+
+    In the case above, Batch starter will skip processing the current job, as it
+    expects that the reprocessed upstream file will soon be uploaded to S3,
+    triggering a new batch job run (we want to avoid needless reprocessing).
+    If the CRID matches the calculated CRID, we will continue with processing.
+
+    Parameters
+    ----------
+    session : db.Session
+        Database session.
+    records : list[Union[models.ScienceFiles, models.AncillaryFiles, models.SPICEFiles]]
+        List of records to check for CRIDs.
+
+    Returns
+    -------
+    bool
+        True if all expected CRIDs exist or are successfully set, False otherwise.
+    """
+    matching_crid = True
+    for upstream_record in records:
+        if isinstance(upstream_record, AncillaryFiles):
+            # Ancillary files do not have CRIDs.
+            continue
+
+        # Calculate CRID and convert to string
+        crid = calculate_crid(session, upstream_record)
+
+        existing_crid = upstream_record.crid
+        if existing_crid:
+            # Check if the CRID already exists in the database
+            if existing_crid == crid:
+                logger.info(
+                    f"Found matching CRID for {upstream_record.file_path}. Continuing.."
+                )
+            else:
+                logger.info(
+                    f"Found mismatched CRID for {upstream_record.file_path}. "
+                    f"This indicates that we are expecting a reprocessing for"
+                    f" this file."
+                )
+                matching_crid = False
+        else:
+            # If no existing CRID, insert CRID into the database for the record.
+            upstream_record.crid = crid
+            session.commit()
+            logger.info(f"Set CRID for {upstream_record.file_path}.")
+
+    return matching_crid
+
+
+# ruff: noqa: PLR0915, PLR0912
 def get_upstream_dependency_inputs(
     dependencies: list,
     start_date: datetime,
     end_date: datetime,
+    calculate_crids: bool,
 ):
     """Construct a ProcessingInputCollection of dependency files.
 
@@ -636,6 +781,12 @@ def get_upstream_dependency_inputs(
         Start date to find dependent files with.
     end_date : datetime
         End date to find dependent files with.
+    calculate_crids : bool
+        If True, we will check if the expected CRIDs exist for the upstream
+        dependencies. If so, processing will continue. If not, it will return None.
+        This check should only be done for jobs that were triggered by a science file
+        because this indicates that there may be a reprocessing of an upstream file,
+        and we want to avoid multiple reprocessing of the same file.
 
     Returns
     -------
@@ -754,6 +905,15 @@ def get_upstream_dependency_inputs(
 
             elif not records:
                 continue
+            # Skip CRID checks for glows l3 products. Menlo is handling this in their
+            # processing code.
+            if (
+                calculate_crids
+                and dep["data_source"] != "glows"
+                and "l3" not in dep["data_type"]
+            ):
+                if not matching_crids_exist(session, records):
+                    return None
 
             filenames = [basename(record.file_path) for record in records]
 
@@ -873,6 +1033,7 @@ def get_jobs(
     descriptor: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    calculate_crids: bool = False,
 ) -> list | ProcessingInputCollection | None:
     """Get dependencies for the given inputs.
 
@@ -895,6 +1056,12 @@ def get_jobs(
     end_date : str, optional
         End date to find dependent files with, in YYYYMMDD format. Required if
         start_date is provided.
+    calculate_crids : bool, optional
+        If True, we will check if the expected CRIDs exist for the upstream
+        dependencies. If so, processing will continue. If not, it will return None.
+        This check should only be done for jobs that were triggered by a science file
+        because this indicates that there may be a reprocessing of an upstream file,
+        and we want to avoid multiple reprocessing of the same file. Default is False.
 
     Returns
     -------
@@ -978,6 +1145,7 @@ def get_jobs(
         dependencies=dependencies,
         start_date=start_date,
         end_date=end_date,
+        calculate_crids=calculate_crids,
     )
     if upstream_dependencies_output is None:
         logger.info(

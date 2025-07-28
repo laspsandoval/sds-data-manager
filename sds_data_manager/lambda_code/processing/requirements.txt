@@ -7,9 +7,9 @@ astropy-healpix==1.1.2 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:ee37b14700d28cf53e2376c65f8cb6224a59f80067feb3f3cd6dd6f9a4577337 \
     --hash=sha256:f6b3e50c49e73a66bb1847dc3451e1d22bf828c10881275bf359928e95d25fe3 \
     --hash=sha256:fb504c998e1661215c74da9537558cd2048d29b44acb2d63e613aae133b91668
-astropy-iers-data==0.2025.5.26.0.37.21 ; python_version >= "3.10" and python_version < "4" \
-    --hash=sha256:0a725f7f84f44f6718347518a2a559bc5464aa53fa2f335d47188d1467a9926b \
-    --hash=sha256:a910ed22a46e5b1961aaabfa085da77c9772284a5b982379623f441f8b9856fc
+astropy-iers-data==0.2025.6.2.0.38.23 ; python_version >= "3.10" and python_version < "4" \
+    --hash=sha256:55893f9bc1d7acb364bc683707104cc9de00b588b5a386e3cdedc38a05f26460 \
+    --hash=sha256:b78895b0d1137ce0800ff8e90f2a58123687d2965d58297065356f2e1d4f3cbe
 astropy==6.1.7 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:072f62a67992393beb016dc80bee8fb994fda9aa69e945f536ed8ac0e51291e6 \
     --hash=sha256:09edca01276ee63f7b2ff511da9bfb432068ba3242e27ef27d76e5a171087b7e \
@@ -145,9 +145,9 @@ idna==3.10 ; python_version >= "3.10" and python_version < "4" \
 imap-data-access==0.31.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:4f8544cc9f6f936d43253cff0ebd26734d483bc8d4818160694a989f017d5dc4 \
     --hash=sha256:c0c8064bcd0978087764c846ba8c420027ca5c6d76b6f7fba9c4602691a1db9d
-imap-processing==0.12.0 ; python_version >= "3.10" and python_version < "4" \
-    --hash=sha256:3ed372c08384e54f3fd36846ea47cad9c0c7a3619bf68f65c88b1f49cd5f239e \
-    --hash=sha256:9c5bd9f1f3309c43b681cfaa6f6430df9169dbd21c2b07e26919e54eaf2d4992
+imap-processing==0.16.2 ; python_version >= "3.10" and python_version < "4" \
+    --hash=sha256:1257d0427e4ea7f1551d76d449c0892d4c4fb09f34deb8bb30c2a8d4d20a5570 \
+    --hash=sha256:59126773aaf6c2509e308e8f311897b5e41d25807d419904212460815bd70ab0
 lxml==5.4.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:00b8686694423ddae324cf614e1b9659c2edb754de617703c3d29ff568448df5 \
     --hash=sha256:073eb6dcdf1f587d9b88c8c93528b57eccda40209cf9be549d469b942b41d70b \
@@ -222,7 +222,6 @@ lxml==5.4.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:7be701c24e7f843e6788353c055d806e8bd8466b52907bafe5d13ec6a6dbaecd \
     --hash=sha256:7ca56ebc2c474e8f3d5761debfd9283b8b18c76c4fc0967b74aeafba1f5647f9 \
     --hash=sha256:7ce1a171ec325192c6a636b64c94418e71a1964f56d002cc28122fceff0b6121 \
-    --hash=sha256:891f7f991a68d20c75cb13c5c9142b2a3f9eb161f1f12a9489c82172d1f133c0 \
     --hash=sha256:8f82125bc7203c5ae8633a7d5d20bcfdff0ba33e436e4ab0abc026a53a8960b7 \
     --hash=sha256:91505d3ddebf268bb1588eb0f63821f738d20e1e7f05d3c647a5ca900288760b \
     --hash=sha256:942a5d73f739ad7c452bf739a62a0f83e2578afd6b8e5406308731f4ce78b16d \
@@ -241,7 +240,6 @@ lxml==5.4.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:a8c9b7f16b63e65bbba889acb436a1034a82d34fa09752d754f88d708eca80e1 \
     --hash=sha256:a8ef956fce64c8551221f395ba21d0724fed6b9b6242ca4f2f7beb4ce2f41997 \
     --hash=sha256:ab339536aa798b1e17750733663d272038bf28069761d5be57cb4a9b0137b4f8 \
-    --hash=sha256:ac7ba71f9561cd7d7b55e1ea5511543c0282e2b6450f122672a2694621d63b7e \
     --hash=sha256:aea53d51859b6c64e7c51d522c03cc2c48b9b5d6172126854cc7f01aa11f52bc \
     --hash=sha256:aea7c06667b987787c7d1f5e1dfcd70419b711cdb47d6b4bb4ad4b76777a0563 \
     --hash=sha256:aefe1a7cb852fa61150fcb21a8c8fcea7b58c4cb11fbe59c97a0a4b31cae3c8c \
@@ -261,7 +259,6 @@ lxml==5.4.0 ; python_version >= "3.10" and python_version < "4" \
     --hash=sha256:c70e93fba207106cb16bf852e421c37bbded92acd5964390aad07cb50d60f5cf \
     --hash=sha256:ca755eebf0d9e62d6cb013f1261e510317a41bf4650f22963474a663fdfe02aa \
     --hash=sha256:cccd007d5c95279e529c146d095f1d39ac05139de26c098166c4beb9374b0f4d \
-    --hash=sha256:ce31158630a6ac85bddd6b830cffd46085ff90498b397bd0a259f59d27a12188 \
     --hash=sha256:ce9c671845de9699904b1e9df95acfe8dfc183f2310f163cdaa91a3535af95de \
     --hash=sha256:d12832e1dbea4be280b22fd0ea7c9b87f0d8fc51ba06e92dc62d52f804f78ebd \
     --hash=sha256:d2ed1b3cb9ff1c10e6e8b00941bb2e5bb568b307bfc6b17dffbbe8be5eecba86 \
