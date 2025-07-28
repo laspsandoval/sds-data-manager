@@ -29,7 +29,7 @@ def add_stable_route(api, base_path, http_method, lambda_function, prefix_list):
         clean = f"{prefix}{base_path}"
         trailing = f"{prefix}{base_path}/"
         proxy = f"{prefix}{base_path}/{{proxy+}}"
-        for path in [clean, trailing, proxy]:
+        for path in set([clean, trailing, proxy]):
             api.add_route(
                 route=path,
                 http_method=http_method,
