@@ -9,6 +9,34 @@ from constructs import Construct
 from .api_gateway_construct import ApiGateway
 
 
+def add_stable_route(api, base_path, http_method, lambda_function, prefix_list=[""]):
+    """Ensure each variation of route is handled.
+
+        Parameters
+        ----------
+        api : obj
+            The APIGateway stack.
+        base_path : str
+            The base route path (e.g., "/upload").
+        http_method : str
+            The HTTP method to allow (e.g., "GET", "POST").
+        lambda_function : obj
+            The lambda function.
+        prefix_list : list[str]
+            List of route prefixes.
+        """
+    for prefix in prefix_list:
+        clean = f"{prefix}{base_path}"
+        trailing = f"{prefix}{base_path}/"
+        proxy = f"{prefix}{base_path}/{{proxy+}}"
+        for path in [clean, trailing, proxy]:
+            api.add_route(
+                route=path,
+                http_method=http_method,
+                lambda_function=lambda_function,
+            )
+
+
 class SdsApiManager(Construct):
     """Construct for API Management."""
 
@@ -69,6 +97,20 @@ class SdsApiManager(Construct):
                 f"{data_bucket.bucket_arn}/*",
             ],
         )
+        #root lambda
+        root_handler_lambda = lambda_.Function(
+            self,
+            id="RootAPILambda",
+            function_name="root-api-handler",
+            code=code,
+            handler="SDSCode.api_lambdas.root_api.lambda_handler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            timeout=cdk.Duration.seconds(10),
+            memory_size=128,
+            allow_public_subnet=True,
+            environment={"MESSAGE": "Welcome to the IMAP API 👋"},
+            layers=layers,
+        )
 
         # upload API lambda
         upload_api_lambda = lambda_.Function(
@@ -94,18 +136,26 @@ class SdsApiManager(Construct):
         upload_api_lambda.add_to_role_policy(s3_read_policy)
         upload_api_lambda.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
+        # Routes for non-specified calls to api
+        api.add_route(
+            route="/",
+            http_method="GET",
+            lambda_function=root_handler_lambda,
+        )
+
+        api.add_route(
+            route="",
+            http_method="GET",
+            lambda_function=root_handler_lambda,
+        )
+
         # basic route: /upload/{proxy+}
         # oauth2 JWT authorizer: /authorized/upload/{proxy+}
         # API key authorizer: /api-key/upload/{proxy+}
         auth_route_prefixes = ["", "/authorized", "/api-key"]
 
         # {proxy+} is used to allow for any pathParams after /upload/
-        for prefix in auth_route_prefixes:
-            api.add_route(
-                route=f"{prefix}/upload/{{proxy+}}",
-                http_method="GET",
-                lambda_function=upload_api_lambda,
-            )
+        add_stable_route(api, "/upload", "GET", upload_api_lambda, auth_route_prefixes)
 
         # query API lambda
         query_api_lambda = lambda_.Function(
@@ -127,13 +177,8 @@ class SdsApiManager(Construct):
             layers=layers,
         )
 
-        for prefix in auth_route_prefixes:
-            # {proxy+} is used to allow for any pathParams after /query/
-            api.add_route(
-                route=f"{prefix}/query",
-                http_method="GET",
-                lambda_function=query_api_lambda,
-            )
+        # {proxy+} is used to allow for any pathParams after /query/
+        add_stable_route(api, "/query", "GET", query_api_lambda, auth_route_prefixes)
 
         # SPICE query API lambda
         spice_query_api_lambda = lambda_.Function(
@@ -206,12 +251,7 @@ class SdsApiManager(Construct):
         download_api.add_to_role_policy(s3_read_policy)
 
         # {proxy+} is used to allow for any pathParams after /download/
-        for prefix in auth_route_prefixes:
-            api.add_route(
-                route=f"{prefix}/download/{{proxy+}}",
-                http_method="GET",
-                lambda_function=download_api,
-            )
+        add_stable_route(api, "/download", "GET", download_api, auth_route_prefixes)
 
         universal_spin_table_handler = lambda_.Function(
             self,
