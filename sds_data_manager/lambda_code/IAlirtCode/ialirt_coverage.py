@@ -39,6 +39,14 @@ def get_dsn(download_dir: Path):
         Path to the downloaded DSN file.
     dsn_dict : dict
         Contents of latest contact schedule.
+
+    Notes
+    -----
+    Example of DSN structure:
+    S/C   Year/DOY    AOS       LOS      STA    Orbit  SOE/TR  Local Time (UTC -0600)
+    ---------------------------------------------------------------------------------
+    IMAP  2025/203  21:40:00  01:40:00  DSS-56  -----  ------  Tue Jul 22 03:40PM
+    IMAP  2025/204  22:00:00  01:10:00  DSS-55  -----  ------  Wed Jul 23 04:00PM
     """
     imap_data_access.config["DATA_DIR"] = download_dir
     dsn_files = imap_data_access.query(
@@ -49,17 +57,41 @@ def get_dsn(download_dir: Path):
     )
 
     if not dsn_files:
-        dsn_dict = {}
         logger.info("No DSN files found for IALiRT. Returning empty dict.")
+        return None, {}
 
     dsn_path = dsn_files[0]
-
     download_path = imap_data_access.download(dsn_path["file_path"])
     logger.info(f"Downloading to {download_path}.")
 
-    # Placeholder
-    # TODO: parse the file and return a populated dict once we know the file structure.
-    dsn_dict = {}
+    dsn_dict: dict[str, list[tuple[str, str]]] = {}
+
+    with open(download_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    # Skip header lines
+    for line in lines:
+        if line.startswith("IMAP"):
+            parts = line.split()
+
+            year_doy = parts[1]
+            aos = parts[2]
+            los = parts[3]
+            station = parts[4]
+
+            # Parse AOS time
+            year, doy = map(int, year_doy.split("/"))
+            aos_dt = datetime.strptime(f"{year} {doy} {aos}", "%Y %j %H:%M:%S")
+            los_dt = datetime.strptime(f"{year} {doy} {los}", "%Y %j %H:%M:%S")
+
+            # If LOS time is earlier than AOS, it must be the next day
+            if los_dt < aos_dt:
+                los_dt += timedelta(days=1)
+
+            start = aos_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            end = los_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            dsn_dict.setdefault(station, []).append((start, end))
 
     return download_path, dsn_dict
 
@@ -116,7 +148,7 @@ def setup_spice_file(dependencies) -> list[Path]:
     Returns
     -------
     spice_files: list[Path]
-        A list of Path objects representing the SPICE files stored in EFS.
+        A list of Path objects representing the downloaded SPICE files.
 
     Notes
     -----
@@ -176,9 +208,13 @@ def parse_outage_file(file_path: Path) -> dict[str, list[tuple[str, str]]]:
 
     Notes
     -----
-    Input text file format:
-    Kiel,2026-09-22T13:50:00.00Z,2026-09-22T14:10:00Z
-    Kiel,2026-09-25T08:00:00.00Z,2026-09-25T09:30:00Z
+    Input json file format:
+    {
+        "Kiel": [
+            ["2026-09-22T13:50:00.00Z", "2026-09-22T14:10:00Z"],
+            ["2026-09-25T08:00:00.00Z", "2026-09-25T09:30:00Z"]
+        ]
+    }
 
     Output dictionary structure:
         outages = {
@@ -188,14 +224,14 @@ def parse_outage_file(file_path: Path) -> dict[str, list[tuple[str, str]]]:
         ],
     }
     """
-    content = file_path.read_text(encoding="utf-8").strip().splitlines()
+    with file_path.open("r", encoding="utf-8") as f:
+        raw_outages: dict[str, list[list[str]]] = json.load(f)
 
-    outages: dict[str, list[tuple[str, str]]] = {}
-    for line in content:
-        if not line.strip():
-            continue
-        station, start, end = [x.strip() for x in line.split(",")]
-        outages.setdefault(station, []).append((start, end))
+    # Convert inner lists to tuples
+    outages = {
+        station: [tuple(period) for period in periods]
+        for station, periods in raw_outages.items()
+    }
 
     return outages
 
@@ -227,9 +263,9 @@ def generate_and_upload_30_days(bucket: str, region: str, outages: dict, dsn: di
         # start_time = day.strftime("%Y-%m-%dT00:00:00Z")
 
         # Placeholder for after we import from imap_processing.
-        # coverage_dict = generate_coverage(start_time=start_time,
-        # outages=outages, dsn=dsn)
-        # table_output = format_coverage_summary(coverage_dict, start_time)
+        # coverage_dict, outage_dict = generate_coverage(start_time,
+        # outages, dsn)
+        # table_output = format_coverage_summary(coverage_dict, outage_dict, start_time)
         table_output = (
             "# I-ALiRT Coverage Summary\n"
             "# Generated: 2026-09-22T00:00:00Z\n"
@@ -243,14 +279,14 @@ def generate_and_upload_30_days(bucket: str, region: str, outages: dict, dsn: di
             "Total Coverage Percent: 37.5%"
         )
 
-        output_key = f"coverage/coverage_{day.strftime('%Y%m%d')}.json"
+        output_key = f"coverage/imap_ialirt_coverage_{day.strftime('%Y%m%d')}.json"
 
         s3_client = boto3.client("s3", region_name=region)
         s3_client.put_object(
             Bucket=bucket,
             Key=output_key,
-            Body=table_output.encode("utf-8"),
-            ContentType="text/plain",
+            Body=json.dumps(table_output, indent=2).encode("utf-8"),
+            ContentType="application/json",
         )
         logger.info(f"Uploaded coverage table to s3://{bucket}/{output_key}")
 
