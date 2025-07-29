@@ -143,11 +143,11 @@ class SdsApiManager(Construct):
             lambda_function=root_handler_lambda,
         )
 
-        '''api.add_route( #testing removal
+        """api.add_route( #testing removal
             route="",
             http_method="GET",
             lambda_function=root_handler_lambda,
-        )'''
+        )"""
 
         # basic route: /upload/{proxy+}
         # oauth2 JWT authorizer: /authorized/upload/{proxy+}
