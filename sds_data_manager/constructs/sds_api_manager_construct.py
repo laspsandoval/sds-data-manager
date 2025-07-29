@@ -26,10 +26,12 @@ def add_stable_route(api, base_path, http_method, lambda_function, prefix_list):
         List of route prefixes.
     """
     for prefix in prefix_list:
-        clean = f"{prefix}{base_path}"
-        trailing = f"{prefix}{base_path}/"
-        proxy = f"{prefix}{base_path}/{{proxy+}}"
-        for path in [clean, trailing, proxy]:
+        clean = f"{prefix}{base_path}".rstrip("/")
+        if not clean.startswith("/"):
+            clean = "/" + clean
+
+        proxy = f"{clean}/{{proxy+}}"
+        for path in [clean, proxy]:
             api.add_route(
                 route=path,
                 http_method=http_method,
@@ -142,12 +144,6 @@ class SdsApiManager(Construct):
             http_method="GET",
             lambda_function=root_handler_lambda,
         )
-
-        """api.add_route( #testing removal
-            route="",
-            http_method="GET",
-            lambda_function=root_handler_lambda,
-        )"""
 
         # basic route: /upload/{proxy+}
         # oauth2 JWT authorizer: /authorized/upload/{proxy+}
