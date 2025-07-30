@@ -10,7 +10,14 @@ from .api_gateway_construct import ApiGateway
 
 
 def add_stable_route(api, base_path, http_method, lambda_function, prefix_list):
-    """Ensure each variation of route is handled.
+    """Add routes to handle variations in path formatting.
+
+    When the prefix of the route is passed in, any trailing '/' will be
+    removed and checked for a starting '/'. This ensures that each route
+    variation a user could call will result in a proper response.
+
+    The two main routes handled and registered are a normalized (/api/upload)
+    and a route with subpaths handled in proxy (/api/upload/{proxy+}).
 
     Parameters
     ----------
@@ -25,12 +32,16 @@ def add_stable_route(api, base_path, http_method, lambda_function, prefix_list):
     prefix_list : list[str]
         List of route prefixes.
     """
+    # remove trailing backslash to circumvent error
     for prefix in prefix_list:
         clean = f"{prefix}{base_path}".rstrip("/")
+        # add a starting '/' if not present
         if not clean.startswith("/"):
             clean = "/" + clean
 
+        # the proxy route for subcommands
         proxy = f"{clean}/{{proxy+}}"
+        # register both base (clean) and proxy routes
         for path in [clean, proxy]:
             api.add_route(
                 route=path,
@@ -110,7 +121,6 @@ class SdsApiManager(Construct):
             timeout=cdk.Duration.seconds(10),
             memory_size=128,
             allow_public_subnet=True,
-            environment={"MESSAGE": "Welcome to the IMAP API 👋"},
             layers=layers,
         )
 
