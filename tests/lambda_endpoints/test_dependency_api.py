@@ -934,19 +934,43 @@ def test_get_cadence_jobs():
 #####################################
 
 
-@pytest.mark.skip(reason="CRID calculation is not behaving as expected")
 def test_calculate_crid(session):
     """Test CRID calculation."""
     _static_spice_files(session)
     records = [
         # File to build CRID for
         ScienceFiles(
-            file_path="/path/to/imap_swe_l1a_sci_20240102_v001.cdf",
+            file_path="/path/to/imap_swe_l1b_sci_20240101_v001.cdf",
+            instrument="swe",
+            data_level="l1b",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+            crid="8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+        ),
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
+            instrument="swe",
+            data_level="l0",
+            descriptor="raw",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
             instrument="swe",
             data_level="l1a",
             descriptor="sci",
-            start_date=datetime(2024, 1, 2),
-            version="v001",
+            start_date=datetime(2024, 1, 1),
+            version="v010",
             extension="pkts",
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
@@ -994,25 +1018,22 @@ def test_calculate_crid(session):
         session.query(models.ScienceFiles)
         .filter(
             models.ScienceFiles.file_path
-            == "/path/to/imap_swe_l1a_sci_20240102_v001.cdf"
+            == "/path/to/imap_swe_l1b_sci_20240101_v001.cdf"
         )
         .first()
     )
-    print(f"Record: {record.file_path}")
     crid = calculate_crid(session, record)
     # The CRID associated with a file is made up of the filepath and the
     # Upstream file versions numbers packed into 2 bytes and sorted by the filename
-    # imap_swe_l1b_sci_20240102_v001.cdf has a total of 3 upstream dependency files:
-    # - imap_swe_l1a_sci_20240102_v001.cdf.cdf
-    # - imap_swe_l1b-in-flight-cal_20230102_v001.cdf
+    # imap_swe_l1b_sci_20240101_v001.cdf has a total of 4 upstream dependency files:
+    # - imap_swe_l1a_sci_20240101_v001.cdf.cdf
+    # - imap_swe_l0_raw_20240101_v001.pkts
+    # - imap_swe_l1a_sci_20240101_v010.cdf
     # - imap_swe_esa-lut_20221231_v001.cdf
     # - imap_swe_eu-conversion_20221231_v001.cdf
 
     # the upstream versions should be in order of the filenames alphabetically
-    # TODO: find out why expected and return didn't match
-    # Expected CRID: 05t?ABJ4IG05593E*m[1ARB7.@:+(cBjWVL1,L[>0J[!Y0JG46@q90O!<<-#!<<-
-    # Calculated CRID: 05t?ABJ4IG05593E*m[1ARB7.@:+(cBjWVL1,L[>0J[!Y0JG46@q90
-    upstream_versions = b"".join([v.to_bytes(2, "big") for v in [1, 1, 1, 1]])
+    upstream_versions = b"".join([v.to_bytes(2, "big") for v in [1, 1, 1, 10, 1]])
     expected_crid = base64.a85encode(record.file_path.encode() + upstream_versions)
     assert expected_crid.decode("ascii") == crid
 
@@ -1055,24 +1076,72 @@ def test_calculate_crid_l0(session):
     assert expected_crid == crid
 
 
-@pytest.mark.skip(reason="CRID calculation is not behaving as expected")
 def test_matching_crid(session):
     """Test CRID check."""
     _static_spice_files(session)
-
     records = [
-        AncillaryFiles(
-            file_path="/path/to/imap_swe_l1b-in-flight-cal_20240104_20240106_v002.cdf",
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l0_raw_20240101_v001.pkts",
             instrument="swe",
-            descriptor="l1b-in-flight-cal",
-            start_date=datetime(2024, 1, 5),
-            end_date=datetime(2025, 1, 4),
+            data_level="l0",
+            descriptor="raw",
+            start_date=datetime(2024, 1, 1),
             version="v001",
             extension="cdf",
             ingestion_date=datetime.strptime(
                 "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
             ),
         ),
+        ScienceFiles(
+            file_path="/path/to/imap_swe_l1a_sci_20240101_v001.cdf",
+            instrument="swe",
+            data_level="l1a",
+            descriptor="sci",
+            start_date=datetime(2024, 1, 1),
+            version="v010",
+            extension="pkts",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        # Adding a downstream swe l1b file that depends on the science file above
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_l1b-in-flight-cal_20230102_v001.cdf",
+            instrument="swe",
+            descriptor="l1b-in-flight-cal",
+            start_date=datetime(2023, 1, 2),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_esa-lut_20221231_v001.cdf",
+            instrument="swe",
+            descriptor="esa-lut",
+            start_date=datetime(2022, 12, 31),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        AncillaryFiles(
+            file_path="/path/to/imap_swe_eu-conversion_20221231_v001.cdf",
+            instrument="swe",
+            descriptor="eu-conversion",
+            start_date=datetime(2022, 12, 31),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+    ]
+    session.add_all(records)
+    session.commit()
+    records = [
         # Add a science file with a CRID that will not match the calculated CRID
         ScienceFiles(
             file_path="/path/to/imap_swe_l1b_sci_20240102_v001.cdf",
@@ -1091,16 +1160,14 @@ def test_matching_crid(session):
     assert not matching_crids_exist(session, records)
     # Update the CRID of the science file to match the calculated CRID
     records[
-        1
+        0
     ].crid = "05t?ABJ4IG05593E*m[1ARB7.@UF1dBjWVL1,L[>0J[!Y0JG46@q90O!<<-#!<<H,!<"
     assert matching_crids_exist(session, records)
 
 
-@pytest.mark.skip(reason="CRID calculation is not behaving as expected")
 def test_new_crid(session):
     """Test that a new CRID is generated for a file with no CRID."""
     _static_spice_files(session)
-
     filename = "/path/to/imap_swe_l1b_sci_20240102_v001.cdf"
     records = [
         # Add a science file with no CRID
@@ -1117,6 +1184,8 @@ def test_new_crid(session):
             ),
         ),
     ]
+    session.add_all(records)
+    session.commit()
     matching_crids_exist(session, records)
     # Now query for that record.
     record = (

@@ -761,7 +761,7 @@ def calculate_crid(session, record) -> str:
     # Sort the upstream versions by file path
     sorted_dict = sorted(upstream_versions.items(), key=lambda x: x[0])
     # Pack the version numbers into 2 bytes
-    sorted_bytes = b"".join([int(v[1:]).to_bytes(2) for path, v in sorted_dict])
+    sorted_bytes = b"".join([int(v[1:]).to_bytes(2, "big") for path, v in sorted_dict])
     logger.info(
         f"Calculating CRID using upstream versions: {sorted_dict} and "
         f"filepath {record.file_path}"
