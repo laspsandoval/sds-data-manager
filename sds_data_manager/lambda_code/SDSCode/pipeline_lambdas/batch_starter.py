@@ -82,8 +82,14 @@ def cadence_to_datetime_range(
         The start date and end date of the cadence. The end_date is set to today
     """
     end_date = datetime.datetime.today()
+    # Find the start date by subtracting the number of days in the cadence from the end
+    # date. Subtract one day from the number of days in the cadence because the query in
+    # dependency.py get_files() is inclusive for both the start and end date.
+    # To avoid overlapping data by one day, we essentially bump the start date up by
+    # one.
     start_date = end_date - datetime.timedelta(
         days=CadenceDays.str_lookup(cadence).value
+        - 1  # subtract one day from cadence days
     )
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
