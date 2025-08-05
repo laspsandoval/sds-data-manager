@@ -635,7 +635,6 @@ mag, ancillary, l1d-calibration, mag, l1d, norm, HARD, DOWNSTREAM
 
 # all L1D processing occurs in one step
 mag, ancillary, l1d-calibration, mag, l1d, norm-srf, HARD, DOWNSTREAM
-mag, ancillary, l1d-calibration, mag, l1d, norm-srf, HARD, DOWNSTREAM
 mag, l1c, norm-mago, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 mag, l1c, norm-magi, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 mag, l1b, burst-mago, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
