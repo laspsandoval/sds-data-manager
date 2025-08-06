@@ -1,6 +1,7 @@
 """Functions for supporting the batch starter component of the architecture."""
 
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -19,7 +20,8 @@ from imap_data_access import (
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
-from ..api_lambdas import download_api, upload_api
+from ..api_lambdas import upload_api
+from ..api_lambdas.upload_api import _file_exists
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -323,6 +325,12 @@ def duplicate_job(
     bool
         True if the job is a duplicate, False otherwise.
     """
+    # Generate the previous dependency file path based on the inputs.
+    # The descriptor should include a hash of the serialized dependencies.
+    descriptor = (
+        f"{descriptor}-"
+        f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
+    )
     previous_dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
@@ -331,24 +339,16 @@ def duplicate_job(
         version=previous_version,
         extension="json",
     )
-    previous_dependency_path = previous_dependency_file.construct_path()
-    # Get the dependency s3 path
-    relative_path = previous_dependency_path.relative_to(
-        imap_data_access.config["DATA_DIR"]
+    previous_dep_path = previous_dependency_file.construct_path()
+    # Strip off the data directory to get the upload path + name
+    # Must be posix style for the URL
+    s3_key_path_str = str(
+        previous_dep_path.relative_to(imap_data_access.config["DATA_DIR"]).as_posix()
     )
-    previous_dependency_str = get_previous_dependency_str(relative_path)
-    if previous_dependency_str is None:
-        logger.error(
-            f"Failed to download previous dependency file: {previous_dependency_path}. "
-            f"Skipping duplicate job check."
-        )
-        return False
-    # If the previous dependency string is the same as the current, this is a duplicate
-    # job.
-    if previous_dependency_str == serialized_dependencies:
-        return True
-
-    return False
+    # If the file already exists, then we know that an exact duplicate job has been
+    # run with the same dependencies, start date, descriptor, instrument, data level,
+    # and version.
+    return _file_exists(s3_key_path_str)
 
 
 def try_to_submit_job(
@@ -434,6 +434,12 @@ def try_to_submit_job(
     # processing code will read the JSON file and deserialize the dependencies. This is
     # to avoid passing a large string through the batch job command line.
     # release
+    # The descriptor should include a hash of the serialized dependencies.
+    # This makes it unique for this file and set of dependencies.
+    descriptor = (
+        f"{descriptor}-"
+        f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
+    )
     dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
@@ -956,45 +962,6 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def get_previous_dependency_str(dependency_file_path: Path):
-    """Download a JSON file containing a dependencies from S3 and return its contents.
-
-    Parameters
-    ----------
-    dependency_file_path : Path
-        The dependency JSON file to download.
-
-    Returns
-    -------
-    str or None
-        The contents of the dependency file if successful, otherwise None.
-    """
-    response = download_api.lambda_handler(
-        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
-    )
-    if response["statusCode"] != 302:
-        logger.error(
-            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
-            f"Error message: {response['body']}, "
-            f"with status code: {response['statusCode']}."
-        )
-        return None
-    try:
-        download_url = json.loads(response["body"])["download_url"]
-        response = requests.get(download_url, timeout=60.0)
-        logger.info(
-            f"Dependency file downloaded successfully from s3 with status code: "
-            f"{response.status_code}"
-        )
-        return response.text
-    except Exception as e:
-        logger.error(
-            f"Unexpected error during dependency file download: {e}. "
-            f"Dependency file download failed."
-        )
-        return None
-
-
 def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
     """Upload a JSON file containing a job's dependencies to S3.
 
@@ -1014,7 +981,12 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
     signed_url = upload_api.lambda_handler(
         {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
     )
-    if signed_url["statusCode"] != 200:
+    if signed_url["statusCode"] == 409:
+        logger.info(
+            f"Dependency file already exists in S3: {dependency_file_path}. Reusing"
+            f"file."
+        )
+    elif signed_url["statusCode"] != 200:
         logger.error(
             f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
             f"As a result, failed to kick off job. "
