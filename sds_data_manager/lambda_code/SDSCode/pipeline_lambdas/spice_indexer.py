@@ -1,5 +1,6 @@
 """Functions to write SPICE ingested files to EFS."""
 
+import csv
 import json
 import logging
 import os
@@ -7,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 
 import boto3
-import pandas as pd
 import spiceypy
 from imap_data_access import SPICEFilePath, download
 from sqlalchemy.dialects.postgresql import insert
@@ -340,9 +340,57 @@ def index_spin_file(s3_key: Path):
             "version": spin_metadata["version"],
             "ingestion_date": get_file_ingestion_date(s3_key),
         }
-        spin_table = models.SpinTable(**params)
+        spin_table = models.SpinFiles(**params)
         session.add(spin_table)
         session.commit()
+
+
+def index_repoint_file(s3_key):
+    """Insert repoint file metadata into repoint database table.
+
+    Parameters
+    ----------
+    s3_key: str
+        S3 path of the repoint file.
+    """
+    logger.info(f"Indexing {s3_key} to RepointFiles table")
+    with db.Session() as session:
+        spin_obj = SPICEFilePath(os.path.basename(s3_key))
+        spin_metadata = spin_obj.spice_metadata
+        params = {
+            "file_path": s3_key,
+            "end_date": spin_metadata["end_date"],
+            "version": spin_metadata["version"],
+            "ingestion_date": get_file_ingestion_date(s3_key),
+        }
+        spin_table = models.RepointFiles(**params)
+        session.add(spin_table)
+        session.commit()
+
+    logger.info(f"Indexed {s3_key} to SPICEFiles table")
+
+
+def parse_datetime(val):
+    """Parse a datetime string safely, returning None for invalid inputs.
+
+    Parameters
+    ----------
+    val: str
+        The datetime string to parse.
+
+    Returns
+    -------
+    datetime or None
+        The parsed datetime object or None if parsing failed.
+    """
+    if val is None or str(val).strip().lower() in ("", "nan", "none"):
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            return datetime.strptime(val, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def index_pointing_data(s3_key: str):
@@ -350,7 +398,7 @@ def index_pointing_data(s3_key: str):
 
     Pointing data is derived from the repoint file data. Steps:
     * Download the repoint file from S3
-    * Read the CSV file using pandas
+    * Read the CSV file
     * Filter repoint_id that's not in pointing_table
     * Fill rows with None values with new values
     * For each new repoint_id, calculate pointing_start_utc and pointing_end_utc
@@ -369,56 +417,49 @@ def index_pointing_data(s3_key: str):
     logger.info(f"Indexing {s3_key} to pointing table")
     # Download repoint file
     repoint_file_path = download(s3_key)
-    # Read CSV file using pandas
-    repoint_df = pd.read_csv(repoint_file_path)
-    repoint_records = []
+    repoind_data = []
+    repoint_db_records = []
+    # Read CSV file using Python's native csv module
+    with open(repoint_file_path) as file:
+        reader = csv.DictReader(file)
+        repoind_data = list(reader)
 
-    for i_row, repoint_id in enumerate(repoint_df["repoint_id"].values[:-1]):
-        # Had to convert to match the type in the database
-        repoint_id = int(repoint_id)  # noqa: PLW2901
+    # Filter out rows with empty repoint_id or all values are empty
+    # This can happen if there is empty row in the CSV file
+    repoind_data = [
+        row for row in repoind_data if any(row.values()) and row["repoint_id"].strip()
+    ]
+    for i_row, data in enumerate(repoind_data[:-1]):
         # Since for loop stops at -1, we can assume that next row exists
         # and should be able to calculate the pointing data
-        current_row = repoint_df.iloc[i_row]
-        next_row = repoint_df.iloc[i_row + 1]  # Get the next
+        current_row = repoind_data[i_row]
+        next_row = repoind_data[i_row + 1]
         row_data = {
-            "pointing_id": repoint_id,
-            "pointing_start_utc": datetime.strptime(
-                current_row["repoint_end_utc"],
-                "%Y-%m-%dT%H:%M:%S.%f",
-            ),
-            "pointing_end_utc": datetime.strptime(
-                next_row["repoint_end_utc"],
-                "%Y-%m-%dT%H:%M:%S.%f",
-            ),
-            "repoint_start_utc": datetime.strptime(
-                next_row["repoint_start_utc"],
-                "%Y-%m-%dT%H:%M:%S.%f",
-            ),
-            "repoint_end_utc": datetime.strptime(
-                next_row["repoint_end_utc"],
-                "%Y-%m-%dT%H:%M:%S.%f",
-            ),
+            # Converting to int to match the SQL type
+            "pointing_id": int(data["repoint_id"]),
+            "pointing_start_utc": parse_datetime(current_row["repoint_end_utc"]),
+            "pointing_end_utc": parse_datetime(next_row["repoint_end_utc"]),
+            "repoint_start_utc": parse_datetime(next_row["repoint_start_utc"]),
+            "repoint_end_utc": parse_datetime(next_row["repoint_end_utc"]),
         }
-        repoint_records.append(row_data)
+        repoint_db_records.append(row_data)
 
     # Store last record data
+    last_row = repoind_data[-1]
     row_data = {
-        "pointing_id": int(repoint_df.iloc[-1]["repoint_id"]),
-        "pointing_start_utc": datetime.strptime(
-            repoint_df.iloc[-1]["repoint_end_utc"],
-            "%Y-%m-%dT%H:%M:%S.%f",
-        ),
+        "pointing_id": int(last_row["repoint_id"]),
+        "pointing_start_utc": parse_datetime(last_row["repoint_end_utc"]),
         "pointing_end_utc": None,
         "repoint_start_utc": None,
         "repoint_end_utc": None,
     }
-    repoint_records.append(row_data)
+    repoint_db_records.append(row_data)
 
     with db.Session() as session:
         # Similar to _upsert_into_spice_table, update db to latest repoint
         # if data already exists. Otherwise, insert new data. This will
         # take care of the None values or new updated values.
-        records = insert(models.PointingTable).values(repoint_records)
+        records = insert(models.PointingTable).values(repoint_db_records)
         records = records.on_conflict_do_update(
             index_elements=["pointing_id"],
             set_={
@@ -548,6 +589,7 @@ def lambda_handler(event, context):
     # Index file to its respective table
     if spice_obj.spice_metadata["type"] == "repoint":
         index_pointing_data(s3_key)
+        index_repoint_file(s3_key)
     elif spice_obj.spice_metadata["type"] == "spin":
         logger.info(f"Indexing {s3_key} spin table")
         index_spin_file(s3_key)

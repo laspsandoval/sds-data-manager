@@ -189,10 +189,10 @@ class AncillaryFiles(Base):
     ingestion_date = Column(DateTime(timezone=True))
 
 
-class SpinTable(Base):
-    """Spin table."""
+class SpinFiles(Base):
+    """Spin files table."""
 
-    __tablename__ = "spin_table"
+    __tablename__ = "spin_files"
     # Spin number will be unique
     file_path = Column(String, nullable=False, primary_key=True, unique=True)
     # start and end date from file name
@@ -207,7 +207,7 @@ class PointingTable(Base):
 
     __tablename__ = "pointing_table"
     pointing_id = Column(Integer, nullable=False, primary_key=True, unique=True)
-    pointing_start_utc = Column(DateTime(timezone=True), nullable=False)
+    pointing_start_utc = Column(DateTime(timezone=True))
     pointing_end_utc = Column(DateTime(timezone=True))
     repoint_start_utc = Column(DateTime(timezone=True))
     repoint_end_utc = Column(DateTime(timezone=True))
@@ -216,7 +216,7 @@ class PointingTable(Base):
 class RepointFiles(Base):
     """Repoint table."""
 
-    __tablename__ = "repoint_table"
+    __tablename__ = "repoint_files"
     file_path = Column(String, nullable=False, primary_key=True, unique=True)
     end_date = Column(DateTime, nullable=False)
     version = Column(String(2), nullable=False)
