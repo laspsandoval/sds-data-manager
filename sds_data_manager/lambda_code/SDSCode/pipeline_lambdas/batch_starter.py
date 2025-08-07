@@ -393,41 +393,16 @@ def try_to_submit_job(
             previous_version,
             serialized_dependencies,
         ):
-            filepath = ScienceFilePath.generate_from_inputs(
-                instrument=instrument,
-                data_level=data_level,
-                descriptor=descriptor,
-                start_time=start_date_str,
-                version=previous_version,
-            )
             logger.info(
-                f"This job is a duplicate of the previous job. See file: "
-                f"{filepath.filename!s}. Skipping submission."
+                f"This job is a duplicate of the previous one for: "
+                f"{instrument=},"
+                f" {data_level=},"
+                f" {descriptor=},"
+                f" {start_date_str=},"
+                f" and {previous_version=}. "
+                f"Skipping submission."
             )
             return
-
-    # All of our upstream requirements have been met.
-    # Try to insert a record into the Processing Jobs table
-    # If this job already exists, then we will get an integrity error
-    # and know that some other process has already taken care of it
-    processing_job = models.ProcessingJob(
-        status=models.Status.INPROGRESS,
-        instrument=instrument,
-        data_level=data_level,
-        descriptor=descriptor,
-        start_date=start_date,
-        version=version,
-    )
-    try:
-        session.add(processing_job)
-        session.commit()
-    except IntegrityError:
-        logger.info(f"Job already completed or in progress: {processing_job}")
-        return
-
-    logger.info(
-        f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
-    )
     # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
 
     # Serialize the upstream dependencies and write them to a JSON file. The Imap
@@ -453,6 +428,29 @@ def try_to_submit_job(
     # If response is None, then the upload failed and we should skip submitting the job.
     if not response:
         return
+
+    # All of our upstream requirements have been met.
+    # Try to insert a record into the Processing Jobs table
+    # If this job already exists, then we will get an integrity error
+    # and know that some other process has already taken care of it
+    processing_job = models.ProcessingJob(
+        status=models.Status.INPROGRESS,
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_date=start_date,
+        version=version,
+    )
+    try:
+        session.add(processing_job)
+        session.commit()
+    except IntegrityError:
+        logger.info(f"Job already completed or in progress: {processing_job}")
+        return
+
+    logger.info(
+        f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
+    )
 
     batch_command = [
         "--instrument",
@@ -986,6 +984,7 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
             f"Dependency file already exists in S3: {dependency_file_path}. Reusing"
             f"file."
         )
+        return {"statusCode": 200, "body": signed_url["body"]}
     elif signed_url["statusCode"] != 200:
         logger.error(
             f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
