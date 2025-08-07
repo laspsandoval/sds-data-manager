@@ -214,7 +214,7 @@ def test_s3_spin_files(session, s3_client, events_client):
         os.path.join(test_spice_data_dir, "imap_2026_267_2026_267_01.spin.csv"),
     )
     spice_indexer.lambda_handler(spin_file1_event, None)
-    query = select(models.SpinTable.__table__)
+    query = select(models.SpinFiles.__table__)
     spin_table_rows = session.execute(query).all()
     assert len(spin_table_rows) == 1
     assert spin_table_rows[0].file_path == (
@@ -228,7 +228,7 @@ def test_s3_spin_files(session, s3_client, events_client):
         os.path.join(test_spice_data_dir, "imap_2026_267_2026_267_02.spin.csv"),
     )
     spice_indexer.lambda_handler(spin_file2_event, None)
-    query = select(models.SpinTable.__table__)
+    query = select(models.SpinFiles.__table__)
     spin_table_rows = session.execute(query).all()
     assert len(spin_table_rows) == 2
     assert spin_table_rows[1].file_path == (
@@ -324,8 +324,9 @@ def test_index_pointing_data_updates_null_values(mock_download, session, tmpdir)
     mock_download.return_value = new_repoint_file
     # Create a test CSV file with repoint data
     test_csv_content = """repoint_id,repoint_start_utc,repoint_end_utc
-    1,2025-07-01T10:00:00,2025-07-01T10:10:00
-    2,2025-07-02T10:00:00,2025-07-02T10:10:00
+    1,2025-07-01T10:00:00.000000,2025-07-01T10:10:00.000000
+    2,2025-07-02T10:00:00.000000,2025-07-02T10:10:00.000000
+    3,NaN,NaN
     """
     with open(new_repoint_file, "w") as f:
         f.write(test_csv_content)
@@ -346,15 +347,15 @@ def test_index_pointing_data_updates_null_values(mock_download, session, tmpdir)
     index_pointing_data("s3://test-bucket/test_repoint.csv")
 
     # Query the pointing table to verify updates
-    pointing_entry = (
+    first_pointing_entry = (
         session.query(models.PointingTable).filter_by(pointing_id=1).first()
     )
 
     # i_pointing repoint_end_utc
-    assert pointing_entry.pointing_start_utc == datetime(2025, 7, 1, 10, 10, 0)
+    assert first_pointing_entry.pointing_start_utc == datetime(2025, 7, 1, 10, 10, 0)
     # i_pointing + 1 repoint_end_utc
-    assert pointing_entry.pointing_end_utc == datetime(2025, 7, 2, 10, 10, 0)
-    # i_pointing + 1 repoint_start_utc
-    assert pointing_entry.repoint_start_utc == datetime(2025, 7, 2, 10, 0, 0)
-    # i_pointing + 1 repoint_end_utc
-    assert pointing_entry.repoint_end_utc == datetime(2025, 7, 2, 10, 10, 0)
+    assert first_pointing_entry.pointing_end_utc == datetime(2025, 7, 2, 10, 10, 0)
+    # # i_pointing + 1 repoint_start_utc
+    assert first_pointing_entry.repoint_start_utc == datetime(2025, 7, 2, 10, 0, 0)
+    # # i_pointing + 1 repoint_end_utc
+    assert first_pointing_entry.repoint_end_utc == datetime(2025, 7, 2, 10, 10, 0)
