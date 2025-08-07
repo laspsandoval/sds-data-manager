@@ -348,6 +348,10 @@ def duplicate_job(
     # If the file already exists, then we know that an exact duplicate job has been
     # run with the same dependencies, start date, descriptor, instrument, data level,
     # and version.
+    # TODO currently this will skip bulk reprocessing jobs that have been kicked off
+    #   Due to algorithm updates. The job might look like a duplicate but have new code.
+    #   We need to somehow track if we are reprocessing due to a manual trigger
+    #   or not.
     return _file_exists(s3_key_path_str)
 
 

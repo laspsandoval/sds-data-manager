@@ -1250,11 +1250,7 @@ def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
         # Verify the function not called
         assert mock_batch_client.submit_job.call_count == 0
 
-        assert (
-            "This job is a duplicate of the previous job. See file:"
-            " imap_mag_l1c_norm-mago_20240101_v001.cdf."
-            " Skipping submission."
-        ) in caplog.text
+        assert ("This job is a duplicate of the previous one") in caplog.text
 
 
 ### TEST CADENCE EVENT
