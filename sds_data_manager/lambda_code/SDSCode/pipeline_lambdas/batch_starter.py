@@ -327,14 +327,14 @@ def duplicate_job(
     """
     # Generate the previous dependency file path based on the inputs.
     # The descriptor should include a hash of the serialized dependencies.
-    descriptor = (
+    dep_descriptor = (
         f"{descriptor}-"
         f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
     )
     previous_dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
-        descriptor=descriptor,
+        descriptor=dep_descriptor,
         start_time=start_date,
         version=previous_version,
         extension="json",
@@ -436,14 +436,14 @@ def try_to_submit_job(
     # release
     # The descriptor should include a hash of the serialized dependencies.
     # This makes it unique for this file and set of dependencies.
-    descriptor = (
+    dep_descriptor = (
         f"{descriptor}-"
         f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
     )
     dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
-        descriptor=descriptor,
+        descriptor=dep_descriptor,
         start_time=start_date.strftime("%Y%m%d"),
         version=version,
         extension="json",

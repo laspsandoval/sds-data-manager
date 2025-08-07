@@ -115,7 +115,7 @@ def test_lambda_handler(session, s3_client):
         lambda_handler(events, context)
         mock_batch_client.submit_job.assert_called_once()
         mock_batch_client.submit_job.assert_called_with(
-            jobName="swe-l1a-sci-a798194b08e95fa322dea1cfba1089ed-job-1",
+            jobName="swe-l1a-sci-job-1",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-swe",
             containerOverrides={
@@ -125,13 +125,13 @@ def test_lambda_handler(session, s3_client):
                     "--data-level",
                     "l1a",
                     "--descriptor",
-                    "sci-a798194b08e95fa322dea1cfba1089ed",
+                    "sci",
                     "--start-date",
                     "20240101",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1a_sci-a798194b08e95fa322dea1cfba1089ed_20240101_v001.json",
+                    "imap_swe_l1a_sci-c685cc1958539fee3c4724e5655c36d2b9b4c8fe99835905b448f7bd93468ab5_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -396,7 +396,7 @@ def test_lambda_handler_ancillary_event(session):
             },
         ]
         mock_batch_client.submit_job.assert_called_with(
-            jobName="swe-l1b-sci-04e19f89136d5c163174a2977acab130-job-1",
+            jobName="swe-l1b-sci-job-1",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-swe",
             containerOverrides={
@@ -406,13 +406,13 @@ def test_lambda_handler_ancillary_event(session):
                     "--data-level",
                     "l1b",
                     "--descriptor",
-                    "sci-04e19f89136d5c163174a2977acab130",
+                    "sci",
                     "--start-date",
                     "20260303",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1b_sci-04e19f89136d5c163174a2977acab130_20260303_v001.json",
+                    "imap_swe_l1b_sci-6a22366cd7a617e3d86a5f9e0f4eeaf8711d5c4b46266b79358619fc42a8309a_20260303_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -901,7 +901,7 @@ def test_ultra_l3_map(session, caplog):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
-            jobName="ultra-l3-u90-ena-h-sf-sp-full-hae-4deg-3mo-8de3878e8f291a026c6f328a4135aa97-job-1",
+            jobName="ultra-l3-u90-ena-h-sf-sp-full-hae-4deg-3mo-job-1",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-ultra-l3",
             containerOverrides={
@@ -911,13 +911,13 @@ def test_ultra_l3_map(session, caplog):
                     "--data-level",
                     "l3",
                     "--descriptor",
-                    "u90-ena-h-sf-sp-full-hae-4deg-3mo-8de3878e8f291a026c6f328a4135aa97",
+                    "u90-ena-h-sf-sp-full-hae-4deg-3mo",
                     "--start-date",
                     "20240201",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo-8de3878e8f291a026c6f328a4135aa97_20240201_v001.json",
+                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo-27005a05f059d26588e175889fe6e8bcd3cbc45b1e7f00c6773785a9fff56538_20240201_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1077,7 +1077,7 @@ def test_lambda_handler_mag_l1c_case(session):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
-            jobName="mag-l1c-norm-mago-9df4ad30d8e5c1419ca77301df76846f-job-1",
+            jobName="mag-l1c-norm-mago-job-1",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-mag",
             containerOverrides={
@@ -1087,13 +1087,13 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--data-level",
                     "l1c",
                     "--descriptor",
-                    "norm-mago-9df4ad30d8e5c1419ca77301df76846f",
+                    "norm-mago",
                     "--start-date",
                     "20240101",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago-9df4ad30d8e5c1419ca77301df76846f_20240101_v001.json",
+                    "imap_mag_l1c_norm-mago-7f10196662789f7653d3e55e3ccb4eb4a1bb4a6f6b90193c64f8ce75a846679f_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1145,7 +1145,7 @@ def test_lambda_handler_mag_l1c_case(session):
         lambda_handler(events, context)
         # Verify the function was called
         mock_batch_client.submit_job.assert_called_with(
-            jobName="mag-l1c-norm-mago-4d649e314e8ac32e3fb76fe5d5aad46f-job-2",
+            jobName="mag-l1c-norm-mago-job-2",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-mag",
             containerOverrides={
@@ -1155,13 +1155,13 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--data-level",
                     "l1c",
                     "--descriptor",
-                    "norm-mago-4d649e314e8ac32e3fb76fe5d5aad46f",
+                    "norm-mago",
                     "--start-date",
                     "20240101",
                     "--version",
                     "v002",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago-4d649e314e8ac32e3fb76fe5d5aad46f_20240101_v002.json",
+                    "imap_mag_l1c_norm-mago-2ae6d6feecb9c00015881bc67ab7b10e29783732468a5e0b635adfe4326fc96c_20240101_v002.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1352,7 +1352,7 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
         assert mock_batch_client.submit_job.call_count == 12
         # Assert that the function was called with the cadence json file path
         mock_batch_client.submit_job.assert_called_with(
-            jobName="ultra-l2-u90-ena-h-sf-nsp-full-hae-6deg-3mo-73e7829640a9d96aaa9f8e043888201e-job-12",
+            jobName="ultra-l2-u90-ena-h-sf-nsp-full-hae-6deg-3mo-job-12",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-ultra",
             containerOverrides={
@@ -1362,13 +1362,13 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "--data-level",
                     "l2",
                     "--descriptor",
-                    "u90-ena-h-sf-nsp-full-hae-6deg-3mo-73e7829640a9d96aaa9f8e043888201e",
+                    "u90-ena-h-sf-nsp-full-hae-6deg-3mo",
                     "--start-date",
                     "20250301",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo-73e7829640a9d96aaa9f8e043888201e_20250301_v001.json",
+                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo-74f0a45021f58df642c0fae542661f17c0790964182ca62399fd0c4be45aeb0f_20250301_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1470,7 +1470,7 @@ def test_idex_l2b(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_idex_l2b_all-1mo-0a9cfa4f10e4f8162a0b5e5cc9df7bda_20230109_v001.json",
+                    "imap_idex_l2b_all-1mo-9de6e4ae33556063213c1528033aadb4a9bd4421fc428dc31303a08876eafd05_20230109_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1975,7 +1975,7 @@ def test_repoint_date_range(sqs_mock, mock_download, session, s3_client, tmp_pat
         # verify that the function was called once
         mock_batch_client.submit_job.assert_called_once()
         mock_batch_client.submit_job.assert_called_with(
-            jobName="spacecraft-l1a-pointing-attitude-58c20cdbd52c1b788c448fcd7b387355-job-3",
+            jobName="spacecraft-l1a-pointing-attitude-job-3",
             jobQueue="ProcessingJobQueue",
             jobDefinition="ProcessingJob-spacecraft",
             containerOverrides={
@@ -1985,13 +1985,13 @@ def test_repoint_date_range(sqs_mock, mock_download, session, s3_client, tmp_pat
                     "--data-level",
                     "l1a",
                     "--descriptor",
-                    "pointing-attitude-58c20cdbd52c1b788c448fcd7b387355",
+                    "pointing-attitude",
                     "--start-date",
                     "20000224",
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_spacecraft_l1a_pointing-attitude-58c20cdbd52c1b788c448fcd7b387355_20000224_v001.json",
+                    "imap_spacecraft_l1a_pointing-attitude-609961590f7a3732fa929e29207ffa14b83dafd107d47b3f1077eded267a9a08_20000224_v001.json",
                     "--upload-to-sdc",
                 ]
             },
