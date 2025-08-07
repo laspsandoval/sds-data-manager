@@ -413,7 +413,7 @@ spacecraft_clock, spice, historical, hit, l1b, hk, HARD_NO_TRIGGER, DOWNSTREAM
 
 hit, l1a, counts-standard, hit, l1b, standard-rates, HARD, DOWNSTREAM
 hit, l1a, counts-standard, hit, l1b, summed-rates, HARD, DOWNSTREAM
-hit, l1a, counts-sectored, hit, l1b, sectored_rates, HARD, DOWNSTREAM
+hit, l1a, counts-sectored, hit, l1b, sectored-rates, HARD, DOWNSTREAM
 
 hit, l1b, standard-rates, hit, l2, standard-intensity, HARD, DOWNSTREAM
 hit, l1b, summed-rates, hit, l2, summed-intensity, HARD, DOWNSTREAM

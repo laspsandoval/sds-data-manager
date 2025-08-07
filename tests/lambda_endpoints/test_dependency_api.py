@@ -194,7 +194,7 @@ def test_get_downstream_dependencies():
     dependency_response = dependency.get_jobs(
         data_source="hit",
         data_type="l1a",
-        descriptor="counts",
+        descriptor="counts-sectored",
         relationship="HARD",
         dependency_type="DOWNSTREAM",
     )
@@ -203,7 +203,7 @@ def test_get_downstream_dependencies():
         {
             "data_source": "hit",
             "data_type": "l1b",
-            "descriptor": "all",
+            "descriptor": "sectored-rates",
             "relationship": "HARD",
         }
     ]
