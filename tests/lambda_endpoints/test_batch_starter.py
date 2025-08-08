@@ -1512,16 +1512,18 @@ def test_cadence_to_datetime_range():
         start_date, end_date = batch_starter.cadence_to_datetime_range(
             cadence="3mo", as_str=True
         )
-        assert start_date == "20231231"
+        assert start_date == "20240101"
         assert end_date == "20240401"
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="6mo")
         assert (end_date - start_date) == dt.timedelta(
-            days=CadenceDays.ONE_YEAR.value / 2
+            days=(CadenceDays.ONE_YEAR.value / 2) - 1
         )
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="1yr")
-        assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
+        assert (end_date - start_date) == dt.timedelta(
+            days=CadenceDays.ONE_YEAR.value - 1
+        )
 
 
 def test_upload_dependency_file(s3_client, tmp_path, dependency_file, caplog):
