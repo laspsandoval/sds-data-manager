@@ -131,7 +131,7 @@ def test_lambda_handler(session, s3_client):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1a_sci_20240101_v001.json",
+                    "imap_swe_l1a_sci-c685cc19_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -412,7 +412,7 @@ def test_lambda_handler_ancillary_event(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1b_sci_20260303_v001.json",
+                    "imap_swe_l1b_sci-6a22366c_20260303_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -917,7 +917,7 @@ def test_ultra_l3_map(session, caplog):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo_20240201_v001.json",
+                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo-27005a05_20240201_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1093,7 +1093,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago_20240101_v001.json",
+                    "imap_mag_l1c_norm-mago-7f101966_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1161,7 +1161,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v002",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago_20240101_v002.json",
+                    "imap_mag_l1c_norm-mago-2ae6d6fe_20240101_v002.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1250,11 +1250,7 @@ def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
         # Verify the function not called
         assert mock_batch_client.submit_job.call_count == 0
 
-        assert (
-            "This job is a duplicate of the previous job. See file:"
-            " imap_mag_l1c_norm-mago_20240101_v001.cdf."
-            " Skipping submission."
-        ) in caplog.text
+        assert ("This job is a duplicate of the previous one") in caplog.text
 
 
 ### TEST CADENCE EVENT
@@ -1368,7 +1364,7 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo_20250301_v001.json",
+                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo-74f0a450_20250301_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1470,7 +1466,7 @@ def test_idex_l2b(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_idex_l2b_all-1mo_20230109_v001.json",
+                    "imap_idex_l2b_all-1mo-9de6e4ae_20230109_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1516,16 +1512,18 @@ def test_cadence_to_datetime_range():
         start_date, end_date = batch_starter.cadence_to_datetime_range(
             cadence="3mo", as_str=True
         )
-        assert start_date == "20231231"
+        assert start_date == "20240101"
         assert end_date == "20240401"
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="6mo")
         assert (end_date - start_date) == dt.timedelta(
-            days=CadenceDays.ONE_YEAR.value / 2
+            days=(CadenceDays.ONE_YEAR.value / 2) - 1
         )
 
         start_date, end_date = batch_starter.cadence_to_datetime_range(cadence="1yr")
-        assert (end_date - start_date) == dt.timedelta(days=CadenceDays.ONE_YEAR.value)
+        assert (end_date - start_date) == dt.timedelta(
+            days=CadenceDays.ONE_YEAR.value - 1
+        )
 
 
 def test_upload_dependency_file(s3_client, tmp_path, dependency_file, caplog):
@@ -1991,7 +1989,7 @@ def test_repoint_date_range(sqs_mock, mock_download, session, s3_client, tmp_pat
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_spacecraft_l1a_pointing-attitude_20000224_v001.json",
+                    "imap_spacecraft_l1a_pointing-attitude-60996159_20000224_v001.json",
                     "--upload-to-sdc",
                 ]
             },
