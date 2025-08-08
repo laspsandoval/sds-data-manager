@@ -327,10 +327,7 @@ def duplicate_job(
     """
     # Generate the previous dependency file path based on the inputs.
     # The descriptor should include a hash of the serialized dependencies.
-    dep_descriptor = (
-        f"{descriptor}-"
-        f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
-    )
+    dep_descriptor = f"{descriptor}-{dependency_hash(serialized_dependencies)}"
     previous_dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
@@ -353,6 +350,22 @@ def duplicate_job(
     #   We need to somehow track if we are reprocessing due to a manual trigger
     #   or not.
     return _file_exists(s3_key_path_str)
+
+
+def dependency_hash(serialized_dependencies):
+    """Generate a hash for the serialized dependencies. Use only the first 8 characters.
+
+    Parameters
+    ----------
+    serialized_dependencies : str
+        The serialized dependencies string.
+
+    Returns
+    -------
+    str
+        The first 8 characters of the SHA-256 hash of the serialized dependencies.
+    """
+    return hashlib.sha256(serialized_dependencies.encode("utf-8")).hexdigest()[:8]
 
 
 def try_to_submit_job(
@@ -415,10 +428,7 @@ def try_to_submit_job(
     # release
     # The descriptor should include a hash of the serialized dependencies.
     # This makes it unique for this file and set of dependencies.
-    dep_descriptor = (
-        f"{descriptor}-"
-        f"{hashlib.sha256(serialized_dependencies.encode('utf-8')).hexdigest()}"
-    )
+    dep_descriptor = f"{descriptor}-{dependency_hash(serialized_dependencies)}"
     dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,

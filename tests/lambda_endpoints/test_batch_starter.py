@@ -131,7 +131,7 @@ def test_lambda_handler(session, s3_client):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1a_sci-c685cc1958539fee3c4724e5655c36d2b9b4c8fe99835905b448f7bd93468ab5_20240101_v001.json",
+                    "imap_swe_l1a_sci-c685cc19_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -412,7 +412,7 @@ def test_lambda_handler_ancillary_event(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_swe_l1b_sci-6a22366cd7a617e3d86a5f9e0f4eeaf8711d5c4b46266b79358619fc42a8309a_20260303_v001.json",
+                    "imap_swe_l1b_sci-6a22366c_20260303_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -917,7 +917,7 @@ def test_ultra_l3_map(session, caplog):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo-27005a05f059d26588e175889fe6e8bcd3cbc45b1e7f00c6773785a9fff56538_20240201_v001.json",
+                    "imap_ultra_l3_u90-ena-h-sf-sp-full-hae-4deg-3mo-27005a05_20240201_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1093,7 +1093,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago-7f10196662789f7653d3e55e3ccb4eb4a1bb4a6f6b90193c64f8ce75a846679f_20240101_v001.json",
+                    "imap_mag_l1c_norm-mago-7f101966_20240101_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1161,7 +1161,7 @@ def test_lambda_handler_mag_l1c_case(session):
                     "--version",
                     "v002",
                     "--dependency",
-                    "imap_mag_l1c_norm-mago-2ae6d6feecb9c00015881bc67ab7b10e29783732468a5e0b635adfe4326fc96c_20240101_v002.json",
+                    "imap_mag_l1c_norm-mago-2ae6d6fe_20240101_v002.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1364,7 +1364,7 @@ def test_def_cadence_map_event(setup_s3, session, tmp_path):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo-74f0a45021f58df642c0fae542661f17c0790964182ca62399fd0c4be45aeb0f_20250301_v001.json",
+                    "imap_ultra_l2_u90-ena-h-sf-nsp-full-hae-6deg-3mo-74f0a450_20250301_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1466,7 +1466,7 @@ def test_idex_l2b(session):
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_idex_l2b_all-1mo-9de6e4ae33556063213c1528033aadb4a9bd4421fc428dc31303a08876eafd05_20230109_v001.json",
+                    "imap_idex_l2b_all-1mo-9de6e4ae_20230109_v001.json",
                     "--upload-to-sdc",
                 ]
             },
@@ -1987,7 +1987,7 @@ def test_repoint_date_range(sqs_mock, mock_download, session, s3_client, tmp_pat
                     "--version",
                     "v001",
                     "--dependency",
-                    "imap_spacecraft_l1a_pointing-attitude-609961590f7a3732fa929e29207ffa14b83dafd107d47b3f1077eded267a9a08_20000224_v001.json",
+                    "imap_spacecraft_l1a_pointing-attitude-60996159_20000224_v001.json",
                     "--upload-to-sdc",
                 ]
             },
