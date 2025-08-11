@@ -1,6 +1,7 @@
 """Functions for supporting the batch starter component of the architecture."""
 
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -12,14 +13,15 @@ import imap_data_access
 import requests
 from imap_data_access import (
     AncillaryFilePath,
+    DependencyFilePath,
     ScienceFilePath,
     SPICEFilePath,
 )
-from imap_data_access.file_validation import CadenceFilePath
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
-from ..api_lambdas import download_api, upload_api
+from ..api_lambdas import upload_api
+from ..api_lambdas.upload_api import _file_exists
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -82,8 +84,14 @@ def cadence_to_datetime_range(
         The start date and end date of the cadence. The end_date is set to today
     """
     end_date = datetime.datetime.today()
+    # Find the start date by subtracting the number of days in the cadence from the end
+    # date. Subtract one day from the number of days in the cadence because the query in
+    # dependency.py get_files() is inclusive for both the start and end date.
+    # To avoid overlapping data by one day, we essentially bump the start date up by
+    # one.
     start_date = end_date - datetime.timedelta(
         days=CadenceDays.str_lookup(cadence).value
+        - 1  # subtract one day from cadence days
     )
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
@@ -323,33 +331,47 @@ def duplicate_job(
     bool
         True if the job is a duplicate, False otherwise.
     """
-    # TODO switch to DependencyFilePath
-    previous_dependency_file = CadenceFilePath.generate_from_inputs(
+    # Generate the previous dependency file path based on the inputs.
+    # The descriptor should include a hash of the serialized dependencies.
+    dep_descriptor = f"{descriptor}-{dependency_hash(serialized_dependencies)}"
+    previous_dependency_file = DependencyFilePath.generate_from_inputs(
         instrument=instrument,
         data_level=data_level,
-        descriptor=descriptor,
+        descriptor=dep_descriptor,
         start_time=start_date,
         version=previous_version,
         extension="json",
     )
-    previous_dependency_path = previous_dependency_file.construct_path()
-    # Get the dependency s3 path
-    relative_path = previous_dependency_path.relative_to(
-        imap_data_access.config["DATA_DIR"]
+    previous_dep_path = previous_dependency_file.construct_path()
+    # Strip off the data directory to get the upload path + name
+    # Must be posix style for the URL
+    s3_key_path_str = str(
+        previous_dep_path.relative_to(imap_data_access.config["DATA_DIR"]).as_posix()
     )
-    previous_dependency_str = get_previous_dependency_str(relative_path)
-    if previous_dependency_str is None:
-        logger.error(
-            f"Failed to download previous dependency file: {previous_dependency_path}. "
-            f"Skipping duplicate job check."
-        )
-        return False
-    # If the previous dependency string is the same as the current, this is a duplicate
-    # job.
-    if previous_dependency_str == serialized_dependencies:
-        return True
+    # If the file already exists, then we know that an exact duplicate job has been
+    # run with the same dependencies, start date, descriptor, instrument, data level,
+    # and version.
+    # TODO currently this will skip bulk reprocessing jobs that have been kicked off
+    #   Due to algorithm updates. The job might look like a duplicate but have new code.
+    #   We need to somehow track if we are reprocessing due to a manual trigger
+    #   or not.
+    return _file_exists(s3_key_path_str)
 
-    return False
+
+def dependency_hash(serialized_dependencies):
+    """Generate a hash for the serialized dependencies. Use only the first 8 characters.
+
+    Parameters
+    ----------
+    serialized_dependencies : str
+        The serialized dependencies string.
+
+    Returns
+    -------
+    str
+        The first 8 characters of the SHA-256 hash of the serialized dependencies.
+    """
+    return hashlib.sha256(serialized_dependencies.encode("utf-8")).hexdigest()[:8]
 
 
 def try_to_submit_job(
@@ -394,18 +416,38 @@ def try_to_submit_job(
             previous_version,
             serialized_dependencies,
         ):
-            filepath = ScienceFilePath.generate_from_inputs(
-                instrument=instrument,
-                data_level=data_level,
-                descriptor=descriptor,
-                start_time=start_date_str,
-                version=previous_version,
-            )
             logger.info(
-                f"This job is a duplicate of the previous job. See file: "
-                f"{filepath.filename!s}. Skipping submission."
+                f"This job is a duplicate of the previous one for: "
+                f"{instrument=},"
+                f" {data_level=},"
+                f" {descriptor=},"
+                f" {start_date_str=},"
+                f" and {previous_version=}. "
+                f"Skipping submission."
             )
             return
+    # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
+
+    # Serialize the upstream dependencies and write them to a JSON file. The Imap
+    # processing code will read the JSON file and deserialize the dependencies. This is
+    # to avoid passing a large string through the batch job command line.
+    # release
+    # The descriptor should include a hash of the serialized dependencies.
+    # This makes it unique for this file and set of dependencies.
+    dep_descriptor = f"{descriptor}-{dependency_hash(serialized_dependencies)}"
+    dependency_file = DependencyFilePath.generate_from_inputs(
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=dep_descriptor,
+        start_time=start_date.strftime("%Y%m%d"),
+        version=version,
+        extension="json",
+    )
+    dependency_file_path = dependency_file.construct_path()
+    response = upload_dependency_file(dependency_file_path, serialized_dependencies)
+    # If response is None, then the upload failed and we should skip submitting the job.
+    if not response:
+        return
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -429,26 +471,6 @@ def try_to_submit_job(
     logger.info(
         f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
     )
-    # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
-
-    # Serialize the upstream dependencies and write them to a JSON file. The Imap
-    # processing code will read the JSON file and deserialize the dependencies. This is
-    # to avoid passing a large string through the batch job command line.
-    # release
-    # TODO switch to DependencyFilePath
-    dependency_file = CadenceFilePath.generate_from_inputs(
-        instrument=instrument,
-        data_level=data_level,
-        descriptor=descriptor,
-        start_time=start_date.strftime("%Y%m%d"),
-        version=version,
-        extension="json",
-    )
-    dependency_file_path = dependency_file.construct_path()
-    response = upload_dependency_file(dependency_file_path, serialized_dependencies)
-    # If response is None, then the upload failed and we should skip submitting the job.
-    if not response:
-        return
 
     batch_command = [
         "--instrument",
@@ -541,6 +563,26 @@ def submit_all_jobs(
 
     # Handle special case reprocessing jobs.
     logger.info(f"All required dependencies found for the dependency: {job_node}")
+    if (
+        job_node["data_source"] == "spacecraft"
+        and job_node["descriptor"] == "pointing-attitude"
+    ):
+        job_version = determine_job_version(
+            session=session,
+            instrument=job_node["data_source"],
+            descriptor=job_node["descriptor"],
+            start_date=start_date,
+            data_level=job_node["data_type"],
+        )
+        try_to_submit_job(
+            session,
+            job_node,
+            datetime.datetime.strptime(start_date, "%Y%m%d"),
+            job_version,
+            upstream_dependencies.serialize(),
+        )
+        return
+
     # Find the first science processingInput that has the same source as the
     # potential job. Use this to determine the start date.
     primary_science_inputs = upstream_dependencies.get_science_inputs(
@@ -623,17 +665,110 @@ def generate_queue_url(event):
     return queue_url
 
 
+def calculate_pointing_date_range(session, pointing_id):
+    """Calculate date range for the pointing id using pointing data.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session
+        Database session.
+    pointing_id : int
+        The ID of the repointing.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the start date and end date in the format YYYYMMDD.
+    """
+    # Query the pointing table to find the pointing information.
+    pointing_record = (
+        session.query(models.PointingTable).filter(
+            models.PointingTable.pointing_id == pointing_id
+        )
+    ).first()
+
+    if not pointing_record:
+        raise ValueError(f"No PointingTable record found for ID: {pointing_id}")
+
+    start_date = pointing_record.pointing_start_utc.strftime("%Y%m%d")
+    end_date = pointing_record.pointing_end_utc.strftime("%Y%m%d")
+    logger.debug(f"pointing date range, start_date: {start_date}, end_date: {end_date}")
+
+    return start_date, end_date
+
+
+def determine_date_range(session, file_obj):
+    """Determine the start and end dates based on the file type.
+
+    This date range is used to query upstream dependencies for the file.
+
+    Parameters
+    ----------
+    session : sqlalchemy.orm.Session
+        Database session.
+    file_obj : SPICEFilePath, ScienceFilePath, or AncillaryFilePath
+        The file object for which to determine the date range.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the start date and end date in the format YYYYMMDD.
+    """
+    if isinstance(file_obj, SPICEFilePath):
+        file_type = file_obj.spice_metadata["type"]
+        if file_type == "repoint":
+            # NOTE:
+            # Repoint file is used to kicks off pointing_attitude job only.
+            # This date range is used to query attitude kernel file(s). If
+            # Other is dependent on the repoint file, please revisit this logic.
+            start_date = (
+                file_obj.spice_metadata["end_date"] - datetime.timedelta(days=1)
+            ).strftime("%Y%m%d")
+            end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
+        else:
+            # Convert datetime object to string of format YYYYMMDD
+            start_date = file_obj.spice_metadata["start_date"].strftime("%Y%m%d")
+            end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
+    elif isinstance(file_obj, ScienceFilePath):
+        # TODO: GLOWS may need other handling using carrington rotation.
+        if file_obj.repointing is not None and file_obj.instrument in [
+            "glows",
+            "hi",
+            "lo",
+            "ultra",
+        ]:
+            logger.debug(
+                "Using repointing file to calculate date range for"
+                f" {file_obj.instrument}."
+            )
+            start_date, end_date = calculate_pointing_date_range(
+                session, file_obj.repointing
+            )
+        else:
+            start_date = end_date = file_obj.start_date
+    elif isinstance(file_obj, AncillaryFilePath):
+        start_date = file_obj.start_date
+        # Ancillary files can have an end date.
+        # If there is no end date for the ancillary file, then it is implicitly
+        # valid through today.
+        end_date = getattr(
+            file_obj, "end_date", None
+        ) or datetime.datetime.now().strftime("%Y%m%d")
+    else:
+        raise ValueError("Unsupported file type")
+    return start_date, end_date
+
+
 def s3_processing_event(session, events):
     """Process SQS events that were triggered by S3 file arrivals.
 
     Parameters
     ----------
-    session : orm session
+    session : sqlalchemy.orm.Session
         Database session.
     events : dict
         SQS event input.
     """
-    # ruff: noqa: PLR0912
     # Since the SQS events can be batched together, we need to loop through
     # each event. In this loop, "event" represents one file landing.
 
@@ -663,29 +798,9 @@ def s3_processing_event(session, events):
             else:
                 triggered_from_glows_l3e = True
 
-        if isinstance(file_obj, SPICEFilePath):
-            # Set the start and end dates for the upstream event message.
-            # TODO: fix date range if/when repoint file ingestion event is
-            # passed to batch starter to kickoff HARD or SOFT_TRIGGER downstream jobs.
-            # Convert datetime object to string of format YYYYMMDD
-            start_date = file_obj.spice_metadata["start_date"].strftime("%Y%m%d")
-            end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
-        elif isinstance(file_obj, ScienceFilePath):
-            # Set the start and end dates for the upstream event message
-            # TODO: if ENA or glows instrument, then get repoint number from filename
-            # and set start date and end date differently.
-            start_date = end_date = file_obj.start_date
-        elif isinstance(file_obj, AncillaryFilePath):
-            # Set the start and end dates for the upstream event message
-            start_date = file_obj.start_date
-            # Ancillary files can have an end date.
-            end_date = getattr(file_obj, "end_date", None)
-            # If there is no end date for the ancillary file, then it is implicitly
-            # valid through today.
-            if not end_date:
-                end_date = datetime.datetime.today().strftime("%Y%m%d")
-        # Potential jobs are the instruments that depend on the current file,
-        # which are the downstream dependencies.
+        # Determine the start and end dates for the upstream query.
+        start_date, end_date = determine_date_range(session, file_obj)
+
         potential_jobs = dependency.get_jobs(
             data_source=input_obj.source,
             descriptor=input_obj.descriptor,
@@ -865,45 +980,6 @@ def bulk_reprocessing_event(session, events):
             submit_all_jobs(session, job, start_date, end_date)
 
 
-def get_previous_dependency_str(dependency_file_path: Path):
-    """Download a JSON file containing a dependencies from S3 and return its contents.
-
-    Parameters
-    ----------
-    dependency_file_path : Path
-        The dependency JSON file to download.
-
-    Returns
-    -------
-    str or None
-        The contents of the dependency file if successful, otherwise None.
-    """
-    response = download_api.lambda_handler(
-        {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
-    )
-    if response["statusCode"] != 302:
-        logger.error(
-            f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
-            f"Error message: {response['body']}, "
-            f"with status code: {response['statusCode']}."
-        )
-        return None
-    try:
-        download_url = json.loads(response["body"])["download_url"]
-        response = requests.get(download_url, timeout=60.0)
-        logger.info(
-            f"Dependency file downloaded successfully from s3 with status code: "
-            f"{response.status_code}"
-        )
-        return response.text
-    except Exception as e:
-        logger.error(
-            f"Unexpected error during dependency file download: {e}. "
-            f"Dependency file download failed."
-        )
-        return None
-
-
 def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
     """Upload a JSON file containing a job's dependencies to S3.
 
@@ -923,7 +999,13 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
     signed_url = upload_api.lambda_handler(
         {"pathParameters": {"proxy": dependency_file_path.as_posix()}}, None
     )
-    if signed_url["statusCode"] != 200:
+    if signed_url["statusCode"] == 409:
+        logger.info(
+            f"Dependency file already exists in S3: {dependency_file_path}. Reusing"
+            f"file."
+        )
+        return {"statusCode": 200, "body": signed_url["body"]}
+    elif signed_url["statusCode"] != 200:
         logger.error(
             f"Failed to get S3 pre-signed URL for file: {dependency_file_path}. "
             f"As a result, failed to kick off job. "

@@ -16,6 +16,9 @@ from sds_data_manager.lambda_code.SDSCode.api_lambdas import (
 )
 from sds_data_manager.lambda_code.SDSCode.database import models
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import spice_indexer
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer import (
+    index_pointing_data,
+)
 
 
 def put_local_file_in_bucket(s3_client, path_in_s3, path_local):
@@ -211,7 +214,7 @@ def test_s3_spin_files(session, s3_client, events_client):
         os.path.join(test_spice_data_dir, "imap_2026_267_2026_267_01.spin.csv"),
     )
     spice_indexer.lambda_handler(spin_file1_event, None)
-    query = select(models.SpinTable.__table__)
+    query = select(models.SpinFiles.__table__)
     spin_table_rows = session.execute(query).all()
     assert len(spin_table_rows) == 1
     assert spin_table_rows[0].file_path == (
@@ -225,13 +228,34 @@ def test_s3_spin_files(session, s3_client, events_client):
         os.path.join(test_spice_data_dir, "imap_2026_267_2026_267_02.spin.csv"),
     )
     spice_indexer.lambda_handler(spin_file2_event, None)
-    query = select(models.SpinTable.__table__)
+    query = select(models.SpinFiles.__table__)
     spin_table_rows = session.execute(query).all()
     assert len(spin_table_rows) == 2
     assert spin_table_rows[1].file_path == (
         "imap/spice/spin/imap_2026_267_2026_267_02.spin.csv"
     )
     assert spin_table_rows[1].version == "02"
+
+
+@patch("sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer.download")
+def test_s3_repoint_files(mock_download, session, s3_client, events_client):
+    """Test s3 event for repoint files."""
+    current_path = os.path.dirname(os.path.abspath(__file__))
+    one_level_up = os.path.abspath(os.path.join(current_path, ".."))
+    test_spice_data_dir = os.path.join(one_level_up, "test-data", "test_spice_files")
+    # Mock download to return the test file path
+    repoint_file = os.path.join(test_spice_data_dir, "imap_2000_056_03.repoint.csv")
+    mock_download.return_value = repoint_file
+    # Repoint file ingestion test
+    repoint_file_event = put_local_file_in_bucket(
+        s3_client,
+        "imap/spice/repoint/imap_2000_056_03.repoint.csv",
+        os.path.join(test_spice_data_dir, "imap_2000_056_03.repoint.csv"),
+    )
+    spice_indexer.lambda_handler(repoint_file_event, None)
+    # Query PointingTable to verify ingestion
+    pointing_ids = session.query(models.PointingTable.pointing_id).all()
+    assert len(pointing_ids) == 49
 
 
 def test_send_spice_event(session, events_client, s3_client):
@@ -291,3 +315,47 @@ def test_send_spice_event(session, events_client, s3_client):
     }
     with pytest.raises(ValueError, match="Error downloading file"):
         spice_indexer.lambda_handler(event, None)
+
+
+@patch("sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer.download")
+def test_index_pointing_data_updates_null_values(mock_download, session, tmpdir):
+    """Test that Null values in the pointing table are updated."""
+    new_repoint_file = os.path.join(tmpdir, "test_repoint.csv")
+    mock_download.return_value = new_repoint_file
+    # Create a test CSV file with repoint data
+    test_csv_content = """repoint_id,repoint_start_utc,repoint_end_utc
+    1,2025-07-01T10:00:00.000000,2025-07-01T10:10:00.000000
+    2,2025-07-02T10:00:00.000000,2025-07-02T10:10:00.000000
+    3,NaN,NaN
+    """
+    with open(new_repoint_file, "w") as f:
+        f.write(test_csv_content)
+
+    # Add an initial entry to the pointing table with Null values
+    session.add(
+        models.PointingTable(
+            pointing_id=1,
+            pointing_start_utc=datetime(2025, 7, 1, 10, 10, 0),
+            pointing_end_utc=None,
+            repoint_start_utc=None,
+            repoint_end_utc=None,
+        )
+    )
+    session.commit()
+
+    # Call the function to index pointing data
+    index_pointing_data("s3://test-bucket/test_repoint.csv")
+
+    # Query the pointing table to verify updates
+    first_pointing_entry = (
+        session.query(models.PointingTable).filter_by(pointing_id=1).first()
+    )
+
+    # i_pointing repoint_end_utc
+    assert first_pointing_entry.pointing_start_utc == datetime(2025, 7, 1, 10, 10, 0)
+    # i_pointing + 1 repoint_end_utc
+    assert first_pointing_entry.pointing_end_utc == datetime(2025, 7, 2, 10, 10, 0)
+    # # i_pointing + 1 repoint_start_utc
+    assert first_pointing_entry.repoint_start_utc == datetime(2025, 7, 2, 10, 0, 0)
+    # # i_pointing + 1 repoint_end_utc
+    assert first_pointing_entry.repoint_end_utc == datetime(2025, 7, 2, 10, 10, 0)
