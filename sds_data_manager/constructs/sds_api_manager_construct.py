@@ -112,28 +112,12 @@ class SdsApiManager(Construct):
         )
 
         # landing page redirect
-        landing_page_redirect_lambda = lambda_.Function(
+        landing_page_lambda = lambda_.Function(
             self,
-            id="LandingPageRedirectLambda",
-            function_name="landing-page-redirect",
-            code=lambda_.InlineCode(
-                """
-            def lambda_handler(event, context):
-                return {
-                    "statusCode": 302,
-                    "headers": {
-                        "Location": "https://imap-processing.readthedocs.io/en/latest/data-access/index.html"
-                    },
-                "body": ""
-                }
-                """
-            ),
-            handler="index.lambda_handler",
+            id="LandingPageLambda",
+            code=code,
+            handler="SDSCode.api_lambdas.landing_page_api.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            timeout=cdk.Duration.seconds(5),
-            memory_size=128,
-            allow_public_subnet=True,
-            layers=layers,
         )
 
         # upload API lambda
@@ -164,7 +148,7 @@ class SdsApiManager(Construct):
         api.add_route(
             route="/",
             http_method="GET",
-            lambda_function=landing_page_redirect_lambda,
+            lambda_function=landing_page_lambda,
         )
 
         # basic route: /upload/{proxy+}
