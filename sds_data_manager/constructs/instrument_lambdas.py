@@ -229,3 +229,22 @@ class BatchStarterLambda(Construct):
                     )
                 ],
             )
+
+        cron_exp = (
+            f"cron(20 6 * * ? *)"
+        )
+        aws_events.CfnRule(
+            scope=scope,
+            id=f"ProcessingCadenceJobDaily",
+            name=f"ProcessingCadenceJobDaily",
+            description=f"Trigger 'batch starter' daily processing job",
+            schedule_expression=cron_exp,
+            state="ENABLED",
+            targets=[
+                aws_events.CfnRule.TargetProperty(
+                    arn=self.instrument_lambda.function_arn,
+                    id=f"Daily",
+                    input=cdk.Fn.sub('{"cron": "daily"}'),
+                )
+            ],
+        )
