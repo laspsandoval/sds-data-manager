@@ -661,7 +661,7 @@ def check_requested_kernels(combined_kernel_sources, metakernel_files):
     # is found.
     if (
         len(expected_ephemeris) == 1
-        and expected_ephemeris[0] == "ephemeris_reconstructed"
+        and next(iter(expected_ephemeris)) == "ephemeris_reconstructed"
         and "ephemeris_reconstructed" in ephemeris_found
     ):
         return True

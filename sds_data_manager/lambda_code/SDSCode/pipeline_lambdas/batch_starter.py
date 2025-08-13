@@ -21,7 +21,6 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from ..api_lambdas import upload_api
-from ..api_lambdas.upload_api import _file_exists
 from ..database import database as db
 from ..database import models
 from . import dependency
@@ -206,11 +205,10 @@ def determine_job_version(
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
                 return max_version
-            else:
-                logger.info(
-                    f"Job with id: {max_version_record.id} is in progress, but the "
-                    f"dependencies have changed. Bumping version number."
-                )
+            logger.info(
+                f"Job with id: {max_version_record.id} is in progress, but the "
+                f"dependencies have changed. Bumping version number."
+            )
     else:
         max_version = None
     # If the descriptor is "all", we should only check the processing job table. The
@@ -324,63 +322,6 @@ def get_special_case_date_range(session, job_node, start_date):
     return new_start_date, new_end_date
 
 
-def duplicate_job(
-    instrument,
-    data_level,
-    descriptor,
-    start_date,
-    previous_version,
-    serialized_dependencies,
-) -> bool:
-    """Determine if the current job is a duplicate of the most recent job.
-
-    Parameters
-    ----------
-    instrument : str
-        Instrument.
-    data_level : str
-        Data level.
-    descriptor : str
-        Data descriptor.
-    start_date : str
-        Start date.
-    previous_version : str
-        The previous version of the job
-    serialized_dependencies : str
-        The serialized upstream dependencies of the job.
-
-    Returns
-    -------
-    bool
-        True if the job is a duplicate, False otherwise.
-    """
-    # Generate the previous dependency file path based on the inputs.
-    # The descriptor should include a hash of the serialized dependencies.
-    dep_descriptor = f"{descriptor}-{dependency_hash(serialized_dependencies)}"
-    previous_dependency_file = DependencyFilePath.generate_from_inputs(
-        instrument=instrument,
-        data_level=data_level,
-        descriptor=dep_descriptor,
-        start_time=start_date,
-        version=previous_version,
-        extension="json",
-    )
-    previous_dep_path = previous_dependency_file.construct_path()
-    # Strip off the data directory to get the upload path + name
-    # Must be posix style for the URL
-    s3_key_path_str = str(
-        previous_dep_path.relative_to(imap_data_access.config["DATA_DIR"]).as_posix()
-    )
-    # If the file already exists, then we know that an exact duplicate job has been
-    # run with the same dependencies, start date, descriptor, instrument, data level,
-    # and version.
-    # TODO currently this will skip bulk reprocessing jobs that have been kicked off
-    #   Due to algorithm updates. The job might look like a duplicate but have new code.
-    #   We need to somehow track if we are reprocessing due to a manual trigger
-    #   or not.
-    return _file_exists(s3_key_path_str)
-
-
 def dependency_hash(serialized_dependencies):
     """Generate a hash for the serialized dependencies. Use only the first 8 characters.
 
@@ -424,32 +365,6 @@ def try_to_submit_job(
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
     start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
-
-    # Search for any duplicate jobs that have the same exact dependencies for this
-    # instrument, data level, descriptor, and start date by checking the CRID.
-    # Only check for duplicates if this is a reprocessing job.
-    # We know this is a reprocessing job if the version is not "v001".
-    # if version != "v001":
-    #     previous_version = f"v{int(version[1:]) - 1:03d}"
-    #     if duplicate_job(
-    #         instrument,
-    #         data_level,
-    #         descriptor,
-    #         start_date_str,
-    #         previous_version,
-    #         serialized_dependencies,
-    #     ):
-    #         logger.info(
-    #             f"This job is a duplicate of the previous one for: "
-    #             f"{instrument=},"
-    #             f" {data_level=},"
-    #             f" {descriptor=},"
-    #             f" {start_date_str=},"
-    #             f" and {previous_version=}. "
-    #             f"Skipping submission."
-    #         )
-    #         return
-    # TODO: do we need a reprocessing column to indicate if this is a reprocessing job?
 
     # Serialize the upstream dependencies and write them to a JSON file. The Imap
     # processing code will read the JSON file and deserialize the dependencies. This is
