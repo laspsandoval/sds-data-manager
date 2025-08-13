@@ -112,28 +112,19 @@ class SdsApiManager(Construct):
         )
 
         # landing page redirect
-        landing_page_redirect_lambda = lambda_.Function(
+        landing_page_lambda = lambda_.Function(
             self,
-            id="LandingPageRedirectLambda",
-            function_name="landing-page-redirect",
-            code=lambda_.InlineCode(
-                """
-            def lambda_handler(event, context):
-                return {
-                    "statusCode": 302,
-                    "headers": {
-                        "Location": "https://imap-processing.readthedocs.io/en/latest/data-access/index.html"
-                    },
-                "body": ""
-                }
-                """
-            ),
-            handler="index.lambda_handler",
+            id="LandingPageLambda",
+            code=code,
+            handler="SDSCode.api_lambdas.landing_page_api.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            timeout=cdk.Duration.seconds(5),
-            memory_size=128,
-            allow_public_subnet=True,
-            layers=layers,
+        )
+
+        # Redirect root '/' to the landing page
+        api.add_route(
+            route="/",
+            http_method="GET",
+            lambda_function=landing_page_lambda,
         )
 
         # upload API lambda
@@ -159,13 +150,6 @@ class SdsApiManager(Construct):
         upload_api_lambda.add_to_role_policy(s3_write_policy)
         upload_api_lambda.add_to_role_policy(s3_read_policy)
         upload_api_lambda.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
-
-        # Redirect root '/' to the landing page
-        api.add_route(
-            route="/",
-            http_method="GET",
-            lambda_function=landing_page_redirect_lambda,
-        )
 
         # basic route: /upload/{proxy+}
         # oauth2 JWT authorizer: /authorized/upload/{proxy+}
