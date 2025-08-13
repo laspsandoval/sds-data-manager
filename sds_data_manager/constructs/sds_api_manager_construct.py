@@ -120,6 +120,13 @@ class SdsApiManager(Construct):
             runtime=lambda_.Runtime.PYTHON_3_12,
         )
 
+        # Redirect root '/' to the landing page
+        api.add_route(
+            route="/",
+            http_method="GET",
+            lambda_function=landing_page_lambda,
+        )
+
         # upload API lambda
         upload_api_lambda = lambda_.Function(
             self,
@@ -143,13 +150,6 @@ class SdsApiManager(Construct):
         upload_api_lambda.add_to_role_policy(s3_write_policy)
         upload_api_lambda.add_to_role_policy(s3_read_policy)
         upload_api_lambda.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
-
-        # Redirect root '/' to the landing page
-        api.add_route(
-            route="/",
-            http_method="GET",
-            lambda_function=landing_page_lambda,
-        )
 
         # basic route: /upload/{proxy+}
         # oauth2 JWT authorizer: /authorized/upload/{proxy+}
