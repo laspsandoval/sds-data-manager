@@ -22,6 +22,7 @@ def test_batch_job_event(session, events_client):
         "descriptor": "sci-1min",
         "start_date": datetime.strptime("20230724", "%Y%m%d"),
         "version": "v001",
+        "dependency_file": "test_dependency.json",
     }
     processing_job = models.ProcessingJob(**job_params)
     session.add(processing_job)

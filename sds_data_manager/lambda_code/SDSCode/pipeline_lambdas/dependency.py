@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
-from ..database.models import AncillaryFiles, SPICEFiles
+from ..database.models import AncillaryFiles, ScienceFiles
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -703,8 +703,8 @@ def get_upstream_versions(session, record, versions) -> dict:
     """
     # Make a copy of the dictionary to avoid modifying the original
     versions = versions.copy()
-    if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
-        # Ancillary and SPICE files have no upstream dependencies
+    if not isinstance(record, ScienceFiles):
+        # Only science files have upstream dependencies.
         return versions
 
     dep_node = {
