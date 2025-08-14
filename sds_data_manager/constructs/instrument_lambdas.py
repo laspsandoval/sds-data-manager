@@ -136,12 +136,18 @@ class BatchStarterLambda(Construct):
         )
 
         # Set up eventBridge rules to trigger batch starter lambda.
-        # create one permission for all eventbridge rules
+        # create one permission for Cadence rules and one for Scheduled rules
         self.instrument_lambda.add_permission(
-            "AllowEventBridgeInvoke",
+            "AllowEventBridgeInvokeCadence",
             principal=iam.ServicePrincipal("events.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingCadenceJob*",
+        )
+        self.instrument_lambda.add_permission(
+            "AllowEventBridgeInvokeScheduled",
+            principal=iam.ServicePrincipal("events.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingScheduledJob*",
         )
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
         # Create eventBridge rules to trigger:
@@ -230,21 +236,25 @@ class BatchStarterLambda(Construct):
                 ],
             )
 
-        cron_exp = (
-            f"cron(20 6 * * ? *)"
-        )
-        aws_events.CfnRule(
-            scope=scope,
-            id=f"ProcessingCadenceJobDaily",
-            name=f"ProcessingCadenceJobDaily",
-            description=f"Trigger 'batch starter' daily processing job",
-            schedule_expression=cron_exp,
-            state="ENABLED",
-            targets=[
-                aws_events.CfnRule.TargetProperty(
-                    arn=self.instrument_lambda.function_arn,
-                    id=f"Daily",
-                    input=cdk.Fn.sub('{"cron": "daily"}'),
-                )
-            ],
-        )
+        scheduled_rules = {
+            # Example:
+            # "glows": "cron(20 6 * * ? *)",
+            # "sp_maps": "cron(20 14 * * ? *)",
+        }
+
+        for name, schedule_expression in scheduled_rules.items():
+            aws_events.CfnRule(
+                scope=scope,
+                id=f"ProcessingScheduledJob-{name}",
+                name=f"ProcessingScheduledJob-{name}",
+                description=f"Trigger 'batch starter' scheduled processing job: {name}",
+                schedule_expression=schedule_expression,
+                state="ENABLED",
+                targets=[
+                    aws_events.CfnRule.TargetProperty(
+                        arn=self.instrument_lambda.function_arn,
+                        id=f"{name}",
+                        input=cdk.Fn.sub(f'{{"scheduled": "{name}"}}'),
+                    )
+                ],
+            )
