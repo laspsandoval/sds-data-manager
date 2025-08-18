@@ -31,8 +31,6 @@ from .dependency import DependencyConfig, get_jobs
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# date format
-DT_FORMAT = "%Y%m%d"
 DEPENDENCY_CONFIG = DependencyConfig()
 # Create a batch client
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
@@ -103,8 +101,8 @@ def cadence_to_datetime_range(
         # end date.
         start_date = end_date - datetime.timedelta(days=num_days)
     if as_str:
-        start_date = start_date.strftime(DT_FORMAT)
-        end_date = end_date.strftime(DT_FORMAT)
+        start_date = start_date.strftime("%Y%m%d")
+        end_date = end_date.strftime("%Y%m%d")
 
     return start_date, end_date
 
@@ -293,7 +291,7 @@ def get_special_case_date_range(session, job_node, start_date):
             .scalar()
         )
 
-    start_date = datetime.datetime.strptime(start_date, DT_FORMAT)
+    start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
 
     deps = get_jobs(
         dependency_type="UPSTREAM",
@@ -317,7 +315,7 @@ def get_special_case_date_range(session, job_node, start_date):
             f"No l2 map files found for {l2_dep['data_source']} "
             f"{l2_dep['data_type']} {l2_dep['descriptor']}."
         )
-    new_start_date = new_start_date.strftime(DT_FORMAT)
+    new_start_date = new_start_date.strftime("%Y%m%d")
     # Determine the number of days the map was created for based on the cadence.
     cadence_key = job_node["descriptor"].split("-")[-1]
     if cadence_key not in CadenceDays.valid_cadence_str():
@@ -328,7 +326,7 @@ def get_special_case_date_range(session, job_node, start_date):
         )
     map_days = CadenceDays.str_lookup(cadence_key).value
     # Use the date range of the l2 map as the query range for the l3 job.
-    new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime(DT_FORMAT)
+    new_end_date = (start_date + datetime.timedelta(days=map_days)).strftime("%Y%m%d")
     return new_start_date, new_end_date
 
 
@@ -374,7 +372,7 @@ def try_to_submit_job(
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = datetime.datetime.strftime(start_date, DT_FORMAT)
+    start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
 
     # Serialize the upstream dependencies and write them to a JSON file. The Imap
     # processing code will read the JSON file and deserialize the dependencies. This is
@@ -387,7 +385,7 @@ def try_to_submit_job(
         instrument=instrument,
         data_level=data_level,
         descriptor=dep_descriptor,
-        start_time=start_date.strftime(DT_FORMAT),
+        start_time=start_date.strftime("%Y%m%d"),
         version=version,
         extension="json",
     )
@@ -525,7 +523,7 @@ def submit_all_jobs(
         try_to_submit_job(
             session,
             job_node,
-            datetime.datetime.strptime(start_date, DT_FORMAT),
+            datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
             serialized_deps,
         )
@@ -640,8 +638,8 @@ def calculate_pointing_date_range(session, pointing_id):
     if not pointing_record:
         raise ValueError(f"No PointingTable record found for ID: {pointing_id}")
 
-    start_date = pointing_record.pointing_start_utc.strftime(DT_FORMAT)
-    end_date = pointing_record.pointing_end_utc.strftime(DT_FORMAT)
+    start_date = pointing_record.pointing_start_utc.strftime("%Y%m%d")
+    end_date = pointing_record.pointing_end_utc.strftime("%Y%m%d")
     logger.debug(f"pointing date range, start_date: {start_date}, end_date: {end_date}")
 
     return start_date, end_date
@@ -673,12 +671,12 @@ def determine_date_range(session, file_obj):
             # Other is dependent on the repoint file, please revisit this logic.
             start_date = (
                 file_obj.spice_metadata["end_date"] - datetime.timedelta(days=1)
-            ).strftime(DT_FORMAT)
-            end_date = file_obj.spice_metadata["end_date"].strftime(DT_FORMAT)
+            ).strftime("%Y%m%d")
+            end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
         else:
             # Convert datetime object to string of format YYYYMMDD
-            start_date = file_obj.spice_metadata["start_date"].strftime(DT_FORMAT)
-            end_date = file_obj.spice_metadata["end_date"].strftime(DT_FORMAT)
+            start_date = file_obj.spice_metadata["start_date"].strftime("%Y%m%d")
+            end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
     elif isinstance(file_obj, ScienceFilePath):
         # TODO: GLOWS may need other handling using carrington rotation.
         if file_obj.repointing is not None and file_obj.instrument in [
@@ -703,7 +701,7 @@ def determine_date_range(session, file_obj):
         # valid through today.
         end_date = getattr(
             file_obj, "end_date", None
-        ) or datetime.datetime.now().strftime(DT_FORMAT)
+        ) or datetime.datetime.now().strftime("%Y%m%d")
     else:
         raise ValueError("Unsupported file type")
     return start_date, end_date
@@ -1025,8 +1023,8 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
                     table.data_level == job_node["data_type"],
                     table.descriptor == job_node["descriptor"],
                     table.start_date
-                    >= datetime.datetime.strptime(start_date, DT_FORMAT),
-                    table.start_date <= datetime.datetime.strptime(end_date, DT_FORMAT),
+                    >= datetime.datetime.strptime(start_date, "%Y%m%d"),
+                    table.start_date <= datetime.datetime.strptime(end_date, "%Y%m%d"),
                     table.status.in_(
                         [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
                     ),
@@ -1127,21 +1125,21 @@ def cadence_processing_event(
             if not reprocessing:
                 offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
                 start_date = (
-                    datetime.datetime.strptime(start_date, DT_FORMAT) - offset_1month
+                    datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
                 )
                 end_date = (
-                    datetime.datetime.strptime(end_date, DT_FORMAT) - offset_1month
-                ).strftime(DT_FORMAT)
+                    datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
+                ).strftime("%Y%m%d")
             start_date = (
-                datetime.datetime.strptime(start_date, DT_FORMAT)
+                datetime.datetime.strptime(start_date, "%Y%m%d")
                 if isinstance(start_date, str)
                 else start_date
             )
             # Subtract two weeks from the start date to get all the necessary hk files.
             l1b_evt_start_date = (start_date - datetime.timedelta(weeks=2)).strftime(
-                DT_FORMAT
+                "%Y%m%d"
             )
-            start_date = start_date.strftime(DT_FORMAT)
+            start_date = start_date.strftime("%Y%m%d")
             upstream_extended_idex_deps = dependency.get_jobs(
                 data_source=instrument,
                 data_type=data_level,
@@ -1182,14 +1180,14 @@ def cadence_processing_event(
             instrument=instrument,
             data_level=data_level,
             descriptor=descriptor,
-            start_date=datetime.datetime.strptime(start_date, DT_FORMAT),
+            start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
             current_dependency_hash=serialized_deps,
         )
         # Submit the map job with all of the upstream dependencies in the date range
         try_to_submit_job(
             session,
             job_node,
-            datetime.datetime.strptime(start_date, DT_FORMAT),
+            datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
             serialized_deps,
         )
