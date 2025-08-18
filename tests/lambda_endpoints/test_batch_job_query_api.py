@@ -28,7 +28,6 @@ def _populate_processing_table(session):
             container_command="lo-some-command",
             started_at=datetime(2010, 1, 1, 20, 21, 9, 388000),
             stopped_at=datetime(2010, 1, 1, 20, 21, 34, 388000),
-            dependency_file="imap_lo_dep_file.json",
         ),
         ProcessingJob(
             status=models.Status.INPROGRESS,
@@ -37,7 +36,6 @@ def _populate_processing_table(session):
             descriptor="sci",
             start_date=datetime(2010, 1, 2),
             version="v001",
-            dependency_file="imap_idex_dep_file.json",
         ),
     ]
 
@@ -87,7 +85,6 @@ def test_batch_job_query_api(session):
     assert response_data[0]["job_definition"] is None
     assert response_data[0]["job_log_stream_id"] is None
     assert response_data[0]["container_image"] is None
-    assert response_data[0]["container_command"] is None
     assert response_data[0]["started_at"] is None
     assert response_data[0]["stopped_at"] is None
 

@@ -1552,7 +1552,7 @@ def test_determine_max_version(session):
         descriptor="de",
         start_date=datetime(2010, 1, 1),
         version="v001",
-        dependency_file="imap_lo_l1b_de-7f101966_20100101_v001.json",
+        container_command="--dependency imap_lo_l1b_de-27005a05_20100101_v001.json",
     )
     session.add(record)
     session.commit()
@@ -1634,8 +1634,6 @@ def test_duplicate_job(session, first_status, second_status):
                 descriptor="de",
                 start_date=datetime(2010, 1, 1),
                 version="v001",
-                dependencies='[{"type": "ancillary", "files": '
-                '["imap_mag_l1b-cal_20250101_v001.cdf"]}]',
             )
         )
     session.commit()

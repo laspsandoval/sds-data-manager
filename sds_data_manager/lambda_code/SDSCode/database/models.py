@@ -82,7 +82,6 @@ class ProcessingJob(Base):
     descriptor = Column(String, nullable=False)
     start_date = Column(DateTime, nullable=False)
     version = Column(String(8), nullable=False)
-    dependency_file = Column(String, nullable=False)
     # TODO:
     # Didn't make it required field yet. Revisit this
     # post discussion

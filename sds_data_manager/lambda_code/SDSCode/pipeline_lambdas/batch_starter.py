@@ -200,8 +200,8 @@ def determine_job_version(
         # If the hashes are different, then we know the dependencies have changed and
         # we should bump the version number and continue with processing.
         if max_version_record.status == models.Status.INPROGRESS:
-            dep_file = max_version_record.dependency_file
-            if current_dependency_hash in dep_file:
+            command = max_version_record.container_command
+            if current_dependency_hash in command:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
                 return max_version
@@ -387,30 +387,6 @@ def try_to_submit_job(
     if not response:
         return
 
-    # All of our upstream requirements have been met.
-    # Try to insert a record into the Processing Jobs table
-    # If this job already exists, then we will get an integrity error
-    # and know that some other process has already taken care of it
-    processing_job = models.ProcessingJob(
-        status=models.Status.INPROGRESS,
-        instrument=instrument,
-        data_level=data_level,
-        descriptor=descriptor,
-        start_date=start_date,
-        version=version,
-        dependency_file=dependency_file_path.name,
-    )
-    try:
-        session.add(processing_job)
-        session.commit()
-    except IntegrityError:
-        logger.info(f"Job already completed or in progress: {processing_job}")
-        return
-
-    logger.info(
-        f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
-    )
-
     batch_command = [
         "--instrument",
         instrument,
@@ -427,6 +403,29 @@ def try_to_submit_job(
         "--upload-to-sdc",
     ]
 
+    # All of our upstream requirements have been met.
+    # Try to insert a record into the Processing Jobs table
+    # If this job already exists, then we will get an integrity error
+    # and know that some other process has already taken care of it
+    processing_job = models.ProcessingJob(
+        status=models.Status.INPROGRESS,
+        instrument=instrument,
+        data_level=data_level,
+        descriptor=descriptor,
+        start_date=start_date,
+        version=version,
+        container_command=" ".join(batch_command),
+    )
+    try:
+        session.add(processing_job)
+        session.commit()
+    except IntegrityError:
+        logger.info(f"Job already completed or in progress: {processing_job}")
+        return
+
+    logger.info(
+        f"Wrote job INPROGRESS to Processing Jobs Table with id: {processing_job.id}"
+    )
     # NOTE: The batch job name should contain only alphanumeric characters and hyphens
     # E.g. "codice-l1a-sci-job-1"
     # The `processing_job.id` is used later for updating the job processing table
