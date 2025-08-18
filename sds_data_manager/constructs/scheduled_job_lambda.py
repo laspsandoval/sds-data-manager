@@ -1,12 +1,13 @@
 """Module containing constructs for the Schedule Job Lambda Function."""
 
-import aws_cdk as cdk
 from aws_cdk import Duration, Environment, aws_events
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_secretsmanager as secrets
+from aws_cdk.aws_events import RuleTargetInput, Schedule
+from aws_cdk.aws_events_targets import LambdaFunction
 from constructs import Construct
 
 from sds_data_manager.constructs.database_construct import SdpDatabase
@@ -113,18 +114,17 @@ class ScheduledJobLambda(Construct):
         }
 
         for name, schedule_expression in scheduled_rules.items():
-            aws_events.CfnRule(
+            rule = aws_events.Rule(
                 scope=scope,
                 id=f"ProcessingScheduledJob-{name}",
-                name=f"ProcessingScheduledJob-{name}",
+                rule_name=f"ProcessingScheduledJob-{name}",
                 description=f"Trigger 'batch starter' scheduled processing job: {name}",
-                schedule_expression=schedule_expression,
-                state="ENABLED",
-                targets=[
-                    aws_events.CfnRule.TargetProperty(
-                        arn=self.scheduled_job_lambda.function_arn,
-                        id=f"{name}",
-                        input=cdk.Fn.sub(f'{{"scheduled": "{name}"}}'),
-                    )
-                ],
+                schedule_expression=Schedule.expression(schedule_expression),
+                enabled=True,
             )
+
+            target = LambdaFunction(
+                handler=self.scheduled_job_lambda,
+                event=RuleTargetInput.from_object({"scheduled": name}),
+            )
+            rule.add_target(target)
