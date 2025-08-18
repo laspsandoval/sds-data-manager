@@ -369,13 +369,14 @@ class DependencyConfig:
                 ]
         return list(set(job_nodes))
 
-    def get_cadence_jobs(self, cadence: str) -> list:
+    def get_cadence_jobs(self, cadence: Optional[str] = None) -> list:
         """Get cadence jobs.
 
         Parameters
         ----------
-        cadence : str
-            Cadence string. Either "1mo", "3mo", "6mo", or "1yr".
+        cadence : str, optional
+            Cadence string. Either "1mo", "3mo", "6mo", or "1yr". If None,
+            all cadence jobs are returned.
 
         Returns
         -------
@@ -384,11 +385,11 @@ class DependencyConfig:
         """
         # Cadence jobs are only at data level l2 and contain either "1mo", "3mo", "6mo",
         # or "1yr" strings as the last part of the descriptor.
-
+        cadences = [cadence] if cadence else ["1mo", "3mo", "6mo", "1yr"]
         return [
             node
             for node in self.get_all_nodes("DOWNSTREAM")
-            if node[1] in ["l2", "l2b"] and cadence == node[2].split("-")[-1]
+            if node[1] in ["l2", "l2b"] and node[2].split("-")[-1] in cadences
         ]
 
 

@@ -1472,6 +1472,21 @@ def test_idex_l2b(session):
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
+        # Assert that reprocessing the cadence file works as expected
+        reprocessing_event = {
+            "queryStringParameters": {
+                "reprocessing": "True",
+                "start_date": "20230101",
+                "end_date": "20231209",
+                "instrument": "idex",
+                "data_level": "l2b",
+                "descriptor": "1mo",
+            }
+        }
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(reprocessing_event, None)
+        assert mock_batch_client.submmit_job.call_count == 1
+
     # Verify the function was called with the correct upstream dependencies
     with (
         patch.object(batch_starter, "try_to_submit_job") as mock_submit,
@@ -1486,7 +1501,7 @@ def test_idex_l2b(session):
             session,
             {"data_source": "idex", "data_type": "l2b", "descriptor": "all-1mo"},
             dt.datetime(2023, 1, 9, 0, 0),
-            "v001",
+            "v002",
             expected_processing_input.serialize(),
         )
 
