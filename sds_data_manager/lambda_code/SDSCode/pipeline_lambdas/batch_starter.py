@@ -15,7 +15,6 @@ import requests
 from imap_data_access import (
     AncillaryFilePath,
     DependencyFilePath,
-    ProcessingInputCollection,
     ScienceFilePath,
     SPICEFilePath,
 )
@@ -66,15 +65,6 @@ SPECIAL_CASE_JOBS = [
         "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
     },
 ]
-
-SCHEDULED_JOBS = {
-    # Expected scheduled job structure:
-    # "glows": [{
-    #     "data_source": "glows",
-    #     "data_type": "l3b",
-    #     "descriptor": "ion-rate-profile"
-    # }],
-}
 
 
 def cadence_to_datetime_range(
@@ -1207,26 +1197,6 @@ def cadence_processing_event(
         )
 
 
-def scheduled_processing_event(session, events):
-    """Process events triggerd by EventBridge rules.
-
-    Parameters
-    ----------
-    session : orm session
-        Database session.
-    events : dict
-        Event input from an Event Bridge rule.
-    """
-    for job in SCHEDULED_JOBS[events["scheduled"]]:
-        try_to_submit_job(
-            session,
-            job,
-            datetime.datetime(2000, 1, 1),
-            "v001",
-            ProcessingInputCollection().serialize(),
-        )
-
-
 def lambda_handler(events: dict, context):
     """Lambda handler.
 
@@ -1282,8 +1252,6 @@ def lambda_handler(events: dict, context):
         elif events.get("cadence"):
             # Handle a cadence event
             cadence_processing_event(session, events)
-        elif events.get("scheduled"):
-            scheduled_processing_event(session, events)
         else:
             # handle s3 event from the SQS queue
             s3_processing_event(session, events)
