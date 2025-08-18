@@ -119,7 +119,7 @@ class ScheduledJobLambda(Construct):
                 scope=scope,
                 id=f"ProcessingScheduledJob-{name}",
                 rule_name=f"ProcessingScheduledJob-{name}",
-                description=f"Trigger 'batch starter' scheduled processing job: {name}",
+                description=f"Trigger 'scheduled job' scheduled processing job: {name}",
                 schedule_expression=schedule,
                 enabled=True,
             )
