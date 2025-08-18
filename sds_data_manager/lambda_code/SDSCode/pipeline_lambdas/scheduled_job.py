@@ -12,15 +12,6 @@ from ..database import database as db
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-SCHEDULED_JOBS = {
-    # Expected scheduled job structure:
-    # "glows": [{
-    #     "data_source": "glows",
-    #     "data_type": "l3b",
-    #     "descriptor": "ion-rate-profile"
-    # }],
-}
-
 
 def scheduled_processing_event(session, events):
     """Process events triggerd by EventBridge rules.
@@ -32,22 +23,22 @@ def scheduled_processing_event(session, events):
     events : dict
         Event input from an Event Bridge rule.
     """
-    for job in SCHEDULED_JOBS[events["scheduled"]]:
-        batch_starter.try_to_submit_job(
-            session,
-            job,
-            datetime.datetime(2000, 1, 1),
-            "v001",
-            ProcessingInputCollection().serialize(),
-        )
+    batch_starter.try_to_submit_job(
+        session,
+        events["scheduled"],
+        datetime.datetime(2000, 1, 1),
+        "v001",
+        ProcessingInputCollection().serialize(),
+    )
 
 
 def lambda_handler(events, context):
     """Lambda handler.
 
     This lambda is triggered on a cron schedule.
-    It's passed an ID that is used to look up what
-    data product to process as defined in SCHEDULED_JOBS
+    The event should contain a 'scheduled' field
+    which contains the job instrument, data_level,
+    and descriptor.
 
     Parameters
     ----------

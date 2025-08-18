@@ -11,6 +11,9 @@ from aws_cdk.aws_events_targets import LambdaFunction
 from constructs import Construct
 
 from sds_data_manager.constructs.database_construct import SdpDatabase
+from sds_data_manager.constructs.scheduled_job_config_reader import (
+    read_scheduled_job_config,
+)
 
 
 class ScheduledJobLambda(Construct):
@@ -107,24 +110,30 @@ class ScheduledJobLambda(Construct):
             source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingScheduledJob*",
         )
 
-        scheduled_rules = {
-            # Example:
-            # "glows": "cron(20 6 * * ? *)",
-            # "sp_maps": "cron(20 14 * * ? *)",
-        }
+        scheduled_jobs = read_scheduled_job_config()
 
-        for name, schedule_expression in scheduled_rules.items():
+        for job in scheduled_jobs:
+            schedule = Schedule.expression(job["schedule"])
+            name = f"{job.instrument}-{job.data_level}-{job.descriptor}"
             rule = aws_events.Rule(
                 scope=scope,
                 id=f"ProcessingScheduledJob-{name}",
                 rule_name=f"ProcessingScheduledJob-{name}",
                 description=f"Trigger 'batch starter' scheduled processing job: {name}",
-                schedule_expression=Schedule.expression(schedule_expression),
+                schedule_expression=schedule,
                 enabled=True,
             )
 
             target = LambdaFunction(
                 handler=self.scheduled_job_lambda,
-                event=RuleTargetInput.from_object({"scheduled": name}),
+                event=RuleTargetInput.from_object(
+                    {
+                        "scheduled": {
+                            "data_source": job.instrument,
+                            "data_type": job.data_level,
+                            "descriptor": job.descriptor,
+                        }
+                    }
+                ),
             )
             rule.add_target(target)
