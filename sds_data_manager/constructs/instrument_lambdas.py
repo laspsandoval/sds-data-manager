@@ -235,26 +235,3 @@ class BatchStarterLambda(Construct):
                     )
                 ],
             )
-
-        scheduled_rules = {
-            # Example:
-            # "glows": "cron(20 6 * * ? *)",
-            # "sp_maps": "cron(20 14 * * ? *)",
-        }
-
-        for name, schedule_expression in scheduled_rules.items():
-            aws_events.CfnRule(
-                scope=scope,
-                id=f"ProcessingScheduledJob-{name}",
-                name=f"ProcessingScheduledJob-{name}",
-                description=f"Trigger 'batch starter' scheduled processing job: {name}",
-                schedule_expression=schedule_expression,
-                state="ENABLED",
-                targets=[
-                    aws_events.CfnRule.TargetProperty(
-                        arn=self.instrument_lambda.function_arn,
-                        id=f"{name}",
-                        input=cdk.Fn.sub(f'{{"scheduled": "{name}"}}'),
-                    )
-                ],
-            )
