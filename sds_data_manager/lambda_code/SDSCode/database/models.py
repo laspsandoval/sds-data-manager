@@ -82,6 +82,7 @@ class ProcessingJob(Base):
     descriptor = Column(String, nullable=False)
     start_date = Column(DateTime, nullable=False)
     version = Column(String(8), nullable=False)
+    repointing = Column(Integer, nullable=True)
     # TODO:
     # Didn't make it required field yet. Revisit this
     # post discussion
@@ -96,6 +97,7 @@ class ProcessingJob(Base):
         # Partial unique index to ensure only one INPROGRESS or COMPLETED for a record
         # We do want to allow multiple FAILED records
         # NOTE: This does not work with sqllite (testing) DBs, only postgres
+        # if any columns are null, they are ignored (such as repointing)
         Index(
             "idx_unique_status",
             "instrument",
@@ -103,6 +105,7 @@ class ProcessingJob(Base):
             "descriptor",
             "start_date",
             "version",
+            "repointing",
             unique=True,
             postgresql_where=and_(status.in_(["INPROGRESS", "SUCCEEDED"])),
         ),

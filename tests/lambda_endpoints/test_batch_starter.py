@@ -153,9 +153,10 @@ def test_lambda_handler(session, s3_client):
         mock_submit.assert_called_with(
             session,
             {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"},
-            dt.datetime(2024, 1, 1, 0, 0),
+            "20240101",
             "v002",
             processing_input.serialize(),
+            repoint=None,
         )
 
 
@@ -428,9 +429,10 @@ def test_lambda_handler_ancillary_event(session):
         mock_submit.assert_called_with(
             session,
             {"data_source": "swe", "data_type": "l1b", "descriptor": "sci"},
-            dt.datetime(2026, 3, 3, 0, 0),
+            "20260303",
             "v002",
             json.dumps(inputs),
+            repoint=None,
         )
 
 
@@ -624,7 +626,7 @@ def test_lambda_handler_missing_dependency_for_start_date(session, caplog):
     # Check that the expected message was logged.
     expected_log = (
         "Skipping job submission for {'data_source': 'mag', 'data_type': "
-        "'l2', 'descriptor': 'norm-srf'} with start_date: 20250117 because"
+        "'l2', 'descriptor': 'norm-srf'} with start_date: 20250418 because"
         " of a missing upstream dependency."
     )
     assert expected_log in caplog.text
@@ -941,9 +943,10 @@ def test_ultra_l3_map(session, caplog):
                     "data_type": "l3",
                     "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
                 },
-                dt.datetime(2024, 2, 1, 0, 0),
+                "20240201",
                 "v002",
                 expected_processing_input.serialize(),
+                repoint=None,
             )
 
 
@@ -1177,9 +1180,10 @@ def test_lambda_handler_mag_l1c_case(session):
         mock_submit.assert_called_with(
             session,
             {"data_source": "mag", "data_type": "l1c", "descriptor": "norm-mago"},
-            dt.datetime(2024, 1, 1, 0, 0),
+            "20240101",
             "v003",
             expected_processing_input.serialize(),
+            repoint=None,
         )
 
 
@@ -1485,8 +1489,8 @@ def test_idex_l2b(session):
         mock_submit.assert_called_with(
             session,
             {"data_source": "idex", "data_type": "l2b", "descriptor": "all-1mo"},
-            dt.datetime(2023, 1, 9, 0, 0),
-            "v001",
+            "20230109",
+            "v002",
             expected_processing_input.serialize(),
         )
 

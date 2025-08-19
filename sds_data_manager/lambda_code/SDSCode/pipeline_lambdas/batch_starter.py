@@ -7,16 +7,19 @@ import logging
 import os
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import boto3
 import imap_data_access
 import requests
 from imap_data_access import (
+    VALID_INSTRUMENTS,
     AncillaryFilePath,
     DependencyFilePath,
     ScienceFilePath,
     SPICEFilePath,
 )
+from imap_data_access.processing_input import ProcessingInputType
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -377,9 +380,10 @@ def dependency_hash(serialized_dependencies):
 def try_to_submit_job(
     session: db.Session,
     job_info: dict,
-    start_date: datetime,
+    start_date: str,
     version: str,
     serialized_dependencies: str,
+    repoint: Optional[int] = None,
 ):
     """Try to submit a batch job with the given job information.
 
@@ -389,18 +393,20 @@ def try_to_submit_job(
         Database session.
     job_info : dict
         Dictionary containing components with dates and versions appended.
-    start_date : datetime
-        Start date of the data.
+    start_date : str
+        Start date of the data in the format 'YYYYMMDD'.
     version : str
         Version of the job.
     serialized_dependencies : str
         The serialized ProcessingInputCollection of the upstream
         dependencies.
+    repoint : int, optional
+        The repointing number for the job, if applicable. Default is None. Should
+        be just an integer, no "repoint" prefix.
     """
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
-    start_date_str = datetime.datetime.strftime(start_date, "%Y%m%d")
 
     # Search for any duplicate jobs that have the same exact dependencies for this
     # instrument, data level, descriptor, and start date by checking the CRID.
@@ -412,7 +418,7 @@ def try_to_submit_job(
             instrument,
             data_level,
             descriptor,
-            start_date_str,
+            start_date,
             previous_version,
             serialized_dependencies,
         ):
@@ -421,7 +427,7 @@ def try_to_submit_job(
                 f"{instrument=},"
                 f" {data_level=},"
                 f" {descriptor=},"
-                f" {start_date_str=},"
+                f" {start_date=},"
                 f" and {previous_version=}. "
                 f"Skipping submission."
             )
@@ -439,9 +445,10 @@ def try_to_submit_job(
         instrument=instrument,
         data_level=data_level,
         descriptor=dep_descriptor,
-        start_time=start_date.strftime("%Y%m%d"),
+        start_time=start_date,
         version=version,
         extension="json",
+        repointing=repoint,  # since we can have different repointings on the same day
     )
     dependency_file_path = dependency_file.construct_path()
     response = upload_dependency_file(dependency_file_path, serialized_dependencies)
@@ -458,8 +465,9 @@ def try_to_submit_job(
         instrument=instrument,
         data_level=data_level,
         descriptor=descriptor,
-        start_date=start_date,
+        start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
         version=version,
+        repointing=repoint,
     )
     try:
         session.add(processing_job)
@@ -480,13 +488,16 @@ def try_to_submit_job(
         "--descriptor",
         descriptor,
         "--start-date",
-        start_date_str,
+        start_date,
         "--version",
         version,
         "--dependency",
         dependency_file_path.name,
         "--upload-to-sdc",
     ]
+
+    if repoint is not None:
+        batch_command.extend(["--repointing", f"repoint{repoint}"])
 
     # NOTE: The batch job name should contain only alphanumeric characters and hyphens
     # E.g. "codice-l1a-sci-job-1"
@@ -512,8 +523,8 @@ def try_to_submit_job(
 def submit_all_jobs(
     session,
     job_node,
-    start_date,
-    end_date,
+    trigger_start_date,
+    trigger_end_date,
     calculate_crids=False,
     filter_dependencies=True,
 ):
@@ -524,11 +535,13 @@ def submit_all_jobs(
     session : orm session
         Database session.
     job_node : dict
-        job node to get the potential jobs from.
-    start_date : str
-        Start date to query the data.
-    end_date : str
-        End date to query the data.
+        job node to get the potential jobs from. This is a dictionary with the
+        keys: data_source, data_type, and descriptor. This can ONLY be a science job.
+    trigger_start_date : str
+        The start date of the file that triggered the job in the format 'YYYYMMDD'. This
+        determines the range of potential jobs.
+    trigger_end_date : str
+        The end date of the file that triggered the job in the format 'YYYYMMDD'.
     calculate_crids : bool
         True if the file that triggered the job is a science file, False if it is SPICE
         or ancillary.
@@ -538,10 +551,9 @@ def submit_all_jobs(
         not want to filter any dependencies out, for example, ULTRA l3
         "u90-ena-h-sf-sp-full-hae-4deg-3mo" needs all the psets in the collection.
         Default is set to True.
-
-
     """
     logger.info(f"Finding dependencies for the job node: {job_node}")
+
     # Submit downstream jobs for each upstream primary science dependency file.
     # Find the files that this job depends on
     upstream_dependencies = dependency.get_jobs(
@@ -550,8 +562,8 @@ def submit_all_jobs(
         descriptor=job_node["descriptor"],
         dependency_type="UPSTREAM",
         relationship="ALL",
-        start_date=start_date,
-        end_date=end_date,
+        start_date=trigger_start_date,
+        end_date=trigger_end_date,
         calculate_crids=calculate_crids,
     )
     if not upstream_dependencies:
@@ -571,22 +583,24 @@ def submit_all_jobs(
             session=session,
             instrument=job_node["data_source"],
             descriptor=job_node["descriptor"],
-            start_date=start_date,
+            start_date=datetime.datetime.strptime(trigger_start_date, "%Y%m%d"),
             data_level=job_node["data_type"],
         )
         try_to_submit_job(
             session,
             job_node,
-            datetime.datetime.strptime(start_date, "%Y%m%d"),
+            trigger_start_date,
             job_version,
             upstream_dependencies.serialize(),
         )
         return
 
-    # Find the first science processingInput that has the same source as the
+    # For jobs, we need to use the start date from the primary science file.
+    # this is not necessarily the same as the start date of the trigger file.
+    # Find the first science processingInput that has the same instrument as the
     # potential job. Use this to determine the start date.
-    primary_science_inputs = upstream_dependencies.get_science_inputs(
-        job_node["data_source"]
+    primary_science_inputs = upstream_dependencies.get_processing_inputs(
+        input_type=ProcessingInputType.SCIENCE_FILE, source=job_node["data_source"]
     )
     if not primary_science_inputs:
         logger.info(
@@ -594,18 +608,26 @@ def submit_all_jobs(
             f"primary science files found."
         )
         return
+    # find the primary science
     primary_science = primary_science_inputs[0]
     num_jobs = len(primary_science.imap_file_paths)
     logger.info(f"Found {num_jobs} jobs to process.")
-    for filepath in primary_science.imap_file_paths:
-        job_start_date = datetime.datetime.strptime(filepath.start_date, "%Y%m%d")
+    for filename in primary_science.filename_list:
+        science_file = ScienceFilePath(filename)
+        start_date, end_date = determine_date_range(session, science_file)
+
         job_version = determine_job_version(
             session=session,
             instrument=job_node["data_source"],
             descriptor=job_node["descriptor"],
-            start_date=job_start_date,
+            start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
             data_level=job_node["data_type"],
         )
+
+        # Get the repointing number from the same spot as the time range
+        # Is either a number or None
+        job_repointing = science_file.repointing
+
         # If there is only one file to process, then we can use upstream dependencies
         # that have already been queried.
         if num_jobs > 1 or filter_dependencies:
@@ -617,8 +639,8 @@ def submit_all_jobs(
                 descriptor=job_node["descriptor"],
                 dependency_type="UPSTREAM",
                 relationship="ALL",
-                start_date=filepath.start_date,
-                end_date=filepath.start_date,
+                start_date=start_date,
+                end_date=end_date,
                 calculate_crids=False,
             )
             if not upstream_deps_for_job:
@@ -632,9 +654,10 @@ def submit_all_jobs(
         try_to_submit_job(
             session,
             job_node,
-            job_start_date,
+            start_date,
             job_version,
             upstream_deps_for_job.serialize(),
+            repoint=job_repointing,
         )
 
 
@@ -788,6 +811,8 @@ def s3_processing_event(session, events):
         file_obj = imap_data_access.file_validation.generate_imap_file_path(filename)
         input_obj = imap_data_access.processing_input.generate_imap_input(filename)
 
+        trigger_start_time, trigger_end_time = determine_date_range(session, file_obj)
+
         if input_obj.source == "glows" and input_obj.data_type == "l3e":
             if triggered_from_glows_l3e:
                 logger.info(
@@ -797,9 +822,6 @@ def s3_processing_event(session, events):
                 continue
             else:
                 triggered_from_glows_l3e = True
-
-        # Determine the start and end dates for the upstream query.
-        start_date, end_date = determine_date_range(session, file_obj)
 
         potential_jobs = dependency.get_jobs(
             data_source=input_obj.source,
@@ -833,25 +855,31 @@ def s3_processing_event(session, events):
         # and we want to avoid multiple reprocessing of the same file.
         calculate_crids = isinstance(file_obj, ScienceFilePath)
         for job in potential_jobs + potential_soft_jobs:
+            if job["data_source"] not in VALID_INSTRUMENTS:
+                raise ValueError(
+                    f"Unable to submit job for invalid instrument {job['data_source']}."
+                    f" Downstream dependencies must be science files."
+                )
+
             job.pop("relationship")
-            if job in SPECIAL_CASE_JOBS:
-                start_date, end_date = get_special_case_date_range(
-                    session, job, start_date
+            is_special_case = job in SPECIAL_CASE_JOBS
+
+            if is_special_case:
+                trigger_start_time, trigger_end_time = get_special_case_date_range(
+                    session, job, trigger_start_time
                 )
                 logger.info(
-                    f"Found a special case job: {job}. Using start_date: {start_date}"
+                    f"Using special case date range: "
+                    f"{trigger_start_time} to {trigger_end_time}"
                 )
-                filter_dependencies = False
-            else:
-                filter_dependencies = True
 
             submit_all_jobs(
                 session,
                 job,
-                start_date,
-                end_date,
+                trigger_start_time,
+                trigger_end_time,
                 calculate_crids,
-                filter_dependencies,
+                not is_special_case,  # filter_dependency is determined by special cases
             )
 
         if sqs_queue_url:
@@ -1124,7 +1152,7 @@ def cadence_processing_event(session, events):
             instrument=job_node[0],
             data_level=job_node[1],
             descriptor=job_node[2],
-            start_date=start_date,
+            start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
         )
         # Submit the map job with all of the upstream dependencies in the date range
         node = {
@@ -1135,7 +1163,7 @@ def cadence_processing_event(session, events):
         try_to_submit_job(
             session,
             node,
-            datetime.datetime.strptime(start_date, "%Y%m%d"),
+            start_date,
             job_version,
             upstream_dependencies.serialize(),
         )
