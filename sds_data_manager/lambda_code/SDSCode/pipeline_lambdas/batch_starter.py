@@ -410,6 +410,9 @@ def try_to_submit_job(
         "--upload-to-sdc",
     ]
 
+    if repoint is not None:
+        batch_command.extend(["--repointing", f"repoint{repoint}"])
+
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
     # If this job already exists, then we will get an integrity error
@@ -584,7 +587,7 @@ def submit_all_jobs(
             session=session,
             instrument=job_node["data_source"],
             descriptor=job_node["descriptor"],
-            start_date=start_date,
+            start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
             data_level=job_node["data_type"],
             current_dependency_hash=dependency_hash(serialized_deps),
         )
@@ -1091,7 +1094,7 @@ def cadence_processing_event(session, events):
             data_level=job_node[1],
             descriptor=job_node[2],
             start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
-            current_dependency_hash=serialized_deps,
+            current_dependency_hash=dependency_hash(serialized_deps),
         )
         # Submit the map job with all of the upstream dependencies in the date range
         node = {
