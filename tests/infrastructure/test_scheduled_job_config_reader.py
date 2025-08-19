@@ -1,5 +1,6 @@
 """Tests scheduled job config reader."""
 
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -43,7 +44,7 @@ def test_read_scheduled_job_config_throws_exception_for_unknown_instrument():
 
         config_path.write_text(csv_line1 + csv_line2, encoding="utf-8")
         with patch.object(scheduled_job_config_reader, "CONFIG_PATH", new=config_path):
-            with pytest.raises(ValueError, "Invalid instrument: swapeeee"):
+            with pytest.raises(ValueError, match="Invalid instrument: swapeeee"):
                 scheduled_job_config_reader.read_scheduled_job_config()
 
 
@@ -65,10 +66,10 @@ def test_read_scheduled_job_config_throws_exception_for_wrong_number_of_fields()
                 scheduled_job_config_reader, "CONFIG_PATH", new=config_path
             ):
                 message = (
-                    f"Each scheduled job should have ['schedule', 'instrument', "
+                    "Each scheduled job should have ['schedule', 'instrument', "
                     f"'data_level', 'descriptor']\nCurrent line: {case}"
                 )
-                with pytest.raises(ValueError, match=message):
+                with pytest.raises(ValueError, match=re.escape(message)):
                     scheduled_job_config_reader.read_scheduled_job_config()
 
 
@@ -86,5 +87,5 @@ def test_read_scheduled_job_config_throws_exception_for_unknown_data_level():
         config_path.write_text(csv_line1 + csv_line2, encoding="utf-8")
 
         with patch.object(scheduled_job_config_reader, "CONFIG_PATH", new=config_path):
-            with pytest.raises(ValueError, "Invalid data level: l3bc"):
+            with pytest.raises(ValueError, match="Invalid data level: l3bc"):
                 scheduled_job_config_reader.read_scheduled_job_config()
