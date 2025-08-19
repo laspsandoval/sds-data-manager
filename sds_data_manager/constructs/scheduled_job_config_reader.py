@@ -1,6 +1,6 @@
 """Reader for the scheduled job config file."""
 
-from dataclasses import dataclass
+from collections import defaultdict
 from pathlib import Path
 
 from imap_data_access import VALID_DATALEVELS, VALID_INSTRUMENTS
@@ -8,22 +8,12 @@ from imap_data_access import VALID_DATALEVELS, VALID_INSTRUMENTS
 CONFIG_PATH = Path(__file__).parent / "scheduled_jobs_config.csv"
 
 
-@dataclass
-class ScheduledJobInfo:
-    """Schedule job dataclass."""
-
-    schedule: str
-    instrument: str
-    data_level: str
-    descriptor: str
-
-
-def read_scheduled_job_config() -> list[ScheduledJobInfo]:
+def read_scheduled_job_config() -> dict[str, list[dict]]:
     """Read the scheduled job config.
 
     Returns
     -------
-    List of ScheduledJobInfo objects from the csv.
+    A list of job definitions for each unique schedule.
     """
     header = [
         "schedule",
@@ -32,7 +22,7 @@ def read_scheduled_job_config() -> list[ScheduledJobInfo]:
         "descriptor",
     ]
 
-    scheduled_jobs_info = []
+    scheduled_jobs_info = defaultdict(list)
 
     with open(CONFIG_PATH) as f:
         for line in f:
@@ -45,10 +35,19 @@ def read_scheduled_job_config() -> list[ScheduledJobInfo]:
                 raise ValueError(
                     f"Each scheduled job should have {header}\nCurrent line: {line}"
                 )
-            if contents[1] not in VALID_INSTRUMENTS:
-                raise ValueError(f"Invalid instrument: {contents[1]}")
-            if contents[2] not in VALID_DATALEVELS:
-                raise ValueError(f"Invalid data level: {contents[2]}")
+            [schedule, instrument, data_level, descriptor] = contents
 
-            scheduled_jobs_info.append(ScheduledJobInfo(*contents))
+            if instrument not in VALID_INSTRUMENTS:
+                raise ValueError(f"Invalid instrument: {instrument}")
+            if data_level not in VALID_DATALEVELS:
+                raise ValueError(f"Invalid data level: {data_level}")
+
+            scheduled_jobs_info[schedule].append(
+                {
+                    "data_source": instrument,
+                    "data_type": data_level,
+                    "descriptor": descriptor,
+                }
+            )
+
     return scheduled_jobs_info

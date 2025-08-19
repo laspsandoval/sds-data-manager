@@ -112,28 +112,18 @@ class ScheduledJobLambda(Construct):
 
         scheduled_jobs = read_scheduled_job_config()
 
-        for job in scheduled_jobs:
-            schedule = Schedule.expression(job["schedule"])
-            name = f"{job.instrument}-{job.data_level}-{job.descriptor}"
+        for schedule in scheduled_jobs.keys():
             rule = aws_events.Rule(
                 scope=scope,
-                id=f"ProcessingScheduledJob-{name}",
-                rule_name=f"ProcessingScheduledJob-{name}",
-                description=f"Trigger 'scheduled job' scheduled processing job: {name}",
-                schedule_expression=schedule,
+                id=f"ProcessingScheduledJob-{schedule}",
+                rule_name=f"ProcessingScheduledJob-{schedule}",
+                description=f"Trigger scheduled processing job: {schedule}",
+                schedule_expression=Schedule.expression(schedule),
                 enabled=True,
             )
 
             target = LambdaFunction(
                 handler=self.scheduled_job_lambda,
-                event=RuleTargetInput.from_object(
-                    {
-                        "scheduled": {
-                            "data_source": job.instrument,
-                            "data_type": job.data_level,
-                            "descriptor": job.descriptor,
-                        }
-                    }
-                ),
+                event=RuleTargetInput.from_object({"scheduled": schedule}),
             )
             rule.add_target(target)

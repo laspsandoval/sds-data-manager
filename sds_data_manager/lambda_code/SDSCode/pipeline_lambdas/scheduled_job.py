@@ -5,6 +5,9 @@ import logging
 
 from imap_data_access import ProcessingInputCollection
 
+from sds_data_manager.constructs.scheduled_job_config_reader import (
+    read_scheduled_job_config,
+)
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter
 
 from ..database import database as db
@@ -23,13 +26,16 @@ def scheduled_processing_event(session, events):
     events : dict
         Event input from an Event Bridge rule.
     """
-    batch_starter.try_to_submit_job(
-        session,
-        events["scheduled"],
-        datetime.datetime(2000, 1, 1),
-        "v001",
-        ProcessingInputCollection().serialize(),
-    )
+    triggered_jobs = read_scheduled_job_config()[events["scheduled"]]
+
+    for job in triggered_jobs:
+        batch_starter.try_to_submit_job(
+            session,
+            job,
+            datetime.datetime(2000, 1, 1),
+            "v001",
+            ProcessingInputCollection().serialize(),
+        )
 
 
 def lambda_handler(events, context):
