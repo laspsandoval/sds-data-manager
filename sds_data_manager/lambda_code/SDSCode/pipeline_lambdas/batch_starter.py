@@ -897,8 +897,8 @@ def bulk_reprocessing_event(session, events):
         potential_jobs = [
             {
                 "data_source": instrument,
-                "descriptor": descriptor,
                 "data_type": data_level,
+                "descriptor": descriptor,
             }
         ]
     else:
@@ -924,7 +924,7 @@ def bulk_reprocessing_event(session, events):
         if job in SPECIAL_CASE_JOBS:
             handle_special_case_reprocessing_jobs(session, job, start_date, end_date)
         elif (
-            tuple(job.values()) in DEPENDENCY_CONFIG.get_cadence_jobs()
+            job in DEPENDENCY_CONFIG.get_cadence_jobs()
             or job["descriptor"] in CadenceDays.valid_cadence_str()
         ):
             cadence_reprocessing_event(session, job, start_date, end_date)
@@ -1002,9 +1002,10 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
     if job["descriptor"] in CadenceDays.valid_cadence_str():
         cadence_str = job["descriptor"]
         potential_jobs = [
-            {"data_source": ds, "data_type": dt, "descriptor": desc}
-            for ds, dt, desc in DEPENDENCY_CONFIG.get_cadence_jobs(cadence_str)
-            if ds == job["data_source"] and dt == job["data_type"]
+            node
+            for node in DEPENDENCY_CONFIG.get_cadence_jobs(cadence_str)
+            if node["data_source"] == job["data_source"]
+            and ["data_type"] == job["data_type"]
         ]
     else:
         cadence_str = job["descriptor"].split("-")[-1]
@@ -1085,12 +1086,9 @@ def cadence_processing_event(
         if not cadence:
             raise ValueError("Cadence event must include 'cadence' key.")
         # Get jobs for specified cadence. Sort them for testing purposes.
-        potential_jobs = [
-            {"data_source": ds, "data_type": dt, "descriptor": desc}
-            for ds, dt, desc in sorted(
-                DEPENDENCY_CONFIG.get_cadence_jobs(cadence), key=lambda x: x[2]
-            )
-        ]
+        potential_jobs = sorted(
+            DEPENDENCY_CONFIG.get_cadence_jobs(cadence), key=lambda x: x["descriptor"]
+        )
         logger.info(
             f"Found {len(potential_jobs)} potential cadence jobs: {potential_jobs}"
         )

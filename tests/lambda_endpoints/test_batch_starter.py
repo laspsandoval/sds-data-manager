@@ -1480,7 +1480,7 @@ def test_idex_l2b(session):
             "end_date": "20231209",
             "instrument": "idex",
             "data_level": "l2b",
-            "descriptor": "1mo",
+            "descriptor": "all-1mo",
         }
     }
     # Move ProcessingJob from in progress to succeeded to mimic the pipeline.

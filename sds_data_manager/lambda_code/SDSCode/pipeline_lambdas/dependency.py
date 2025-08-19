@@ -387,9 +387,9 @@ class DependencyConfig:
         # or "1yr" strings as the last part of the descriptor.
         cadences = [cadence] if cadence else ["1mo", "3mo", "6mo", "1yr"]
         return [
-            node
-            for node in self.get_all_nodes("DOWNSTREAM")
-            if node[1] in ["l2", "l2b"] and node[2].split("-")[-1] in cadences
+            {"data_source": ds, "data_type": dt, "descriptor": des}
+            for ds, dt, des in self.get_all_nodes("DOWNSTREAM")
+            if dt in ["l2", "l2b"] and des.split("-")[-1] in cadences
         ]
 
 
