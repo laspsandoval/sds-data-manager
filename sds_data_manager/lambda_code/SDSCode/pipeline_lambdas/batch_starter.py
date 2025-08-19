@@ -1005,7 +1005,7 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
             node
             for node in DEPENDENCY_CONFIG.get_cadence_jobs(cadence_str)
             if node["data_source"] == job["data_source"]
-            and ["data_type"] == job["data_type"]
+            and node["data_type"] == job["data_type"]
         ]
     else:
         cadence_str = job["descriptor"].split("-")[-1]
