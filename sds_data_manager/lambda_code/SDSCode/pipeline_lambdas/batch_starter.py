@@ -153,7 +153,7 @@ def determine_job_version(
     data_level: str,
     descriptor: str,
     start_date: datetime,
-    current_dependency_hash: str,
+    current_dependencies: str,
 ) -> str:
     """Return the maximum existing file version in the pipeline increased by one.
 
@@ -169,8 +169,8 @@ def determine_job_version(
         Data descriptor.
     start_date : datetime
         Start date.
-    current_dependency_hash : str
-        The hash of the serialized dependencies for the current job.
+    current_dependencies : str
+        Serialized dependencies for the current job.
 
     Returns
     -------
@@ -209,7 +209,7 @@ def determine_job_version(
         # we should bump the version number and continue with processing.
         if max_version_record.status == models.Status.INPROGRESS:
             command = max_version_record.container_command
-            if current_dependency_hash in command:
+            if dependency_hash(current_dependencies) in command:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
                 return max_version
@@ -518,7 +518,7 @@ def submit_all_jobs(
             descriptor=job_node["descriptor"],
             start_date=start_date,
             data_level=job_node["data_type"],
-            current_dependency_hash=dependency_hash(serialized_deps),
+            current_dependencies=serialized_deps,
         )
         try_to_submit_job(
             session,
@@ -575,7 +575,7 @@ def submit_all_jobs(
             descriptor=job_node["descriptor"],
             start_date=job_start_date,
             data_level=job_node["data_type"],
-            current_dependency_hash=dependency_hash(serialized_deps),
+            current_dependencies=serialized_deps,
         )
         try_to_submit_job(
             session,
@@ -1046,7 +1046,7 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
             cadence_processing_event(
                 session,
                 events=None,
-                job_node=job_node,
+                job=job_node,
                 start_date=start_date,
                 end_date=end_date,
             )
@@ -1181,7 +1181,7 @@ def cadence_processing_event(
             data_level=data_level,
             descriptor=descriptor,
             start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
-            current_dependency_hash=serialized_deps,
+            current_dependencies=serialized_deps,
         )
         # Submit the map job with all of the upstream dependencies in the date range
         try_to_submit_job(
