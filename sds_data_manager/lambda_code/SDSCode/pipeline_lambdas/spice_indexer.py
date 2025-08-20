@@ -111,10 +111,15 @@ def get_coverage_dictionary(spice_file: Path, **kwargs):
     results_sclk = []
     results_datetime = []
 
+    # TODO: add handler for earth attitude .bpc files
     if spice_file.suffix == ".bc":
         coverage_function = spiceypy.ckcov
     elif spice_file.suffix == ".bsp":
         coverage_function = spiceypy.spkcov
+    elif spice_file.suffix == ".bpc":
+        # TODO: uncomment once scipy releases
+        # coverage_function = spiceypy.pckcov
+        pass
     else:
         raise ValueError(
             f"Unable to handle spice file with the extension {spice_file.suffix}."
@@ -176,7 +181,11 @@ def _upsert_into_spice_table(
     """
     # Format the data to insert
     filename = str(spice_object.filename.name)
-    version = spice_object.spice_metadata["version"]
+    # earth attitude kernel doesn't have version.
+    if spice_object.spice_metadata["type"] == "earth_attitude":
+        version = "1"
+    else:
+        version = spice_object.spice_metadata["version"]
     spice_params = {
         "file_path": s3_key,
         "file_name": filename,
@@ -306,6 +315,8 @@ def index_spice_file(s3_key: str):
                 function_arguments["level"] = COVERAGE_LEVEL
                 function_arguments["tol"] = COVERAGE_TOLERANCE
                 function_arguments["timsys"] = COVERAGE_TIME_SYSTEM
+            if spice_metadata["type"] in ["earth_attitude"]:
+                function_arguments["idcode"] = 3000
             file_coverage_j2000, file_coverage_datetime, file_coverage_sclk = (
                 get_coverage_dictionary(spice_file, **function_arguments)
             )
