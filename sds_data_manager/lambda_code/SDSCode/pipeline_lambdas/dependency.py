@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
-from ..database.models import AncillaryFiles, ScienceFiles
+from ..database.models import AncillaryFiles
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -703,7 +703,7 @@ def get_upstream_versions(session, record, versions) -> dict:
     """
     # Make a copy of the dictionary to avoid modifying the original
     versions = versions.copy()
-    if not isinstance(record, ScienceFiles):
+    if not isinstance(record, models.ScienceFiles):
         # Only science files have upstream dependencies.
         return versions
 
@@ -718,6 +718,8 @@ def get_upstream_versions(session, record, versions) -> dict:
         "ALL",
     )
     for upstream_dep in upstream_deps:
+        if upstream_dep["data_source"] not in imap_data_access.VALID_INSTRUMENTS:
+            continue
         upstream_records = get_files(
             session,
             upstream_dep,
