@@ -19,7 +19,8 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
-from ..database.models import AncillaryFiles
+from ..database.models import AncillaryFiles, ScienceFiles
+from . import VALID_CADENCE_STRS
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -385,11 +386,15 @@ class DependencyConfig:
         """
         # Cadence jobs are only at data level l2 and contain either "1mo", "3mo", "6mo",
         # or "1yr" strings as the last part of the descriptor.
-        cadences = [cadence] if cadence else ["1mo", "3mo", "6mo", "1yr"]
+        cadences = [cadence] if cadence else VALID_CADENCE_STRS
         return [
-            {"data_source": ds, "data_type": dt, "descriptor": des}
-            for ds, dt, des in self.get_all_nodes("DOWNSTREAM")
-            if dt in ["l2", "l2b"] and des.split("-")[-1] in cadences
+            {
+                "data_source": data_source,
+                "data_type": data_type,
+                "descriptor": descriptor,
+            }
+            for data_source, data_type, descriptor in self.get_all_nodes("DOWNSTREAM")
+            if data_type in ["l2", "l2b"] and descriptor.split("-")[-1] in cadences
         ]
 
 

@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
-from . import dependency
+from . import VALID_CADENCE_STRS, dependency
 from .dependency import DependencyConfig, get_jobs
 
 # Logger setup
@@ -118,7 +118,7 @@ class CadenceDays(float, Enum):
     @staticmethod
     def valid_cadence_str():
         """Get a list of valid cadence strings."""
-        return ["1mo", "3mo", "6mo", "1yr"]
+        return VALID_CADENCE_STRS
 
     @classmethod
     def str_lookup(cls, cadence_str: str):
@@ -1014,9 +1014,10 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
     for job_node in potential_jobs:
         # get the upstream dependencies for the reprocessing date range
 
-        # Get all the start dates for the processing jobs that match the job node.
+        # Get all the start dates for the existing processing jobs that match the job
+        # node.
         table = models.ProcessingJob
-        dates = [
+        processed_start_dates = [
             row[0]
             for row in (
                 session.query(models.ProcessingJob.start_date).filter(
@@ -1026,20 +1027,22 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
                     table.start_date
                     >= datetime.datetime.strptime(start_date, "%Y%m%d"),
                     table.start_date <= datetime.datetime.strptime(end_date, "%Y%m%d"),
-                    table.status.in_(
-                        [models.Status.INPROGRESS.value, models.Status.SUCCEEDED.value]
-                    ),
                 )
             ).all()
         ]
-
-        if not dates:
+        # Processed start dates are the dates of jobs that have already been processed
+        # In the given date range. If there are no processed start dates, then
+        if not processed_start_dates:
+            logger.info(
+                f"No previously processed jobs found for: {job_node}, skipping."
+            )
             continue
         logger.info(
-            f"Handling cadence reprocessing. Found {len(dates)} files to reprocess."
+            f"Handling cadence reprocessing. Found {len(processed_start_dates)} files "
+            f"to reprocess for job: {job_node}."
         )
-        for date in list(set(dates)):
-            # For each file to reprocess we need to determine the correct
+        for date in list(set(processed_start_dates)):
+            # For each file to reprocess, we need to determine the correct
             # start and end date to use for the map job.
             start_date, end_date = cadence_to_datetime_range(
                 cadence_str, date, as_str=True
