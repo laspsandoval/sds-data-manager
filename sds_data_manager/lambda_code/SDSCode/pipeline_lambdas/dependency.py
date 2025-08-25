@@ -19,7 +19,7 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
-from ..database.models import AncillaryFiles, ScienceFiles
+from ..database.models import AncillaryFiles
 from . import VALID_CADENCE_STRS
 
 # Logger setup
