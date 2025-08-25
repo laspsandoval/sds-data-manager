@@ -1033,17 +1033,8 @@ def cadence_reprocessing_event(session, job, start_date, end_date):
         # Processed start dates are the dates of jobs that have already been processed
         # in the given date range. If there are no processed start dates for this job,
         # skip reprocessing for this specific job node, but continue checking other
-        # jobs. For example, if there are no jobs for ultra l2 6mo, we still want to
-        # attempt to reprocess lo l2 6mo or other valid jobs.
-        if not processed_start_dates:
-            logger.info(
-                f"No previously processed jobs found for: {job_node}, skipping."
-            )
-            continue
-        logger.info(
-            f"Handling cadence reprocessing. Found {len(processed_start_dates)} files "
-            f"to reprocess for job: {job_node}."
-        )
+        # jobs. For example, if there are no jobs for ultra,l2,"...4deg-3mo",
+        # we still want to attempt to reprocess ultra,l2,"...6deg-3mo" maps.
         if not processed_start_dates:
             logger.info(
                 f"No previously processed jobs found for: {job_node}, skipping."
