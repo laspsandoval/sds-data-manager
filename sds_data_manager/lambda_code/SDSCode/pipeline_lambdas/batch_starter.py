@@ -7,6 +7,7 @@ import logging
 import os
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import boto3
 import imap_data_access
@@ -23,13 +24,14 @@ from sqlalchemy.exc import IntegrityError
 from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
-from . import dependency
+from . import VALID_CADENCE_STRS, dependency
 from .dependency import DependencyConfig, get_jobs
 
 # Logger setup
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+DEPENDENCY_CONFIG = DependencyConfig()
 # Create a batch client
 BATCH_CLIENT = boto3.client("batch", region_name="us-west-2")
 # Define the retry strategy for batch jobs
@@ -66,7 +68,7 @@ SPECIAL_CASE_JOBS = [
 
 
 def cadence_to_datetime_range(
-    cadence: str, as_str: bool = False
+    cadence: str, start_date: Optional[datetime] = None, as_str: Optional[bool] = False
 ) -> tuple[datetime, datetime] | tuple[str, str]:
     """Convert the cadence to a datetime range.
 
@@ -74,6 +76,9 @@ def cadence_to_datetime_range(
     ----------
     cadence : str
         The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
+    start_date : datetime, optional
+        The start date for the cadence. This is used to calculate the end date. If
+        not provided, the end date will be set to today. Default is None.
     as_str : bool
         If True, return the start and end dates as strings. Default is False.
 
@@ -82,16 +87,19 @@ def cadence_to_datetime_range(
     tuple(datetime, datetime)
         The start date and end date of the cadence. The end_date is set to today
     """
-    end_date = datetime.datetime.today()
-    # Find the start date by subtracting the number of days in the cadence from the end
-    # date. Subtract one day from the number of days in the cadence because the query in
-    # dependency.py get_files() is inclusive for both the start and end date.
-    # To avoid overlapping data by one day, we essentially bump the start date up by
-    # one.
-    start_date = end_date - datetime.timedelta(
-        days=CadenceDays.str_lookup(cadence).value
-        - 1  # subtract one day from cadence days
-    )
+    # Subtract one day from the number of days in the cadence because the query in
+    # dependency.py get_files() is inclusive for both the start and end date. This is
+    # done to avoid overlapping data by one day.
+    num_days = CadenceDays.str_lookup(cadence).value - 1
+    if start_date:
+        # Find the end date by adding the number of days in the cadence to the start
+        # date.
+        end_date = start_date + datetime.timedelta(days=num_days)
+    else:
+        end_date = datetime.datetime.today()
+        # Find the start date by subtracting the number of days in the cadence from the
+        # end date.
+        start_date = end_date - datetime.timedelta(days=num_days)
     if as_str:
         start_date = start_date.strftime("%Y%m%d")
         end_date = end_date.strftime("%Y%m%d")
@@ -110,7 +118,7 @@ class CadenceDays(float, Enum):
     @staticmethod
     def valid_cadence_str():
         """Get a list of valid cadence strings."""
-        return ["1mo", "3mo", "6mo", "1yr"]
+        return VALID_CADENCE_STRS
 
     @classmethod
     def str_lookup(cls, cadence_str: str):
@@ -145,7 +153,7 @@ def determine_job_version(
     data_level: str,
     descriptor: str,
     start_date: datetime,
-    current_dependency_hash: str,
+    current_dependencies: str,
 ) -> str:
     """Return the maximum existing file version in the pipeline increased by one.
 
@@ -161,8 +169,8 @@ def determine_job_version(
         Data descriptor.
     start_date : datetime
         Start date.
-    current_dependency_hash : str
-        The hash of the serialized dependencies for the current job.
+    current_dependencies : str
+        Serialized dependencies for the current job.
 
     Returns
     -------
@@ -201,7 +209,7 @@ def determine_job_version(
         # we should bump the version number and continue with processing.
         if max_version_record.status == models.Status.INPROGRESS:
             command = max_version_record.container_command
-            if current_dependency_hash in command:
+            if dependency_hash(current_dependencies) in command:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
                 return max_version
@@ -476,8 +484,6 @@ def submit_all_jobs(
         not want to filter any dependencies out, for example, ULTRA l3
         "u90-ena-h-sf-sp-full-hae-4deg-3mo" needs all the psets in the collection.
         Default is set to True.
-
-
     """
     logger.info(f"Finding dependencies for the job node: {job_node}")
     # Submit downstream jobs for each upstream primary science dependency file.
@@ -512,7 +518,7 @@ def submit_all_jobs(
             descriptor=job_node["descriptor"],
             start_date=start_date,
             data_level=job_node["data_type"],
-            current_dependency_hash=dependency_hash(serialized_deps),
+            current_dependencies=serialized_deps,
         )
         try_to_submit_job(
             session,
@@ -569,7 +575,7 @@ def submit_all_jobs(
             descriptor=job_node["descriptor"],
             start_date=job_start_date,
             data_level=job_node["data_type"],
-            current_dependency_hash=dependency_hash(serialized_deps),
+            current_dependencies=serialized_deps,
         )
         try_to_submit_job(
             session,
@@ -866,7 +872,6 @@ def bulk_reprocessing_event(session, events):
     events : dict
         Event input.
     """
-    # TODO: We need s3 tag or column in db to track bulk reprocessing
     instrument = events.get("instrument")
     data_level = events.get("data_level")
     descriptor = events.get("descriptor")
@@ -892,8 +897,8 @@ def bulk_reprocessing_event(session, events):
         potential_jobs = [
             {
                 "data_source": instrument,
-                "descriptor": descriptor,
                 "data_type": data_level,
+                "descriptor": descriptor,
             }
         ]
     else:
@@ -918,6 +923,11 @@ def bulk_reprocessing_event(session, events):
     for job in potential_jobs:
         if job in SPECIAL_CASE_JOBS:
             handle_special_case_reprocessing_jobs(session, job, start_date, end_date)
+        elif (
+            job in DEPENDENCY_CONFIG.get_cadence_jobs()
+            or job["descriptor"] in CadenceDays.valid_cadence_str()
+        ):
+            cadence_reprocessing_event(session, job, start_date, end_date)
         else:
             submit_all_jobs(session, job, start_date, end_date)
 
@@ -975,7 +985,87 @@ def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: 
         return None
 
 
-def cadence_processing_event(session, events):
+def cadence_reprocessing_event(session, job, start_date, end_date):
+    """Handle reprocessing of cadence jobs.
+
+    Parameters
+    ----------
+    session : orm session
+        Database session.
+    job : dict
+        Job node containing data source, data type, and descriptor.
+    start_date : str
+        Start date for the reprocessing job in the format YYYYMMDD.
+    end_date : str
+        End date for the reprocessing job in the format YYYYMMDD.
+    """
+    if job["descriptor"] in CadenceDays.valid_cadence_str():
+        cadence_str = job["descriptor"]
+        potential_jobs = [
+            node
+            for node in DEPENDENCY_CONFIG.get_cadence_jobs(cadence_str)
+            if node["data_source"] == job["data_source"]
+            and node["data_type"] == job["data_type"]
+        ]
+    else:
+        cadence_str = job["descriptor"].split("-")[-1]
+        potential_jobs = [job]
+    logger.info(f"Reprocessing cadence jobs: {potential_jobs}")
+    for job_node in potential_jobs:
+        # get the upstream dependencies for the reprocessing date range
+
+        # Get all the start dates for the existing processing jobs that match the job
+        # node.
+        table = models.ProcessingJob
+        processed_start_dates = [
+            row[0]
+            for row in (
+                session.query(models.ProcessingJob.start_date).filter(
+                    table.instrument == job_node["data_source"],
+                    table.data_level == job_node["data_type"],
+                    table.descriptor == job_node["descriptor"],
+                    table.start_date
+                    >= datetime.datetime.strptime(start_date, "%Y%m%d"),
+                    table.start_date <= datetime.datetime.strptime(end_date, "%Y%m%d"),
+                )
+            ).all()
+        ]
+        # Processed start dates are the dates of jobs that have already been processed
+        # in the given date range. If there are no processed start dates for this job,
+        # skip reprocessing for this specific job node, but continue checking other
+        # jobs. For example, if there are no jobs for ultra,l2,"...4deg-3mo",
+        # we still want to attempt to reprocess ultra,l2,"...6deg-3mo" maps.
+        if not processed_start_dates:
+            logger.info(
+                f"No previously processed jobs found for: {job_node}, skipping."
+            )
+            continue
+        logger.info(
+            f"Handling cadence reprocessing. Found {len(processed_start_dates)} files "
+            f"to reprocess for job: {job_node}."
+        )
+        for date in list(set(processed_start_dates)):
+            # For each file to reprocess, we need to determine the correct
+            # start and end date to use for the map job.
+            start_date, end_date = cadence_to_datetime_range(
+                cadence_str, date, as_str=True
+            )
+            cadence_processing_event(
+                session,
+                events=None,
+                job=job_node,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+
+def cadence_processing_event(
+    session,
+    events: Optional[dict] = None,
+    job: Optional[dict] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
     """Process events triggerd by EventBridge rules.
 
     Parameters
@@ -983,54 +1073,81 @@ def cadence_processing_event(session, events):
     session : orm session
         Database session.
     events : dict
-        Event input from an Event Bridge rule.
+        Event input from an Event Bridge rule. This is used when the event is triggered
+        by an event bridge rule. If not supplied, then job_node, start_date, and
+        end_date must be provided. Default is None.
+    job : dict
+        Job node including data source, data type, and descriptor. Default is None.
+    start_date : str
+        Start date for the job in the format YYYYMMDD. Default is None.
+    end_date : str
+        End date for the job in the format YYYYMMDD. Default is None.
     """
-    cadence = events.get("cadence")
-    # TODO: remove start_date and end_date handling after SIT-4.
-    start_date = events.get("start_date")
-    end_date = events.get("end_date")
-    logger.info(f"A cadence event was triggered with the parameters: {cadence=}")
-    if not cadence:
-        raise ValueError("Cadence event must include 'cadence' key.")
-    dep_config = DependencyConfig()
-    # Get jobs for specified cadence. Sort them for testing purposes.
-    potential_jobs = sorted(dep_config.get_cadence_jobs(cadence), key=lambda x: x[2])
-    logger.info(f"Found {len(potential_jobs)} potential cadence jobs: {potential_jobs}")
-    # Get the start and end dates for this job
-    if not start_date and not end_date:
-        start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
-    elif not start_date or not end_date:
-        raise ValueError(
-            "Cadence event must include both 'start_date' and 'end_date' if either is"
-            " provided."
+    if events:
+        cadence = events.get("cadence")
+        # TODO: remove start_date and end_date handling after SIT-4.
+        start_date = events.get("start_date")
+        end_date = events.get("end_date")
+        logger.info(f"A cadence event was triggered with the parameters: {cadence=}")
+        if not cadence:
+            raise ValueError("Cadence event must include 'cadence' key.")
+        # Get jobs for specified cadence. Sort them for testing purposes.
+        potential_jobs = sorted(
+            DEPENDENCY_CONFIG.get_cadence_jobs(cadence), key=lambda x: x["descriptor"]
         )
+        logger.info(
+            f"Found {len(potential_jobs)} potential cadence jobs: {potential_jobs}"
+        )
+        # Get the start and end dates for this job
+        if not start_date and not end_date:
+            start_date, end_date = cadence_to_datetime_range(cadence, as_str=True)
+        elif not start_date or not end_date:
+            raise ValueError(
+                "Cadence event must include both 'start_date' and 'end_date' if either "
+                "is provided."
+            )
+        reprocessing = False
+    else:
+        potential_jobs = [job]
+        reprocessing = True
+
     logger.info(f"Using {start_date=} and {end_date=} for cadence jobs.")
 
     for job_node in potential_jobs:
-        if job_node[0] == "idex" and job_node[1] == "l2b":
+        instrument = job_node["data_source"]
+        data_level = job_node["data_type"]
+        descriptor = job_node["descriptor"]
+        if instrument == "idex" and data_level == "l2b":
             # IDEX l2b jobs are dependent on idex l1b evt housekeeping files. The job
             # should be offset by 1 month to allow for all the event message
-            # packets to be processed for the corresponding l2a files. L2b jobs also
+            # packets to be processed for the corresponding l2a files (This should only
+            # be done for first version products). L2b jobs also
             # depend on l1b evt housekeeping files that might be before the cadence job
             # start date. To account for this, we will query for all the l1b evt files
             # including those two weeks before the cadence job start date. This should
             # ensure that all the l1b evt files are available for the l2b job.
-            offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
+            if not reprocessing:
+                offset_1month = datetime.timedelta(days=CadenceDays.ONE_MONTH)
+                start_date = (
+                    datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
+                )
+                end_date = (
+                    datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
+                ).strftime("%Y%m%d")
             start_date = (
-                datetime.datetime.strptime(start_date, "%Y%m%d") - offset_1month
+                datetime.datetime.strptime(start_date, "%Y%m%d")
+                if isinstance(start_date, str)
+                else start_date
             )
-            end_date = (
-                datetime.datetime.strptime(end_date, "%Y%m%d") - offset_1month
-            ).strftime("%Y%m%d")
             # Subtract two weeks from the start date to get all the necessary hk files.
             l1b_evt_start_date = (start_date - datetime.timedelta(weeks=2)).strftime(
                 "%Y%m%d"
             )
             start_date = start_date.strftime("%Y%m%d")
             upstream_extended_idex_deps = dependency.get_jobs(
-                data_source=job_node[0],
-                data_type=job_node[1],
-                descriptor=job_node[2],
+                data_source=instrument,
+                data_type=data_level,
+                descriptor=descriptor,
                 dependency_type="UPSTREAM",
                 relationship="ALL",
                 start_date=l1b_evt_start_date,
@@ -1046,9 +1163,9 @@ def cadence_processing_event(session, events):
             additional_input = None
 
         upstream_dependencies = dependency.get_jobs(
-            data_source=job_node[0],
-            data_type=job_node[1],
-            descriptor=job_node[2],
+            data_source=instrument,
+            data_type=data_level,
+            descriptor=descriptor,
             dependency_type="UPSTREAM",
             relationship="ALL",
             start_date=start_date,
@@ -1064,21 +1181,16 @@ def cadence_processing_event(session, events):
         serialized_deps = upstream_dependencies.serialize()
         job_version = determine_job_version(
             session=session,
-            instrument=job_node[0],
-            data_level=job_node[1],
-            descriptor=job_node[2],
-            start_date=start_date,
-            current_dependency_hash=serialized_deps,
+            instrument=instrument,
+            data_level=data_level,
+            descriptor=descriptor,
+            start_date=datetime.datetime.strptime(start_date, "%Y%m%d"),
+            current_dependencies=serialized_deps,
         )
         # Submit the map job with all of the upstream dependencies in the date range
-        node = {
-            "data_source": job_node[0],
-            "data_type": job_node[1],
-            "descriptor": job_node[2],
-        }
         try_to_submit_job(
             session,
-            node,
+            job_node,
             datetime.datetime.strptime(start_date, "%Y%m%d"),
             job_version,
             serialized_deps,
