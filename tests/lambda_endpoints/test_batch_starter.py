@@ -1231,9 +1231,40 @@ def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
         ]
     }
     context = {"context": "sample_context"}
+
+    # Mock the database constraint that prevents duplicate ProcessingJob records
+    # The real database uses PostgreSQL constraints, but tests use SQLite which doesn't
+    # support them
+    original_add = session.add
+
+    def mock_add(obj):
+        if isinstance(obj, ProcessingJob):
+            # Check for duplicate based on unique constraint fields in the actual
+            # session
+            existing_jobs = (
+                session.query(ProcessingJob)
+                .filter(
+                    ProcessingJob.instrument == obj.instrument,
+                    ProcessingJob.data_level == obj.data_level,
+                    ProcessingJob.descriptor == obj.descriptor,
+                    ProcessingJob.start_date == obj.start_date,
+                    ProcessingJob.version == obj.version,
+                    ProcessingJob.repointing == obj.repointing,
+                    ProcessingJob.status.in_(["INPROGRESS", "SUCCEEDED"]),
+                )
+                .all()
+            )
+
+            if existing_jobs:
+                raise IntegrityError(
+                    "duplicate key value violates unique constraint", None, None
+                )
+        return original_add(obj)
+
     with (
         patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
         patch.object(batch_starter, "generate_queue_url", return_value=False),
+        patch.object(session, "add", side_effect=mock_add),
     ):
         lambda_handler(events, context)
         # Verify the function was called
