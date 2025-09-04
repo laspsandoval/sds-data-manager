@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -204,9 +205,16 @@ def determine_job_version(
         # we should bump the version number and continue with processing.
         if max_version_record.status == models.Status.INPROGRESS:
             command = max_version_record.container_command
-            if current_dependency_hash in command:
+            # Extract the dependency hash from the existing job's command
+            dependency_pattern = r"--dependency\s+\S*-([a-f0-9]{8})_\d{8}_v\d{3}\.json"
+            match = re.search(dependency_pattern, command)
+            if match and match.group(1) == current_dependency_hash:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
+                logger.info(
+                    "Job already completed or in progress: duplicate dependency hash "
+                    "found"
+                )
                 return max_version
             logger.info(
                 f"Job with id: {max_version_record.id} is in progress, but the "
