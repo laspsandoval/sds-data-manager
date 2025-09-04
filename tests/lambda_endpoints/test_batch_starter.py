@@ -1231,40 +1231,9 @@ def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
         ]
     }
     context = {"context": "sample_context"}
-
-    # Mock the database constraint that prevents duplicate ProcessingJob records
-    # The real database uses PostgreSQL constraints, but tests use SQLite which doesn't
-    # support them
-    original_add = session.add
-
-    def mock_add(obj):
-        if isinstance(obj, ProcessingJob):
-            # Check for duplicate based on unique constraint fields in the actual
-            # session
-            existing_jobs = (
-                session.query(ProcessingJob)
-                .filter(
-                    ProcessingJob.instrument == obj.instrument,
-                    ProcessingJob.data_level == obj.data_level,
-                    ProcessingJob.descriptor == obj.descriptor,
-                    ProcessingJob.start_date == obj.start_date,
-                    ProcessingJob.version == obj.version,
-                    ProcessingJob.repointing == obj.repointing,
-                    ProcessingJob.status.in_(["INPROGRESS", "SUCCEEDED"]),
-                )
-                .all()
-            )
-
-            if existing_jobs:
-                raise IntegrityError(
-                    "duplicate key value violates unique constraint", None, None
-                )
-        return original_add(obj)
-
     with (
         patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client,
         patch.object(batch_starter, "generate_queue_url", return_value=False),
-        patch.object(session, "add", side_effect=mock_add),
     ):
         lambda_handler(events, context)
         # Verify the function was called
@@ -1507,6 +1476,47 @@ def test_idex_l2b(session):
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
+    # Assert that reprocessing the cadence file works as expected
+    reprocessing_event = {
+        "queryStringParameters": {
+            "reprocessing": "True",
+            "start_date": "20230101",
+            "end_date": "20231209",
+            "instrument": "idex",
+            "data_level": "l2b",
+            "descriptor": "all-1mo",
+        }
+    }
+    # Move ProcessingJob from in progress to succeeded to mimic the pipeline.
+    processing_job_record = session.query(models.ProcessingJob).first()
+    processing_job_record.status = models.Status.SUCCEEDED
+    session.commit()
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(reprocessing_event, None)
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="idex-l2b-all-1mo-job-2",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-idex",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "idex",
+                    "--data-level",
+                    "l2b",
+                    "--descriptor",
+                    "all-1mo",
+                    "--start-date",
+                    "20230109",
+                    "--version",
+                    "v002",
+                    "--dependency",
+                    "imap_idex_l2b_all-1mo-9de6e4ae_20230109_v002.json",
+                    "--upload-to-sdc",
+                ]
+            },
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+
     # Verify the function was called with the correct upstream dependencies
     with (
         patch.object(batch_starter, "try_to_submit_job") as mock_submit,
@@ -1521,7 +1531,7 @@ def test_idex_l2b(session):
             session,
             {"data_source": "idex", "data_type": "l2b", "descriptor": "all-1mo"},
             "20230109",
-            "v001",
+            "v002",
             expected_processing_input.serialize(),
         )
 
@@ -1599,7 +1609,7 @@ def test_determine_max_version(session):
         data_level="l1b",
         descriptor="de",
         start_date=datetime(2010, 1, 1),
-        current_dependency_hash="abcdsf",
+        current_dependencies="abcdsf",
     )
     assert result == "v002"
     # Assert that the version returned is "v001" when the job has not been processed.
@@ -1609,7 +1619,7 @@ def test_determine_max_version(session):
         data_level="l1b",
         descriptor="sci",
         start_date=datetime(2010, 1, 1),
-        current_dependency_hash="7f101966",
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
@@ -1625,7 +1635,7 @@ def test_determine_job_version_descriptor_is_all(session):
         data_level="l1b",
         descriptor="all",
         start_date=datetime(2024, 1, 1),
-        current_dependency_hash="7f101966",
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
@@ -1641,7 +1651,7 @@ def test_determine_max_version_missing_processing_job(session):
         data_level="l1a",
         descriptor="sci",
         start_date=datetime(2024, 1, 1),
-        current_dependency_hash="7f101966",
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
