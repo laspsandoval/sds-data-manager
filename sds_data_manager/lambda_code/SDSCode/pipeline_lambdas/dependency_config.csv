@@ -93,6 +93,8 @@ glows, ancillary, pipeline-settings, glows, l1b, hist, HARD, DOWNSTREAM
 glows, ancillary, suspected-transients, glows, l1b, hist, HARD, DOWNSTREAM
 science_frames, spice, historical, glows, l1b, hist, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, glows, l1b, hist, HARD_NO_TRIGGER, DOWNSTREAM
+ephemeris_reconstructed, spice, historical, glows, l1b, hist, HARD_NO_TRIGGER, DOWNSTREAM
+planetary_ephemeris, spice, historical, glows, l1b, hist, HARD_NO_TRIGGER, DOWNSTREAM
 
 glows, l1b, hist, glows, l2, hist, HARD, DOWNSTREAM
 
