@@ -563,8 +563,7 @@ def submit_all_jobs(
         science_file = ScienceFilePath(filename)
         start_date, end_date = determine_date_range(session, science_file)
 
-        # Get the repointing number from the same spot as the time range
-        # Is either a number or None
+        # Get the repointing number from the science file object
         job_repointing = science_file.repointing
 
         # If there is only one file to process, then we can use upstream dependencies
@@ -810,9 +809,8 @@ def s3_processing_event(session, events):
                 )
 
             job.pop("relationship")
-            is_special_case = job in SPECIAL_CASE_JOBS
 
-            if is_special_case:
+            if job in SPECIAL_CASE_JOBS:
                 trigger_start_time, trigger_end_time = get_special_case_date_range(
                     session, job, trigger_start_time
                 )
@@ -820,6 +818,9 @@ def s3_processing_event(session, events):
                     f"Using special case date range: "
                     f"{trigger_start_time} to {trigger_end_time}"
                 )
+                filter_dependencies = False
+            else:
+                filter_dependencies = True
 
             submit_all_jobs(
                 session,
@@ -827,7 +828,7 @@ def s3_processing_event(session, events):
                 trigger_start_time,
                 trigger_end_time,
                 calculate_crids,
-                not is_special_case,  # filter_dependency is determined by special cases
+                filter_dependencies,
             )
 
         if sqs_queue_url:
