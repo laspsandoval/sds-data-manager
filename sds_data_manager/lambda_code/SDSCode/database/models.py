@@ -120,6 +120,7 @@ class ProcessingJob(Base):
             "descriptor": self.descriptor,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "version": self.version,
+            "repointing": self.repointing,
             # These parameters could be None when the batch job is in progress
             "job_definition": self.job_definition if self.job_definition else None,
             "job_log_stream_id": self.job_log_stream_id
