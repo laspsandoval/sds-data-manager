@@ -1,9 +1,13 @@
 """Tests the scheduled job lambda."""
+import datetime as dt
 
 from unittest.mock import call, patch
 
+from imap_data_access import ProcessingInputCollection, RepointInput
+
+from sds_data_manager.lambda_code.SDSCode.database.models import RepointFiles
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
-    batch_starter,
+    batch_starter, dependency,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.scheduled_job import (
     lambda_handler,
@@ -124,4 +128,52 @@ def test_scheduled_processing_event(mock_read_scheduled_job_config, session):
                     retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
                 ),
             ]
+        )
+
+@patch(
+    "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.scheduled_job.read_scheduled_job_config"
+)
+def test_scheduled_processing_event_adds_repointing_to_dependencies(mock_read_scheduled_job_config, session):
+    """Tests ``lambda_handler`` when invoked with a scheduled job event."""
+    context = {"context": "sample_context"}
+
+    glows_job = {
+        "data_source": "glows",
+        "data_type": "l3b",
+        "descriptor": "ion-rate-profile",
+    }
+
+    mock_read_scheduled_job_config.return_value = {
+        "cron(20 6 * * ? *)": [glows_job]
+    }
+
+    yesterdays_date = dt.datetime.now() - dt.timedelta(days=1)
+
+    repointing_file_name = f"imap_{yesterdays_date.strftime("%Y_%j")}_01.repoint.csv"
+
+    records = [
+        RepointFiles(
+            file_path=f"imap/spice/repoint/{repointing_file_name}",
+            end_date=yesterdays_date,
+            version="01",
+            ingestion_date=dt.datetime.now(),
+        )
+    ]
+    session.add_all(records)
+    session.commit()
+
+    with (
+        patch.object(batch_starter, "try_to_submit_job") as mock_submit,
+    ):
+        expected_processing_input = ProcessingInputCollection(RepointInput(repointing_file_name))
+        events = {
+            "scheduled": "cron(20 6 * * ? *)"
+        }
+        lambda_handler(events, context)
+        mock_submit.assert_called_with(
+            session,
+            glows_job,
+            dt.datetime(2000, 1, 1, 0, 0),
+            "v001",
+            expected_processing_input.serialize(),
         )
