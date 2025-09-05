@@ -1,13 +1,13 @@
 """Tests the scheduled job lambda."""
-import datetime as dt
 
+import datetime as dt
 from unittest.mock import call, patch
 
 from imap_data_access import ProcessingInputCollection, RepointInput
 
 from sds_data_manager.lambda_code.SDSCode.database.models import RepointFiles
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
-    batch_starter, dependency,
+    batch_starter,
 )
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.scheduled_job import (
     lambda_handler,
@@ -130,6 +130,7 @@ def test_scheduled_processing_event(mock_read_scheduled_job_config, session):
             ]
         )
 
+
 @patch(
     "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.scheduled_job.read_scheduled_job_config"
 )
@@ -143,9 +144,7 @@ def test_scheduled_job_passes_repointing(mock_read_job_config, session):
         "descriptor": "ion-rate-profile",
     }
 
-    mock_read_job_config.return_value = {
-        "cron(20 6 * * ? *)": [glows_job]
-    }
+    mock_read_job_config.return_value = {"cron(21 6 * * ? *)": [glows_job]}
 
     yesterdays_date = dt.datetime.now() - dt.timedelta(days=1)
 
@@ -166,12 +165,9 @@ def test_scheduled_job_passes_repointing(mock_read_job_config, session):
     with (
         patch.object(batch_starter, "try_to_submit_job") as mock_submit,
     ):
-
         repoint_input = RepointInput(repointing_file_name)
         expected_processing_input = ProcessingInputCollection(repoint_input)
-        events = {
-            "scheduled": "cron(20 6 * * ? *)"
-        }
+        events = {"scheduled": "cron(21 6 * * ? *)"}
         lambda_handler(events, context)
         mock_submit.assert_called_with(
             session,

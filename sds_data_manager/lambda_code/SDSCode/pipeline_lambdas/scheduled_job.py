@@ -8,7 +8,10 @@ from imap_data_access import ProcessingInputCollection, RepointInput
 from sds_data_manager.constructs.scheduled_job_config_reader import (
     read_scheduled_job_config,
 )
-from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter, dependency
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
+    batch_starter,
+    dependency,
+)
 
 from ..database import database as db
 
@@ -29,7 +32,6 @@ def scheduled_processing_event(session, events):
     triggered_jobs = read_scheduled_job_config()[events["scheduled"]]
 
     processing_inputs = []
-
     try:
         min_python_date = dt.datetime(1, 1, 1)
         latest_repoint_file_name = dependency.get_latest_repoint_file(min_python_date)
