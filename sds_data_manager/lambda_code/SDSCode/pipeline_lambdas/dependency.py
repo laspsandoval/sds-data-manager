@@ -19,7 +19,8 @@ from sqlalchemy.orm import aliased
 from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
-from ..database.models import AncillaryFiles, SPICEFiles
+from ..database.models import AncillaryFiles
+from . import VALID_CADENCE_STRS
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -369,13 +370,14 @@ class DependencyConfig:
                 ]
         return list(set(job_nodes))
 
-    def get_cadence_jobs(self, cadence: str) -> list:
+    def get_cadence_jobs(self, cadence: Optional[str] = None) -> list:
         """Get cadence jobs.
 
         Parameters
         ----------
-        cadence : str
-            Cadence string. Either "1mo", "3mo", "6mo", or "1yr".
+        cadence : str, optional
+            Cadence string. Either "1mo", "3mo", "6mo", or "1yr". If None,
+            all cadence jobs are returned.
 
         Returns
         -------
@@ -384,11 +386,15 @@ class DependencyConfig:
         """
         # Cadence jobs are only at data level l2 and contain either "1mo", "3mo", "6mo",
         # or "1yr" strings as the last part of the descriptor.
-
+        cadences = [cadence] if cadence else VALID_CADENCE_STRS
         return [
-            node
-            for node in self.get_all_nodes("DOWNSTREAM")
-            if node[1] in ["l2", "l2b"] and cadence == node[2].split("-")[-1]
+            {
+                "data_source": data_source,
+                "data_type": data_type,
+                "descriptor": descriptor,
+            }
+            for data_source, data_type, descriptor in self.get_all_nodes("DOWNSTREAM")
+            if data_type in ["l2", "l2b"] and descriptor.split("-")[-1] in cadences
         ]
 
 
@@ -661,7 +667,7 @@ def check_requested_kernels(combined_kernel_sources, metakernel_files):
     # is found.
     if (
         len(expected_ephemeris) == 1
-        and expected_ephemeris[0] == "ephemeris_reconstructed"
+        and next(iter(expected_ephemeris)) == "ephemeris_reconstructed"
         and "ephemeris_reconstructed" in ephemeris_found
     ):
         return True
@@ -703,8 +709,8 @@ def get_upstream_versions(session, record, versions) -> dict:
     """
     # Make a copy of the dictionary to avoid modifying the original
     versions = versions.copy()
-    if isinstance(record, AncillaryFiles) or isinstance(record, SPICEFiles):
-        # Ancillary and SPICE files have no upstream dependencies
+    if not isinstance(record, models.ScienceFiles):
+        # Only science files have upstream dependencies.
         return versions
 
     dep_node = {
@@ -718,6 +724,8 @@ def get_upstream_versions(session, record, versions) -> dict:
         "ALL",
     )
     for upstream_dep in upstream_deps:
+        if upstream_dep["data_source"] not in imap_data_access.VALID_INSTRUMENTS:
+            continue
         upstream_records = get_files(
             session,
             upstream_dep,

@@ -154,7 +154,7 @@ def test_lambda_handler(session, s3_client):
             session,
             {"data_source": "swe", "data_type": "l1a", "descriptor": "sci"},
             dt.datetime(2024, 1, 1, 0, 0),
-            "v002",
+            "v001",
             processing_input.serialize(),
         )
 
@@ -429,7 +429,7 @@ def test_lambda_handler_ancillary_event(session):
             session,
             {"data_source": "swe", "data_type": "l1b", "descriptor": "sci"},
             dt.datetime(2026, 3, 3, 0, 0),
-            "v002",
+            "v001",
             json.dumps(inputs),
         )
 
@@ -942,7 +942,7 @@ def test_ultra_l3_map(session, caplog):
                     "descriptor": "u90-ena-h-sf-sp-full-hae-4deg-3mo",
                 },
                 dt.datetime(2024, 2, 1, 0, 0),
-                "v002",
+                "v001",
                 expected_processing_input.serialize(),
             )
 
@@ -1178,7 +1178,7 @@ def test_lambda_handler_mag_l1c_case(session):
             session,
             {"data_source": "mag", "data_type": "l1c", "descriptor": "norm-mago"},
             dt.datetime(2024, 1, 1, 0, 0),
-            "v003",
+            "v002",
             expected_processing_input.serialize(),
         )
 
@@ -1250,7 +1250,7 @@ def test_lambda_handler_duplicate_mag_l1c_job(session, caplog):
         # Verify the function not called
         assert mock_batch_client.submit_job.call_count == 0
 
-        assert ("This job is a duplicate of the previous one") in caplog.text
+        assert ("Job already completed or in progress") in caplog.text
 
 
 ### TEST CADENCE EVENT
@@ -1472,6 +1472,47 @@ def test_idex_l2b(session):
             },
             retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
         )
+    # Assert that reprocessing the cadence file works as expected
+    reprocessing_event = {
+        "queryStringParameters": {
+            "reprocessing": "True",
+            "start_date": "20230101",
+            "end_date": "20231209",
+            "instrument": "idex",
+            "data_level": "l2b",
+            "descriptor": "all-1mo",
+        }
+    }
+    # Move ProcessingJob from in progress to succeeded to mimic the pipeline.
+    processing_job_record = session.query(models.ProcessingJob).first()
+    processing_job_record.status = models.Status.SUCCEEDED
+    session.commit()
+    with patch.object(batch_starter, "BATCH_CLIENT", Mock()) as mock_batch_client:
+        lambda_handler(reprocessing_event, None)
+        mock_batch_client.submit_job.assert_called_with(
+            jobName="idex-l2b-all-1mo-job-2",
+            jobQueue="ProcessingJobQueue",
+            jobDefinition="ProcessingJob-idex",
+            containerOverrides={
+                "command": [
+                    "--instrument",
+                    "idex",
+                    "--data-level",
+                    "l2b",
+                    "--descriptor",
+                    "all-1mo",
+                    "--start-date",
+                    "20230109",
+                    "--version",
+                    "v002",
+                    "--dependency",
+                    "imap_idex_l2b_all-1mo-9de6e4ae_20230109_v002.json",
+                    "--upload-to-sdc",
+                ]
+            },
+            retryStrategy=batch_starter.BATCH_JOB_RETRY_STRATEGY,
+        )
+
     # Verify the function was called with the correct upstream dependencies
     with (
         patch.object(batch_starter, "try_to_submit_job") as mock_submit,
@@ -1486,7 +1527,7 @@ def test_idex_l2b(session):
             session,
             {"data_source": "idex", "data_type": "l2b", "descriptor": "all-1mo"},
             dt.datetime(2023, 1, 9, 0, 0),
-            "v001",
+            "v002",
             expected_processing_input.serialize(),
         )
 
@@ -1552,6 +1593,7 @@ def test_determine_max_version(session):
         descriptor="de",
         start_date=datetime(2010, 1, 1),
         version="v001",
+        container_command="--dependency imap_lo_l1b_de-27005a05_20100101_v001.json",
     )
     session.add(record)
     session.commit()
@@ -1563,6 +1605,7 @@ def test_determine_max_version(session):
         data_level="l1b",
         descriptor="de",
         start_date=datetime(2010, 1, 1),
+        current_dependencies="abcdsf",
     )
     assert result == "v002"
     # Assert that the version returned is "v001" when the job has not been processed.
@@ -1572,6 +1615,7 @@ def test_determine_max_version(session):
         data_level="l1b",
         descriptor="sci",
         start_date=datetime(2010, 1, 1),
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
@@ -1587,6 +1631,7 @@ def test_determine_job_version_descriptor_is_all(session):
         data_level="l1b",
         descriptor="all",
         start_date=datetime(2024, 1, 1),
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
@@ -1602,6 +1647,7 @@ def test_determine_max_version_missing_processing_job(session):
         data_level="l1a",
         descriptor="sci",
         start_date=datetime(2024, 1, 1),
+        current_dependencies="7f101966",
     )
     assert result == "v001"
 
@@ -1629,8 +1675,6 @@ def test_duplicate_job(session, first_status, second_status):
                 descriptor="de",
                 start_date=datetime(2010, 1, 1),
                 version="v001",
-                dependencies='[{"type": "ancillary", "files": '
-                '["imap_mag_l1b-cal_20250101_v001.cdf"]}]',
             )
         )
     session.commit()

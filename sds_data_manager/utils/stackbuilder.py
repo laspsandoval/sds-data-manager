@@ -21,6 +21,7 @@ from sds_data_manager.constructs import (
     ialirt_efs_construct,
     ialirt_ingest_lambda_construct,
     ialirt_processing_construct,
+    ialirt_realtime_construct,
     indexer_lambda_construct,
     instrument_lambdas,
     lambda_layer_construct,
@@ -63,7 +64,8 @@ def build_sds(
     domain_name = account_config.get("domain_name", None)
     us_east_env = Environment(account=env.account, region="us-east-1")
     hosted_zone_stack = Stack(scope, "HostedZoneCertificateStack", env=us_east_env)
-    if account_config["account_name"] == "prod":
+    account_name = account_config["account_name"]
+    if account_name == "prod":
         # This is for the root level account So it should be the base url
         # e.g."imap-mission.com"
         domain = route53_hosted_zone.DomainConstruct(
@@ -215,6 +217,7 @@ def build_sds(
         rds_security_group=rds_construct.rds_security_group,
         db_secret_name=db_secret_name,
         layers=[db_lambda_layer, spice_lambda_layer],
+        account_name=account_name,
     )
 
     # Packet Downloader Lambda
@@ -337,6 +340,13 @@ def build_sds(
     ialirt_coverage_construct.IalirtCoverageConstruct(
         scope=ialirt_stack,
         construct_id="IalirtCoverage",
+        ialirt_bucket=ialirt_bucket.ialirt_bucket,
+    )
+
+    # I-ALiRT IOIS realtime lambda (facilitates creating realtime json in s3)
+    ialirt_realtime_construct.IalirtRealTimeConstruct(
+        scope=ialirt_stack,
+        construct_id="IalirtRealTime",
         ialirt_bucket=ialirt_bucket.ialirt_bucket,
     )
 

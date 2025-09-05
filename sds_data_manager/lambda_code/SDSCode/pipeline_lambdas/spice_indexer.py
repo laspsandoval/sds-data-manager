@@ -23,15 +23,16 @@ logger.setLevel(logging.INFO)
 
 
 # Define constants needed in the file
+EARTH_SPICE_ID = 3
 SPACECRAFT_ID = -43
 minimum_mission_time = datetime(2010, 1, 1)
 maximum_mission_time = datetime(2145, 1, 1)
 MAXIMUM_DATETIME_INTERVAL = [[minimum_mission_time, maximum_mission_time]]
 MAXIMUM_SCLK_INTERVAL = [
-    ["1/0410227203:00000", "1/4288750963:38093"]
+    ["1/0000000000:00000", "1/4260211203:00000"]
 ]  # Calculated from the above datetimes seperately
 MAXIMUM_J2000_INTERVAL = [
-    [725803269.1839136, 4575787269.183866]
+    [315576066.1839245, 4575787269.183866]
 ]  # Calculated from the above datetimes seperately
 
 # Set constants for the time interval calculations
@@ -82,7 +83,7 @@ def furnish_best_spice_file(kernel_type: str):
     return highest_version_spice_file
 
 
-def get_coverage_dictionary(spice_file: Path, **kwargs):
+def get_coverage_dictionary(spice_file: Path):
     """Determine the valid time spans of a SPICE file.
 
     Returns 3 lists for GPS time, python datetime, and spacecraft clock time.
@@ -95,8 +96,6 @@ def get_coverage_dictionary(spice_file: Path, **kwargs):
     ----------
     spice_file: Path
         The path to the spice file
-    kwargs: dict
-        The key word arguments to use when determining the coverage dictionary
 
     Returns
     -------
@@ -111,17 +110,31 @@ def get_coverage_dictionary(spice_file: Path, **kwargs):
     results_sclk = []
     results_datetime = []
 
+    # cover defines the array we need to write to
+    cover = spiceypy.cell_double(COVERAGE_SPICE_ARRAY_LENGTH)
+
+    # 1) Calculate the time coverage of the file
     if spice_file.suffix == ".bc":
-        coverage_function = spiceypy.ckcov
+        cover = spiceypy.ckcov(
+            str(spice_file),
+            idcode=SPACECRAFT_ID * 1000,
+            cover=cover,
+            needav=COVERAGE_ANGULAR_VELOCITY_ONLY,
+            level=COVERAGE_LEVEL,
+            tol=COVERAGE_TOLERANCE,
+            timsys=COVERAGE_TIME_SYSTEM,
+        )
     elif spice_file.suffix == ".bsp":
-        coverage_function = spiceypy.spkcov
+        cover = spiceypy.spkcov(str(spice_file), idcode=SPACECRAFT_ID, cover=cover)
+    elif spice_file.suffix == ".bpc":
+        # pckcov does *not* return a new "cover" object.
+        # Instead, we retrieve it from the original input, which is a mutable object.
+        spiceypy.pckcov(str(spice_file), idcode=EARTH_SPICE_ID * 1000, cover=cover)
     else:
         raise ValueError(
             f"Unable to handle spice file with the extension {spice_file.suffix}."
         )
 
-    # 1) Calculate the time coverage of the file
-    cover = coverage_function(str(spice_file), **kwargs)
     # 2) Determine the number of intervals in the file
     card = spiceypy.wncard(cover)
     # 3) Loop through the number of intervals, appending the results of steps 4,5,6
@@ -176,7 +189,11 @@ def _upsert_into_spice_table(
     """
     # Format the data to insert
     filename = str(spice_object.filename.name)
-    version = spice_object.spice_metadata["version"]
+    # earth attitude kernel doesn't have version.
+    if spice_object.spice_metadata["type"] == "earth_attitude":
+        version = "1"
+    else:
+        version = spice_object.spice_metadata["version"]
     spice_params = {
         "file_path": s3_key,
         "file_name": filename,
@@ -294,20 +311,8 @@ def index_spice_file(s3_key: str):
                 ]
             ]
         else:
-            function_arguments = {
-                "idcode": SPACECRAFT_ID,
-                "cover": spiceypy.cell_double(COVERAGE_SPICE_ARRAY_LENGTH),
-            }
-
-            if spice_metadata["type"] in ["attitude_history", "attitude_predict"]:
-                # Extra arguments needed for ckcov
-                function_arguments["idcode"] = function_arguments["idcode"] * 1000
-                function_arguments["needav"] = COVERAGE_ANGULAR_VELOCITY_ONLY
-                function_arguments["level"] = COVERAGE_LEVEL
-                function_arguments["tol"] = COVERAGE_TOLERANCE
-                function_arguments["timsys"] = COVERAGE_TIME_SYSTEM
             file_coverage_j2000, file_coverage_datetime, file_coverage_sclk = (
-                get_coverage_dictionary(spice_file, **function_arguments)
+                get_coverage_dictionary(spice_file)
             )
 
     # Insert/Update the gathered data into the database

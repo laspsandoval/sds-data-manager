@@ -925,8 +925,8 @@ def test_get_cadence_jobs():
     # Call the get_all_nodes method
     all_nodes = dependency_config.get_cadence_jobs("1yr")
     for node in all_nodes:
-        assert node[1] == "l2"
-        assert node[2].split("-")[-1] in ["1yr"]
+        assert node["data_type"] == "l2"
+        assert node["descriptor"].split("-")[-1] in ["1yr"]
 
 
 #####################################
