@@ -1,14 +1,14 @@
 """Functions for triggering a processing job on a schedule."""
 
-import datetime
+import datetime as dt
 import logging
 
-from imap_data_access import ProcessingInputCollection
+from imap_data_access import ProcessingInputCollection, RepointInput
 
 from sds_data_manager.constructs.scheduled_job_config_reader import (
     read_scheduled_job_config,
 )
-from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import batch_starter, dependency
 
 from ..database import database as db
 
@@ -28,13 +28,23 @@ def scheduled_processing_event(session, events):
     """
     triggered_jobs = read_scheduled_job_config()[events["scheduled"]]
 
+    processing_inputs = []
+
+    try:
+        latest_repoint_file_name = dependency.get_latest_repoint_file(dt.datetime(1, 1, 1))
+        processing_inputs.append(RepointInput(latest_repoint_file_name))
+    except ValueError:
+        pass
+
+    processing_input_collection = ProcessingInputCollection(*processing_inputs)
+
     for job in triggered_jobs:
         batch_starter.try_to_submit_job(
             session,
             job,
-            datetime.datetime(2000, 1, 1),
+            dt.datetime(2000, 1, 1),
             "v001",
-            ProcessingInputCollection().serialize(),
+            processing_input_collection.serialize(),
         )
 
 
