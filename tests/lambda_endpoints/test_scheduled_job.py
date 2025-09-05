@@ -133,7 +133,7 @@ def test_scheduled_processing_event(mock_read_scheduled_job_config, session):
 @patch(
     "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.scheduled_job.read_scheduled_job_config"
 )
-def test_scheduled_processing_event_adds_repointing_to_dependencies(mock_read_scheduled_job_config, session):
+def test_scheduled_job_passes_repointing(mock_read_job_config, session):
     """Tests ``lambda_handler`` when invoked with a scheduled job event."""
     context = {"context": "sample_context"}
 
@@ -143,13 +143,14 @@ def test_scheduled_processing_event_adds_repointing_to_dependencies(mock_read_sc
         "descriptor": "ion-rate-profile",
     }
 
-    mock_read_scheduled_job_config.return_value = {
+    mock_read_job_config.return_value = {
         "cron(20 6 * * ? *)": [glows_job]
     }
 
     yesterdays_date = dt.datetime.now() - dt.timedelta(days=1)
 
-    repointing_file_name = f"imap_{yesterdays_date.strftime("%Y_%j")}_01.repoint.csv"
+    year_day_formatted_date = yesterdays_date.strftime("%Y_%j")
+    repointing_file_name = f"imap_{year_day_formatted_date}_01.repoint.csv"
 
     records = [
         RepointFiles(
@@ -165,7 +166,9 @@ def test_scheduled_processing_event_adds_repointing_to_dependencies(mock_read_sc
     with (
         patch.object(batch_starter, "try_to_submit_job") as mock_submit,
     ):
-        expected_processing_input = ProcessingInputCollection(RepointInput(repointing_file_name))
+
+        repoint_input = RepointInput(repointing_file_name)
+        expected_processing_input = ProcessingInputCollection(repoint_input)
         events = {
             "scheduled": "cron(20 6 * * ? *)"
         }

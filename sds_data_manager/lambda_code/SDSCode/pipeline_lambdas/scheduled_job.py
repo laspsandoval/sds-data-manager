@@ -31,7 +31,8 @@ def scheduled_processing_event(session, events):
     processing_inputs = []
 
     try:
-        latest_repoint_file_name = dependency.get_latest_repoint_file(dt.datetime(1, 1, 1))
+        min_python_date = dt.datetime(1, 1, 1)
+        latest_repoint_file_name = dependency.get_latest_repoint_file(min_python_date)
         processing_inputs.append(RepointInput(latest_repoint_file_name))
     except ValueError:
         pass
