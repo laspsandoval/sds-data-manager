@@ -118,7 +118,7 @@ class ScheduledJobLambda(Construct):
                 id=f"ProcessingScheduledJob-{schedule}",
                 rule_name=f"ProcessingScheduledJob-{schedule}",
                 description=f"Trigger scheduled processing job: {schedule}",
-                schedule_expression=Schedule.expression(schedule),
+                schedule=Schedule.expression(schedule),
                 enabled=True,
             )
 
