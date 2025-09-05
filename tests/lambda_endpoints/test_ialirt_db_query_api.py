@@ -1,6 +1,7 @@
 """Tests for the I-ALiRT DB Query API Lambda function."""
 
 import json
+from decimal import Decimal
 
 import pytest
 
@@ -62,7 +63,7 @@ def test_query_with_met_range(algorithm_table):
     items = json.loads(response["body"])
     met = sorted(item["met"] for item in items)
 
-    expected_data = [str(101), str(110)]
+    expected_data = [101, 110]
 
     assert met == expected_data
 
@@ -79,7 +80,7 @@ def test_query_with_met_start(algorithm_table):
     items = json.loads(response["body"])
     met = sorted(item["met"] for item in items)
 
-    expected_data = [str(120), str(130)]
+    expected_data = [120, 130]
     assert met == expected_data
 
 
@@ -248,3 +249,30 @@ def test_query_with_mixed_parameters(algorithm_table):
         "message": "Cannot query multiple time keys (met, met_in_utc, last_modified)"
     }
     assert json.loads(response["body"]) == expected_message
+
+
+def test_process_item_types():
+    """Test process_item_types function."""
+    items = [
+        {
+            "apid": Decimal("478"),
+            "met": Decimal("123456789"),
+            "ttj2000ns": Decimal("123456789000000"),
+            "mag_B_GSE": [Decimal("0.0"), Decimal("0.1"), Decimal("0.2")],
+            "mag_B_magnitude": Decimal("0.22"),
+            "met_in_utc": "2025-06-20T08:00:00",  # string should stay unchanged
+        }
+    ]
+
+    processed_items = [ialirt_db_query_api.process_item_types(item) for item in items]
+
+    assert processed_items == [
+        {
+            "apid": 478,
+            "met": 123456789,
+            "ttj2000ns": 123456789000000,
+            "mag_B_GSE": [0.0, 0.1, 0.2],
+            "mag_B_magnitude": 0.22,
+            "met_in_utc": "2025-06-20T08:00:00",
+        }
+    ]
