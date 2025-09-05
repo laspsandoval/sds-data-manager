@@ -112,11 +112,11 @@ class ScheduledJobLambda(Construct):
 
         scheduled_jobs = read_scheduled_job_config()
 
-        for schedule in scheduled_jobs.keys():
+        for i, schedule in enumerate(scheduled_jobs.keys()):
             rule = aws_events.Rule(
                 scope=scope,
-                id=f"ProcessingScheduledJob-{schedule}",
-                rule_name=f"ProcessingScheduledJob-{schedule}",
+                id=f"ProcessingScheduledJob-{i}",
+                rule_name=f"ProcessingScheduledJob-{i}",
                 description=f"Trigger scheduled processing job: {schedule}",
                 schedule=Schedule.expression(schedule),
                 enabled=True,
