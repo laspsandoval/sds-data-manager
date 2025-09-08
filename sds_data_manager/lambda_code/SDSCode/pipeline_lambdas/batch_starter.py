@@ -438,6 +438,8 @@ def try_to_submit_job(
         session.add(processing_job)
         session.commit()
     except IntegrityError:
+        # Rollback the session to clear the failed transaction
+        session.rollback()
         logger.info(f"Job already completed or in progress: {processing_job}")
         return
 
