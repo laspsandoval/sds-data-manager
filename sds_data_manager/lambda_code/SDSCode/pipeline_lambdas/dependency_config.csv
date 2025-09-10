@@ -815,7 +815,7 @@ ultra, ancillary, l1b-tofxph, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
 ultra, ancillary, l1b-45sensor-spbtphcorr, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
 ultra, ancillary, l1b-45sensor-sptpphcorr, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
 ultra, ancillary, l1b-scattering-thresholds-per-energy, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
-ultra, ancillary, l1b-45sensor-scattering-calibration-data, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
+ultra, ancillary, l1b-90sensor-scattering-calibration-data, ultra, l1b, 45sensor-de, HARD, DOWNSTREAM
 
 spacecraft_clock, spice, historical, ultra, l1b, 45sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
 leapseconds, spice, historical, ultra, l1b, 45sensor-de, HARD_NO_TRIGGER, DOWNSTREAM
