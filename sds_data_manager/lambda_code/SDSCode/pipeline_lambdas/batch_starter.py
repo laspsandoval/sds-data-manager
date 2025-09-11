@@ -369,6 +369,9 @@ def try_to_submit_job(
         The serialized ProcessingInputCollection of the upstream
         dependencies.
     """
+    logger.info(f"start_date {type(start_date)}: {start_date}")
+    logger.info(f"serialized start date {start_date.strftime('%Y%m%d')}")
+
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
