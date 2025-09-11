@@ -190,7 +190,7 @@ class SPICEFiles(Base):
     sclk_kernel = Column(String)
     lsk_kernel = Column(String)
     version = Column(Integer, nullable=True)
-    released = Column(Boolean, nullable=False, default=False)
+    released = Column(Boolean, nullable=False, default=True)
 
 
 class AncillaryFiles(Base):
@@ -221,7 +221,7 @@ class SpinFiles(Base):
     end_date = Column(DateTime, nullable=False)
     version = Column(String(2), nullable=False)
     ingestion_date = Column(DateTime(timezone=True))
-    released = Column(Boolean, nullable=False, default=False)
+    released = Column(Boolean, nullable=False, default=True)
 
 
 class PointingTable(Base):
@@ -243,7 +243,7 @@ class RepointFiles(Base):
     end_date = Column(DateTime, nullable=False)
     version = Column(String(2), nullable=False)
     ingestion_date = Column(DateTime(timezone=True))
-    released = Column(Boolean, nullable=False, default=False)
+    released = Column(Boolean, nullable=False, default=True)
 
 
 class Version(Base):
