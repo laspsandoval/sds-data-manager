@@ -1,5 +1,6 @@
 """Reader for the scheduled job config file."""
 
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -41,6 +42,9 @@ def read_scheduled_job_config() -> dict[str, list[dict]]:
                 raise ValueError(f"Invalid instrument: {instrument}")
             if data_level not in VALID_DATALEVELS:
                 raise ValueError(f"Invalid data level: {data_level}")
+            regex = re.compile(r"^cron\(\S* \S* \S* \S* \S* \S*\)$")
+            if not regex.match(schedule):
+                raise ValueError(f"Invalid schedule expression: {schedule}")
 
             scheduled_jobs_info[schedule].append(
                 {
