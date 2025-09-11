@@ -5,7 +5,7 @@ from pathlib import Path
 
 import boto3
 import imap_data_access
-from imap_data_access import webpoda
+from imap_data_access import SPICEFilePath, webpoda
 
 S3_CLIENT = boto3.client("s3")
 # We need to access the webpoda-api-key
@@ -39,7 +39,9 @@ def get_two_most_recent_contact_times(bucket):
     """
     paginator = S3_CLIENT.get_paginator("list_objects_v2")
     # In case we have more than 1000 of these files (~3 years)
-    pages = paginator.paginate(Bucket=bucket, Prefix="spice/repoint/imap_")
+    pages = paginator.paginate(
+        Bucket=bucket, Prefix=f"{SPICEFilePath._dir_prefix}/repoint/imap_"
+    )
 
     repointing_file_times = []
     for page in pages:
@@ -51,9 +53,17 @@ def get_two_most_recent_contact_times(bucket):
             # We want last-modified time to know when these files were uploaded
             repointing_file_times.append(obj["LastModified"])
 
-    if len(repointing_file_times) < 2:
-        logger.warning("Less than 2 repointing files found")
+    if len(repointing_file_times) == 0:
+        # Nothing in the bucket yet, query from the start of the mission to right now.
+        logger.warning("No repointing files found")
         return None
+    elif len(repointing_file_times) == 1:
+        # Only one repointing file, so we can't bracket a contact yet.
+        # Use the first launch opportunity as an initial start time,
+        # and the time this repointing file landed as the end time to
+        # brack the queries with.
+        logger.warning("Only one repointing file found, using the start of the mission")
+        return ["2025-09-23T00:00:00.000Z", repointing_file_times[0]]
 
     # We only want the latest two times
     return sorted(repointing_file_times)[-2:]
@@ -118,7 +128,6 @@ def lambda_handler(event, context):
                 start_time=start_time,
                 end_time=end_time,
                 repointing_file=repointing_file,
-                version="v001",
                 upload_to_server=True,
             )
         else:
@@ -127,7 +136,6 @@ def lambda_handler(event, context):
                 instrument=instrument,
                 start_time=start_time,
                 end_time=end_time,
-                version="v001",
                 upload_to_server=True,
             )
 
