@@ -172,7 +172,7 @@ def test_scheduled_job_passes_repointing(mock_read_job_config, session):
         mock_submit.assert_called_with(
             session,
             glows_job,
-            dt.datetime(2000, 1, 1, 0, 0),
+            "20000101",
             "v001",
             expected_processing_input.serialize(),
         )

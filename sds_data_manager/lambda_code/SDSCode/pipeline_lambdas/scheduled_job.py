@@ -45,7 +45,7 @@ def scheduled_processing_event(session, events):
         batch_starter.try_to_submit_job(
             session,
             job,
-            dt.datetime(2000, 1, 1),
+            "20000101",
             "v001",
             processing_input_collection.serialize(),
         )

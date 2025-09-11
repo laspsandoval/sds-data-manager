@@ -375,9 +375,6 @@ def try_to_submit_job(
         The repointing number for the job, if applicable. Default is None. Should
         be just an integer, no "repoint" prefix.
     """
-    logger.info(f"start_date {type(start_date)}: {start_date}")
-    logger.info(f"serialized start date {start_date.strftime('%Y%m%d')}")
-
     instrument = job_info["data_source"]
     data_level = job_info["data_type"]
     descriptor = job_info["descriptor"]
