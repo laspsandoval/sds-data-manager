@@ -26,6 +26,11 @@ def scheduled_processing_event(session, events):
     events : dict
         Event input from an Event Bridge rule.
     """
+    if events["scheduled"] not in read_scheduled_job_config():
+        logger.error(
+            "There are no jobs found with this schedule: %s", events["scheduled"]
+        )
+
     triggered_jobs = read_scheduled_job_config()[events["scheduled"]]
 
     processing_inputs = []
@@ -40,7 +45,6 @@ def scheduled_processing_event(session, events):
     processing_input_collection = ProcessingInputCollection(*processing_inputs)
 
     for job in triggered_jobs:
-        logger.info("Submitting job: %s", job)
         batch_starter.try_to_submit_job(
             session,
             job,
