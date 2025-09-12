@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from sds_data_manager.constructs import scheduled_job_config_reader
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
+    scheduled_job_config_reader,
+)
 
 
 def test_scheduled_job_config_reader(tmp_path):

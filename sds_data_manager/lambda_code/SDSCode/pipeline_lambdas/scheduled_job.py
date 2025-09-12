@@ -5,15 +5,12 @@ import logging
 
 from imap_data_access import ProcessingInputCollection, RepointInput
 
-from sds_data_manager.constructs.scheduled_job_config_reader import (
-    read_scheduled_job_config,
-)
-from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
+from ..database import database as db
+from . import (
     batch_starter,
     dependency,
 )
-
-from ..database import database as db
+from .scheduled_job_config_reader import read_scheduled_job_config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,11 +34,13 @@ def scheduled_processing_event(session, events):
         latest_repoint_file_name = dependency.get_latest_repoint_file(min_python_date)
         processing_inputs.append(RepointInput(latest_repoint_file_name))
     except ValueError:
+        logger.warning("No repointing files found, proceeding without one.")
         pass
 
     processing_input_collection = ProcessingInputCollection(*processing_inputs)
 
     for job in triggered_jobs:
+        logger.info("Submitting job: %s", job)
         batch_starter.try_to_submit_job(
             session,
             job,

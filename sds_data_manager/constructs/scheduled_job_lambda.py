@@ -11,8 +11,8 @@ from aws_cdk.aws_events_targets import LambdaFunction
 from constructs import Construct
 
 from sds_data_manager.constructs.database_construct import SdpDatabase
-from sds_data_manager.constructs.scheduled_job_config_reader import (
-    read_scheduled_job_config,
+from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import (
+    scheduled_job_config_reader,
 )
 
 
@@ -110,7 +110,7 @@ class ScheduledJobLambda(Construct):
             source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingScheduledJob*",
         )
 
-        scheduled_jobs = read_scheduled_job_config()
+        scheduled_jobs = scheduled_job_config_reader.read_scheduled_job_config()
 
         for i, schedule in enumerate(scheduled_jobs.keys()):
             rule = aws_events.Rule(
