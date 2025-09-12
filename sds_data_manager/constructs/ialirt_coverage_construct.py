@@ -17,6 +17,7 @@ class IalirtCoverageConstruct(Construct):
         construct_id: str,
         ialirt_bucket: aws_s3.Bucket,
         docker_path: str = "sds_data_manager/lambda_code",
+        data_access_url: str = "",
         **kwargs,
     ) -> None:
         """Create ialirt coverage files.
@@ -31,6 +32,10 @@ class IalirtCoverageConstruct(Construct):
             The data bucket.
         docker_path : str
             Path to the Dockerfile.
+        data_access_url : str, optional
+            The data access URL to use for this job, by default the empty string.
+            You should set this to the appropriate API endpoint, e.g.
+            https://api.dev.imap-mission.com
         kwargs : dict
             Keyword arguments.
 
@@ -38,13 +43,16 @@ class IalirtCoverageConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
 
         # Create Lambda Function
-        ialirt_coverage_lambda = self.create_coverage_lambda(ialirt_bucket, docker_path)
+        ialirt_coverage_lambda = self.create_coverage_lambda(
+            ialirt_bucket, docker_path, data_access_url
+        )
         self.create_event_rule(ialirt_coverage_lambda)
 
     def create_coverage_lambda(
         self,
         ialirt_bucket: aws_s3.Bucket,
         docker_path: str,
+        data_access_url: str,
     ) -> lambda_.DockerImageFunction:
         """Create and return the Lambda function."""
         lambda_role = iam.Role(
@@ -81,6 +89,7 @@ class IalirtCoverageConstruct(Construct):
             role=lambda_role,
             environment={
                 "S3_BUCKET": ialirt_bucket.bucket_name,
+                "IMAP_DATA_ACCESS_URL": data_access_url,
             },
         )
 
