@@ -661,6 +661,7 @@ science_frames, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTRE
 pointing_attitude, spice, historical, mag, l1d, norm-srf, HARD, DOWNSTREAM
 leapseconds, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spin, spin, historical, mag, l1d, norm-srf, HARD, DOWNSTREAM
 
 # MAG L2 and L1D look pretty similar.
 mag, l1c, norm-mago, mag, l2, norm-srf, HARD, DOWNSTREAM
