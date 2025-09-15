@@ -890,13 +890,13 @@ files = [
 
 [[package]]
 name = "imap-data-access"
-version = "0.34.1"
+version = "0.35.0"
 description = "IMAP SDC Data Access"
 optional = false
 python-versions = "*"
 files = [
-    {file = "imap_data_access-0.34.1-py3-none-any.whl", hash = "sha256:c399b7db47a86c5dd04e76fb9dd27ba66c7caee6f7ede819997b450a639fe9ae"},
-    {file = "imap_data_access-0.34.1.tar.gz", hash = "sha256:967b3df4fb684e315087f9de7eef97512ae01e8eb5121c39b24df9a07a98201f"},
+    {file = "imap_data_access-0.35.0-py3-none-any.whl", hash = "sha256:df4b7061a808f5859da0a49a39fc0ae5d40979e178bc06ec346e3c260015c0f0"},
+    {file = "imap_data_access-0.35.0.tar.gz", hash = "sha256:a483b127ba7650b43990c9bdaeebdc3e06e6f6dda0ebb8a6a91d0f015c02fe28"},
 ]
 
 [package.dependencies]
@@ -908,19 +908,19 @@ test = ["pytest", "pytest-cov"]
 
 [[package]]
 name = "imap-processing"
-version = "0.19.0"
+version = "0.19.3"
 description = "IMAP Science Operations Center Processing"
 optional = false
 python-versions = "<4,>=3.10"
 files = [
-    {file = "imap_processing-0.19.0-py3-none-any.whl", hash = "sha256:9eb08a575cf22f4d4a883de5ae80a7f5026955096c5e0accc88ba76463d9ff64"},
-    {file = "imap_processing-0.19.0.tar.gz", hash = "sha256:a25ac9ba5b43af894d1b5c589ea2e1951c9a06c07069d846aba54448c16239b5"},
+    {file = "imap_processing-0.19.3-py3-none-any.whl", hash = "sha256:0ad7a19ab3a2ad9c4eb081aed7c4344400ed1aef608aefc55072db898cb09648"},
+    {file = "imap_processing-0.19.3.tar.gz", hash = "sha256:17a6365d34693db8cd57c1b831473f495371feb759d535641de973f1c99c1286"},
 ]
 
 [package.dependencies]
 astropy-healpix = ">=1.0"
 cdflib = ">=1.3.6,<2.0.0"
-imap-data-access = ">=0.32.0"
+imap-data-access = ">=0.35.0"
 numpy = "<=3"
 sammi-cdf = ">=1.0,<2.0"
 scipy = ">=1.13,<2.0"
@@ -2547,4 +2547,4 @@ doc = ["myst-parser", "pydata-sphinx-theme", "sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "1f5efd4cdd8624054d6b8d3e4c44baf17ec25f101deaa645f75010fcc19d3457"
+content-hash = "1e36066ed5f0b540ec5d0ebe17d67cc2f1855f3a73d6977053407d2506e0f1f7"

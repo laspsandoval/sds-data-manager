@@ -108,6 +108,7 @@ class IndexerLambda(Construct):
             {"prefix": f"imap/{instrument}/"} for instrument in VALID_INSTRUMENTS
         ]
         science_event_prefixes.append({"prefix": "imap/ancillary/"})
+        science_event_prefixes.append({"prefix": "imap/quicklook/"})
         imap_data_arrival_rule = events.Rule(
             self,
             "ImapDataArrival",
@@ -181,6 +182,10 @@ class SPICEIndexerLambda(Construct):
             The RDS security group
         data_bucket : obj
             The data bucket
+        data_access_url : str, optional
+            The data access URL to use for this job, by default the empty string.
+            You should set this to the appropriate API endpoint, e.g.
+            https://api.dev.imap-mission.com
         kwargs : dict
             Keyword arguments
 

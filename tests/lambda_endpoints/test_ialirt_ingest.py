@@ -175,7 +175,12 @@ def test_query_filenames_crossing_hour_boundary(s3_client):
     "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.sct_to_et",
     return_value=12345.0,
 )
+@patch(
+    "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.met_to_utc",
+    side_effect=lambda met: "2025-05-21T00:00:00",
+)
 def test_insert_data(
+    mock_met_to_utc,
     mock_sct_to_et,
     mock_imap_state,
     setup_dynamodb,
@@ -248,6 +253,10 @@ def test_insert_data(
     "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.met_to_sclkticks",
     return_value=67890.0,
 )
+@patch(
+    "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.met_to_utc",
+    side_effect=lambda met: "2025-05-21T00:00:00",
+)
 @mock.patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.load_cdf")
 @mock.patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.pd.read_csv")
 @mock.patch("sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.get_ancillary")
@@ -258,7 +267,11 @@ def test_insert_data(
 @mock.patch(
     "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.process_swapi_ialirt"
 )
+@mock.patch(
+    "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.MagAncillaryCombiner"
+)
 def test_process_algorithms(
+    mock_magancillarycombiner,
     mock_swapi,
     mock_codice,
     mock_swe,
@@ -269,6 +282,7 @@ def test_process_algorithms(
     mock_read_csv,
     mock_sclkticks,
     mock_sct_to_et,
+    mock_met_to_utc,
     mock_imap_state,
     setup_dynamodb,
 ):
@@ -276,6 +290,10 @@ def test_process_algorithms(
     algorithm_table = setup_dynamodb["algorithm_table"]
     mock_load_cdf.return_value = {"mock": "calibration data"}
     mock_read_csv.return_value = pd.DataFrame({"mock": [1.23]})
+
+    mock_combiner_instance = MagicMock()
+    mock_combiner_instance.combined_dataset = "mocked_combined_dataset"
+    mock_magancillarycombiner.return_value = mock_combiner_instance
 
     mock_hit.return_value = [
         {
@@ -324,7 +342,9 @@ def test_process_algorithms(
         }
     ]
 
-    mock_get_ancillary.return_value = Path("/mock/path.csv")
+    mock_get_ancillary.return_value = Path(
+        "/mock/imap_mag_l1b-calibration_20250101_v002.cdf"
+    )
 
     process_algorithms(combined=None, algorithm_table=algorithm_table)
 

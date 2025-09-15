@@ -7,7 +7,7 @@ import logging
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import boto3
 import imap_data_access
@@ -70,8 +70,10 @@ SPECIAL_CASE_JOBS = [
 
 
 def cadence_to_datetime_range(
-    cadence: str, start_date: Optional[datetime] = None, as_str: Optional[bool] = False
-) -> tuple[datetime, datetime] | tuple[str, str]:
+    cadence: str,
+    start_date: Optional[datetime.datetime] = None,
+    as_str: Optional[bool] = False,
+) -> Union[tuple[datetime.datetime, datetime.datetime], tuple[str, str]]:
     """Convert the cadence to a datetime range.
 
     Parameters
@@ -418,7 +420,7 @@ def try_to_submit_job(
     ]
 
     if repoint is not None:
-        batch_command.extend(["--repointing", f"repoint{repoint}"])
+        batch_command.extend(["--repointing", f"repoint{repoint:05d}"])
 
     # All of our upstream requirements have been met.
     # Try to insert a record into the Processing Jobs table
@@ -438,6 +440,8 @@ def try_to_submit_job(
         session.add(processing_job)
         session.commit()
     except IntegrityError:
+        # Rollback the session to clear the failed transaction
+        session.rollback()
         logger.info(f"Job already completed or in progress: {processing_job}")
         return
 
@@ -499,8 +503,17 @@ def submit_all_jobs(
     """
     logger.info(f"Finding dependencies for the job node: {job_node}")
 
-    # Submit downstream jobs for each upstream primary science dependency file.
-    # Find the files that this job depends on
+    # Make initial query for upstream dependency files.
+    # These dependencies will be used to determine the start dates of the jobs to
+    # submit.
+    # If we are filtering dependencies, then we do not need to get spice files because
+    # there will be a second query for upstream dependencies for each potential file
+    # To process.
+    if filter_dependencies:
+        get_spice = False
+    else:
+        get_spice = True
+
     upstream_dependencies = dependency.get_jobs(
         data_source=job_node["data_source"],
         data_type=job_node["data_type"],
@@ -510,6 +523,7 @@ def submit_all_jobs(
         start_date=trigger_start_date,
         end_date=trigger_end_date,
         calculate_crids=calculate_crids,
+        get_spice=get_spice,
     )
     if not upstream_dependencies:
         logger.info(
@@ -567,7 +581,7 @@ def submit_all_jobs(
 
         # If there is only one file to process, then we can use upstream dependencies
         # that have already been queried.
-        if num_jobs > 1 or filter_dependencies:
+        if filter_dependencies:
             # Query for upstream files only needed for this job with using the
             # start date of the primary science file.
             upstream_deps_for_job = dependency.get_jobs(
@@ -579,6 +593,7 @@ def submit_all_jobs(
                 start_date=start_date,
                 end_date=end_date,
                 calculate_crids=False,
+                get_spice=True,
             )
             if not upstream_deps_for_job:
                 logger.info(
@@ -809,6 +824,16 @@ def s3_processing_event(session, events):
 
             job.pop("relationship")
 
+            # by default, we want to filter the upstream dependencies only if the
+            # trigger file is an ancillary file.
+            # Ancillary files can trigger multiple jobs for the
+            # same instrument, data level, and descriptor but with different start
+            # dates. Once we know the start dates for the job, we "filter" the upstream
+            # dependencies to only include those valid for that date.
+            filter_dependencies = False
+            if isinstance(file_obj, AncillaryFilePath):
+                filter_dependencies = True
+
             if job in SPECIAL_CASE_JOBS:
                 trigger_start_time, trigger_end_time = get_special_case_date_range(
                     session, job, trigger_start_time
@@ -817,9 +842,8 @@ def s3_processing_event(session, events):
                     f"Using special case date range: "
                     f"{trigger_start_time} to {trigger_end_time}"
                 )
+                # Do not filter dependencies for special case jobs.
                 filter_dependencies = False
-            else:
-                filter_dependencies = True
 
             submit_all_jobs(
                 session,
@@ -1271,9 +1295,9 @@ def lambda_handler(events: dict, context):
         Lambda context object
     """
     logger.info(f"Events: {events}")
+    api_event = events.get("queryStringParameters")
 
     with db.Session() as session:
-        api_event = events.get("queryStringParameters")
         if api_event and api_event.get("reprocessing"):
             # handle reprocessing event
             bulk_reprocessing_event(session, api_event)

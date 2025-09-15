@@ -4,12 +4,15 @@ import csv
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import boto3
+import imap_data_access
 import spiceypy
-from imap_data_access import SPICEFilePath, download
+from imap_data_access import SPICEFilePath
 from sqlalchemy.dialects.postgresql import insert
 
 from ..api_lambdas import spice_metakernel_api
@@ -20,6 +23,52 @@ from .lambda_custom_events import IMAPLambdaPutEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def download_from_s3(s3_key: str, bucket_name: Optional[str] = None) -> Path:
+    """Download a file from S3 to a local temporary path.
+
+    Parameters
+    ----------
+    s3_key : str
+        The S3 key (path) of the file to download.
+    bucket_name : Optional[str], optional
+        The S3 bucket name. If not provided, will use the S3_BUCKET
+        environment variable.
+
+    Returns
+    -------
+    Path
+        The local path where the file was downloaded.
+
+    Raises
+    ------
+    ValueError
+        If bucket_name is not provided and S3_BUCKET environment variable is
+        not set.
+    """
+    if bucket_name is None:
+        bucket_name = os.environ.get("S3_BUCKET")
+        if bucket_name is None:
+            raise ValueError(
+                "bucket_name must be provided or S3_BUCKET environment "
+                "variable must be set"
+            )
+
+    # Create a temporary file path
+    filename = os.path.basename(s3_key)
+    temp_dir = tempfile.gettempdir()
+    local_path = Path(temp_dir) / filename
+
+    # Download from S3
+    s3_client = boto3.client("s3")
+    try:
+        s3_client.download_file(bucket_name, s3_key, str(local_path))
+        logger.info(f"Downloaded {s3_key} from bucket {bucket_name} to {local_path}")
+        return local_path
+    except Exception as e:
+        logger.error(f"Failed to download {s3_key} from bucket {bucket_name}: {e}")
+        raise
 
 
 # Define constants needed in the file
@@ -76,7 +125,14 @@ def furnish_best_spice_file(kernel_type: str):
     kernel_filename = json.loads(metakernel_response["body"])[0]
     logger.info(f"Furnishing the latest {kernel_type} kernel: {kernel_filename}")
     # Download the latest kernel file
-    highest_version_spice_file = download(kernel_filename)
+    # Convert this into an s3 key
+    # Relative to our base directory to trim off the initial path
+    s3_key = str(
+        SPICEFilePath(kernel_filename)
+        .construct_path()
+        .relative_to(imap_data_access.config["DATA_DIR"])
+    )
+    highest_version_spice_file = download_from_s3(s3_key)
     logger.info(f"Downloaded SPICE file: {highest_version_spice_file}")
     # Furnish the SPICE file
     spiceypy.furnsh(str(highest_version_spice_file))
@@ -250,7 +306,7 @@ def index_spice_file(s3_key: str):
     spice_metadata = spice_object.spice_metadata
     # Download the ingested SPICE file from S3
     try:
-        spice_file = download(s3_key)
+        spice_file = download_from_s3(s3_key)
     except Exception as e:
         logger.error(f"Failed to download SPICE file {s3_key}: {e}")
         raise ValueError(f"Error downloading file {s3_key}") from e
@@ -421,7 +477,7 @@ def index_pointing_data(s3_key: str):
     """
     logger.info(f"Indexing {s3_key} to pointing table")
     # Download repoint file
-    repoint_file_path = download(s3_key)
+    repoint_file_path = download_from_s3(s3_key)
     repoind_data = []
     repoint_db_records = []
     # Read CSV file using Python's native csv module
@@ -514,21 +570,28 @@ def send_spice_event(spice_obj: SPICEFilePath, s3_key: str):
     if spice_obj.spice_metadata["type"] not in spice_events:
         return None
 
-    logger.info(f"Sending SPICE event for {s3_key} to EventBridge")
-    eventbridge_client = boto3.client("events")
-
     # Create event["detail"] and event inputs
     detail = {
         "object": {
             "key": s3_key,
-            "instrument": "spacecraft",
         }
     }
+
+    eventbridge_client = boto3.client("events")
+    if spice_obj.spice_metadata["type"] == "repoint":
+        detail["object"]["instrument"] = "spacecraft"
+        detail["object"]["data_level"] = "l1a"
+
     event = IMAPLambdaPutEvent(
         detail_type="Processed File",
         detail=detail,
     )
     event_data = event.to_event()
+
+    logger.info(
+        f"Sending SPICE event for {s3_key} to EventBridge"
+        f" with detail {json.dumps(detail)}"
+    )
 
     # Send event to EventBridge
     response = eventbridge_client.put_events(Entries=[event_data])
