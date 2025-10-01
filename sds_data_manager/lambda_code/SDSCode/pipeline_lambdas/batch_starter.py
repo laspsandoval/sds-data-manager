@@ -981,8 +981,11 @@ def bulk_reprocessing_event(session, events):
         ):
             cadence_reprocessing_event(session, job, start_date, end_date)
         else:
-            # check if the job is a special case where we do not want to filter
-            # dependencies
+            # Spacecraft pointing-attitude jobs are special cases:
+            # Unlike other reprocessing jobs, they have no upstream science
+            # dependencies, meaning there is only one pointing-attitude job per
+            # reprocessing call. Therefore, dependencies should not be filtered
+            # after the initial upstream dependency query in "submit_all_jobs".
             if (
                 job["data_source"] == "spacecraft"
                 and job["descriptor"] == "pointing-attitude"
