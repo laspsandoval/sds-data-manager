@@ -981,7 +981,22 @@ def bulk_reprocessing_event(session, events):
         ):
             cadence_reprocessing_event(session, job, start_date, end_date)
         else:
-            submit_all_jobs(session, job, start_date, end_date)
+            # check if the job is a special case where we do not want to filter
+            # dependencies
+            if (
+                job["data_source"] == "spacecraft"
+                and job["descriptor"] == "pointing-attitude"
+            ):
+                filter_dependencies = False
+            else:
+                filter_dependencies = True
+            submit_all_jobs(
+                session,
+                job,
+                start_date,
+                end_date,
+                filter_dependencies=filter_dependencies,
+            )
 
 
 def upload_dependency_file(dependency_file_path: Path, serialized_dependencies: str):
