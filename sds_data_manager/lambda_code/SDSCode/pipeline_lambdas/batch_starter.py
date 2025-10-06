@@ -688,7 +688,8 @@ def calculate_repoint_table_date_range(session, file_obj):
     the start date, we query the database and use the end date from the previous
     repoint table.
 
-    NOTE:
+    Notes
+    -----
     Repoint file is used to kick off the pointing_attitude job only.
     This date range is used to query attitude kernel file(s). If
     other jobs become dependent on triggering off of the repoint file,
