@@ -30,11 +30,19 @@ def process_item_types(item: dict) -> dict:
     for key, value in item.items():
         # Vectors fields
         if isinstance(value, list):
-            result[key] = [int(v) if v % 1 == 0 else float(v) for v in value]
-
+            result[key] = [int(v) if v % 1 == 0 else round(float(v), 3) for v in value]
+        # Dictionary fields
+        elif isinstance(value, dict):
+            nested = {}
+            for k, v in value.items():
+                if isinstance(v, Decimal):
+                    nested[k] = int(v) if v % 1 == 0 else round(float(v), 3)
+                else:
+                    nested[k] = v
+            result[key] = nested
         # Scalar fields
         elif isinstance(value, Decimal):
-            result[key] = int(value) if value % 1 == 0 else float(value)
+            result[key] = int(value) if value % 1 == 0 else round(float(value), 3)
 
         else:
             result[key] = value
