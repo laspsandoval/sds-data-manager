@@ -700,9 +700,34 @@ lo, l3, l090-ena-h-sf-sp-ram-hae-4deg-6mo, lo, l3, l090-spx-h-sf-sp-ram-hae-4deg
 
 # <---- MAG Dependencies ---->
 
-mag, l0, raw, mag, l1a, all, HARD, DOWNSTREAM
+# Clock dependencies for all MAG levels
 leapseconds, spice, historical, mag, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
 spacecraft_clock, spice, historical, mag, l1a, all, HARD_NO_TRIGGER, DOWNSTREAM
+
+leapseconds, spice, historical, mag, l1b, norm-mago, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1b, norm-mago, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l1b, norm-magi, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1b, norm-magi, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l1b, burst-mago, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1b, burst-mago, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l1b, burst-magi, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1b, burst-magi, HARD_NO_TRIGGER, DOWNSTREAM
+
+leapseconds, spice, historical, mag, l1c, norm-mago, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1c, norm-mago, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l1c, norm-magi, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1c, norm-magi, HARD_NO_TRIGGER, DOWNSTREAM
+
+leapseconds, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+
+leapseconds, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
+leapseconds, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+spacecraft_clock, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
+
+# Other dependencies
+mag, l0, raw, mag, l1a, all, HARD, DOWNSTREAM
 
 mag, l1a, norm-mago, mag, l1b, norm-mago, HARD, DOWNSTREAM
 mag, ancillary, l1b-calibration, mag, l1b, norm-mago, HARD, DOWNSTREAM
@@ -725,13 +750,10 @@ mag, l1c, norm-mago, mag, l1d, norm-srf, HARD, DOWNSTREAM
 mag, l1c, norm-magi, mag, l1d, norm-srf, HARD, DOWNSTREAM
 mag, l1b, burst-mago, mag, l1d, norm-srf, SOFT_TRIGGER, DOWNSTREAM
 mag, l1b, burst-magi, mag, l1d, norm-srf, SOFT_TRIGGER, DOWNSTREAM
-mag, ancillary, l1d-calibration, mag, l1d, norm-srf, HARD, DOWNSTREAM
 
 imap_frames, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 science_frames, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, mag, l1d, norm-srf, HARD, DOWNSTREAM
-leapseconds, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
-spacecraft_clock, spice, historical, mag, l1d, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 spin, spin, historical, mag, l1d, norm-srf, HARD, DOWNSTREAM
 
 # MAG L2 and L1D look pretty similar.
@@ -745,15 +767,10 @@ mag, ancillary, l2-burst-offsets, mag, l2, burst-srf, HARD, DOWNSTREAM
 imap_frames, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 science_frames, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, mag, l2, norm-srf, HARD, DOWNSTREAM
-leapseconds, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
-spacecraft_clock, spice, historical, mag, l2, norm-srf, HARD_NO_TRIGGER, DOWNSTREAM
 
 imap_frames, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
 science_frames, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
 pointing_attitude, spice, historical, mag, l2, burst-srf, HARD, DOWNSTREAM
-leapseconds, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
-spacecraft_clock, spice, historical, mag, l2, burst-srf, HARD_NO_TRIGGER, DOWNSTREAM
-
 
 # <---- Spacecraft Dependencies ---->
 # Quaternions
