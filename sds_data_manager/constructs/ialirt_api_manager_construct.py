@@ -125,6 +125,34 @@ class IalirtApiManager(Construct):
             lambda_function=packets_query_api_lambda,
         )
 
+        # Queries latest realtime filename.
+        # Realtime file contains tcp connection and packet creation information.
+        realtime_query_api_lambda = lambda_.Function(
+            self,
+            id="IAlirtCodeRealtimeQueryAPILambda",
+            function_name="ialirt-realtime-query-api-handler",
+            code=code,
+            handler="IAlirtCode.ialirt_realtime_query_api.lambda_handler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            timeout=cdk.Duration.minutes(1),
+            memory_size=1000,
+            allow_public_subnet=True,
+            vpc=vpc,
+            environment={
+                "S3_BUCKET": data_bucket.bucket_name,
+                "REGION": env.region,
+            },
+            layers=layers,
+        )
+
+        realtime_query_api_lambda.add_to_role_policy(s3_read_policy)
+
+        api.add_route(
+            route="/ialirt-realtime-query",
+            http_method="GET",
+            lambda_function=realtime_query_api_lambda,
+        )
+
         # download API lambda
         download_api = lambda_.Function(
             self,
@@ -204,12 +232,39 @@ class IalirtApiManager(Construct):
         )
 
         # Grant the lambda function read/write permissions on the DynamoDB table.
-        algorithm_table.grant_read_write_data(ialirt_db_query_handler)
+        algorithm_table.grant_read_data(ialirt_db_query_handler)
 
         add_stable_route(
             api,
             "/ialirt-db-query",
             "GET",
             ialirt_db_query_handler,
+            restricted_route_prefixes,
+        )
+
+        ialirt_db_query_formatted_handler = lambda_.Function(
+            self,
+            "IAlirtDbQueryApiFormattedHandler",
+            function_name="ialirt-db-query-formatted-handler",
+            code=code,
+            handler="IAlirtCode.ialirt_db_query_api_formatted.lambda_handler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            timeout=cdk.Duration.minutes(1),
+            memory_size=1000,
+            environment={
+                "ALGORITHM_TABLE": algorithm_table.table_name,
+                "REGION": env.region,
+            },
+            layers=layers,
+        )
+
+        # Grant the lambda function read/write permissions on the DynamoDB table.
+        algorithm_table.grant_read_data(ialirt_db_query_formatted_handler)
+
+        add_stable_route(
+            api,
+            "/space-weather",
+            "GET",
+            ialirt_db_query_formatted_handler,
             restricted_route_prefixes,
         )
