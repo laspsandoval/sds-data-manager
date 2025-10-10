@@ -365,6 +365,7 @@ def build_sds(
         scope=ialirt_stack,
         construct_id="IalirtPointingConstruct",
         ialirt_bucket=ialirt_bucket.ialirt_bucket,
+        data_access_url=general_data_access_url,
     )
 
     # I-ALiRT IOIS coverage lambda (facilitates creating coverage json in s3)
