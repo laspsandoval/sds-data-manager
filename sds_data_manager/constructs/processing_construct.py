@@ -116,7 +116,7 @@ class ProcessingConstruct(Construct):
             image=ecs.ContainerImage.from_ecr_repository(
                 repository=container_repo, tag="latest"
             ),
-            memory=cdk.Size.mebibytes(4096),
+            memory=cdk.Size.gibibytes(16),
             cpu=1,
             environment={
                 # Useful for switching APIs between dev / prod endpoints
