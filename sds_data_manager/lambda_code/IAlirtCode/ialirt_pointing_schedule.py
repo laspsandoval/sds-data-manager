@@ -2,13 +2,14 @@
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 import boto3
 import imap_processing.ialirt.constants
 from imap_processing.ialirt.process_ephemeris import generate_text_files
 
-from sds_data_manager.lambda_code.IAlirtCode.ialirt_coverage import (
+from .ialirt_coverage import (
     get_latest_spice_kernels,
     setup_spice_file,
 )
@@ -58,8 +59,8 @@ def lambda_handler(event, context):
     """Create pointing schedule files."""
     logger.info("Received event: %s", json.dumps(event))
 
-    bucket = event["detail"]["bucket"]["name"]
-    region = event["region"]
+    bucket = os.environ.get("S3_BUCKET")
+    region = os.environ.get("AWS_REGION")
 
     # Download latest SPICE kernels
     dependency_inputs = get_latest_spice_kernels(
