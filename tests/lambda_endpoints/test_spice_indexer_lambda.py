@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 import spiceypy
 from imap_data_access import SPICEFilePath
@@ -82,6 +83,43 @@ def _insert_test_file(session, filename, s3_path, intervals, upload_time=0):
     } | _irrelevant_data()
     session.add(models.SPICEFiles(**metadata_params))
     session.commit()
+
+
+@pytest.mark.parametrize(
+    "coverage_file, expected_coverage",  # noqa: PT006
+    [
+        (
+            "imap_2025_118_2025_120_001.ah.bc",
+            np.array(
+                [
+                    [799244416.073258, 799244763.0732579],
+                ]
+            ),
+        ),
+        (
+            "imap_dps_2025_284_2025_285_001.ah.bc",
+            np.array(
+                [
+                    [784909316.4208736, 784995503.4208926],
+                ]
+            ),
+        ),
+    ],
+)
+def test_get_coverage_dictionary(coverage_file, expected_coverage):
+    """Test get_coverage_dictionary for various files."""
+    tests_path = Path(os.path.abspath(__file__)).parent.parent
+    test_spice_data_dir = tests_path / "test-data" / "test_spice_files"
+    with spiceypy.KernelPool(
+        [
+            str(test_spice_data_dir / "naif0012.tls"),
+            str(test_spice_data_dir / "imap_sclk_0012.tsc"),
+        ]
+    ):
+        results_j2000, _results_datetime, _results_sclk = get_coverage_dictionary(
+            test_spice_data_dir / coverage_file
+        )
+        np.testing.assert_array_equal(results_j2000, expected_coverage)
 
 
 @patch(
