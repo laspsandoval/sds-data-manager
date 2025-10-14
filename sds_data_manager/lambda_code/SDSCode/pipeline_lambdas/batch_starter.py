@@ -198,7 +198,7 @@ def determine_job_version(
             )
         return conditions
 
-    # First check to see if there are any jobs in progress and get the max version
+    # Step 1: query to get the max version from the processing jobs table
     max_version_record = (
         session.query(models.ProcessingJob)
         .filter(*filter_conditions(models.ProcessingJob))
@@ -206,35 +206,44 @@ def determine_job_version(
         .first()
     )
     if max_version_record:
-        max_version = max_version_record.version
-        # If there is a job already in progress, determine whether the current job
-        # is a duplicate of the in-progress job by checking the dependency file hash.
-        # If the hashes are different, then we know the dependencies have changed and
-        # we should bump the version number and continue with processing.
+        max_version_proc = max_version_record.version
+        # Step 2: If there is a job already in progress, determine whether the current
+        # job is a duplicate of the in-progress job by checking the dependency file
+        # hash. If the hashes are different, then we know the dependencies have changed
+        # and we should bump the version number and continue with processing.
         if max_version_record.status == models.Status.INPROGRESS:
             command = max_version_record.container_command
             if dependency_hash(current_dependencies) in command:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
-                return max_version
+                return max_version_proc
             logger.info(
                 f"Job with id: {max_version_record.id} is in progress, but the "
                 f"dependencies have changed. Bumping version number."
             )
     else:
-        max_version = None
-    # If the descriptor is "all", we should only check the processing job table. The
-    # ScienceFiles table does not have descriptors of "all" since the products
-    # produced will have their own specific descriptors.
+        max_version_proc = None
+    # Step 3: If the descriptor is "all", only use the max version from the processing
+    # job table. The ScienceFiles table does not have descriptors of "all" since the
+    # products produced will have their own specific descriptors.
     if descriptor == "all":
-        return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
-    # If no jobs are in progress, check the science files table for the max version.
-    if not max_version:
-        max_version = (
-            session.query(func.max(models.ScienceFiles.version)).filter(
-                *filter_conditions(models.ScienceFiles)
-            )
-        ).scalar()
+        return f"v{int(max_version_proc[1:]) + 1:03d}" if max_version_proc else "v001"
+
+    # Step 4: Get the max version from the science files table.
+    max_version_sci = (
+        session.query(func.max(models.ScienceFiles.version)).filter(
+            *filter_conditions(models.ScienceFiles)
+        )
+    ).scalar()
+
+    # Step 5: By default, use the max version from the science files table unless
+    # it is None. If None, then use the max version from the processing jobs
+    # table. For example, if the job is a spacecraft pointing-attitude job, it will
+    # produce a SPICE kernel and not a science file. There is no way to determine the
+    # filename of the kernel that will be produced, so we rely on the max version from
+    # the processing jobs table.
+    max_version = max_version_sci if max_version_sci else max_version_proc
+
     # Bump the version number. "V001" will be returned if max_version is None.
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
 
