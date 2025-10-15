@@ -2110,3 +2110,73 @@ def test_lambda_skip_processing_due_to_crid_check(session, caplog):
     # Verify the job was skipped
     assert log in caplog.text
     assert mock_submit.call_count == 0
+
+
+# Add tests to verify that the correct version is calculated.
+def test_determine_job_version_science(session):
+    """Tests ``determine_job_version`` for science jobs."""
+    # For science files, the job version should be determined from the science files
+    # table. Although there is a successful job with v003, the latest science file is
+    # v001, so the next version should be v002. It is possible for a job to have
+    # Status = SUCCEEDED, but no files were produced for the job, which is why we check
+    # the science files table for the version.
+    records = [
+        ScienceFiles(
+            file_path="/path/to/imap_lo_l1a_de_20240101_v002.cdf",
+            instrument="lo",
+            data_level="l1a",
+            descriptor="de",
+            start_date=datetime(2024, 1, 1),
+            version="v001",
+            extension="cdf",
+            ingestion_date=datetime.strptime(
+                "2024-01-25 23:35:26+00:00", "%Y-%m-%d %H:%M:%S%z"
+            ),
+        ),
+        ProcessingJob(
+            status=models.Status.SUCCEEDED,
+            instrument="lo",
+            data_level="l1a",
+            descriptor="de",
+            start_date=datetime(2024, 1, 1),
+            version="v003",
+        ),
+    ]
+    session.add_all(records)
+    session.add_all(records)
+    version = determine_job_version(
+        session, "lo", "l1a", "de", datetime(2024, 1, 1), "test_dependency"
+    )
+    # The version should be v002
+    assert version == "v002"
+
+
+def test_determine_job_version_spacecraft(session):
+    """Tests ``determine_job_version`` for spacecraft jobs."""
+    # the function determine_job_version uses the processing job table to determine
+    # the correct version for a spacecraft pointing-attitude job, since there is no way
+    # to determine the filename and therefore the version from the spice table using the
+    # information given. Assert that the version is calculated from the processing
+    # job table.
+    records = [
+        # Add a processing job with version 1
+        ProcessingJob(
+            status=models.Status.SUCCEEDED,
+            instrument="spacecraft",
+            data_level="l1a",
+            descriptor="pointing-attitude",
+            start_date=datetime(2024, 1, 1),
+            version="v002",
+        )
+    ]
+    session.add_all(records)
+    version = determine_job_version(
+        session,
+        "spacecraft",
+        "l1a",
+        "pointing-attitude",
+        datetime(2024, 1, 1),
+        "test_dependency",
+    )
+    # The version should be v003 since there was a successful job with v002
+    assert version == "v003"
