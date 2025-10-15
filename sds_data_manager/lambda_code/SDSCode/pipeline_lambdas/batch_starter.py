@@ -188,7 +188,7 @@ def determine_job_version(
         .first()
     )
     if max_version_record:
-        max_version_proc = max_version_record.version
+        max_version_processing = max_version_record.version
         # Step 2: If there is a job already in progress, determine whether the current
         # job is a duplicate of the in-progress job by checking the dependency file
         # hash. If the hashes are different, then we know the dependencies have changed
@@ -198,18 +198,26 @@ def determine_job_version(
             if dependency_hash(current_dependencies) in command:
                 # Return the current max version and this job will not proceed if
                 # everything else is the same.
-                return max_version_proc
-            logger.info(
-                f"Job with id: {max_version_record.id} is in progress, but the "
-                f"dependencies have changed. Bumping version number."
-            )
+                return max_version_processing
+            else:
+                # Dependencies have changed, so bump the version number.
+                logger.info(
+                    f"Job with id: {max_version_record.id} is in progress, but the "
+                    f"dependencies have changed. Bumping version number."
+                )
+                return f"v{int(max_version_processing[1:]) + 1:03d}"
+
     else:
-        max_version_proc = None
+        max_version_processing = None
     # Step 3: If the descriptor is "all", only use the max version from the processing
     # job table. The ScienceFiles table does not have descriptors of "all" since the
     # products produced will have their own specific descriptors.
-    if descriptor == "all":
-        return f"v{int(max_version_proc[1:]) + 1:03d}" if max_version_proc else "v001"
+    if "all" in descriptor:
+        return (
+            f"v{int(max_version_processing[1:]) + 1:03d}"
+            if max_version_processing
+            else "v001"
+        )
 
     # Step 4: Get the max version from the science files table.
     max_version_sci = (
@@ -219,12 +227,15 @@ def determine_job_version(
     ).scalar()
 
     # Step 5: By default, use the max version from the science files table unless
-    # it is None. If None, then use the max version from the processing jobs
-    # table. For example, if the job is a spacecraft pointing-attitude job, it will
-    # produce a SPICE kernel and not a science file. There is no way to determine the
-    # filename of the kernel that will be produced, so we rely on the max version from
-    # the processing jobs table.
-    max_version = max_version_sci if max_version_sci else max_version_proc
+    # it is a spacecraft "pointing-attitude" job. If a so, then use the max version
+    # from the processing jobs table. If the job is a spacecraft pointing-attitude job,
+    # it will produce a SPICE kernel and not a science file. There is no way to
+    # determine the filename of the kernel that will be produced, so we rely on the max
+    # version from the processing jobs table.
+    if instrument == "spacecraft" and descriptor == "pointing-attitude":
+        max_version = max_version_processing
+    else:
+        max_version = max_version_sci
 
     # Bump the version number. "V001" will be returned if max_version is None.
     return f"v{int(max_version[1:]) + 1:03d}" if max_version else "v001"
