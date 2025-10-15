@@ -64,8 +64,7 @@ def lambda_handler(event, context):
     region = os.environ.get("AWS_REGION")
     url = os.environ.get("IMAP_DATA_ACCESS_URL")
 
-    download_dir = Path("/tmp")  # noqa: S108
-    imap_data_access.config["DATA_DIR"] = download_dir
+    imap_data_access.config["DATA_DIR"] = Path("/tmp")  # noqa: S108
 
     # Download latest SPICE kernels
     dependency_inputs = get_latest_spice_kernels(

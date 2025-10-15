@@ -34,7 +34,8 @@ class IalirtPointingConstruct(Construct):
             Path to the Dockerfile.
         data_access_url : str, optional
             The data access URL to use for this job, by default the empty string.
-            You should set this to the appropriate API endpoint, e.g.
+            You should set this to the appropriate API endpoint used for
+            data access, e.g.
             https://api.dev.imap-mission.com
         kwargs : dict
             Keyword arguments.
