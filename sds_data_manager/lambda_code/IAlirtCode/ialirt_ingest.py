@@ -487,9 +487,6 @@ def lambda_handler(event, context):
     logger.info("Retrieved filename: %s", filename)
     dependency_inputs = get_latest_spice_kernels(url)
 
-    # Insert kernel metadata every minute.
-    insert_kernels(dependency_inputs, algorithm_table)
-
     logger.info("dependency_inputs: %s", dependency_inputs)
     download_spice_file(dependency_inputs)
 
@@ -510,6 +507,8 @@ def lambda_handler(event, context):
         logger.info("Packets parsed. Processing algorithms.")
         # Process algorithms and insert new data.
         process_algorithms(combined, algorithm_table)
+        # Insert kernel metadata every minute.
+        insert_kernels(dependency_inputs, algorithm_table)
 
         logger.info("Successfully wrote all new items to DynamoDB")
     else:
