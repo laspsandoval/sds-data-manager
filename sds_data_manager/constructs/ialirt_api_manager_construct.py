@@ -67,7 +67,7 @@ class IalirtApiManager(Construct):
 
         auth_route_prefixes = ["", "/authorized", "/api-key"]
         if account_name == "prod":
-            restricted_route_prefixes = ["/api-key"]
+            restricted_route_prefixes = ["/api-key", "/authorized"]
         else:
             restricted_route_prefixes = auth_route_prefixes
 
