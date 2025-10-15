@@ -17,9 +17,10 @@ def lambda_handler(event, context):  # noqa: PLR0912
     """Handle API requests for the spin-data endpoint."""
     logger.debug("Spin/Repoint Query Event: " + json.dumps(event, indent=2))
 
-    if "spin" in event.get("path", "").lower():
+    raw_path = event.get("rawPath", "")
+    if "spin" in raw_path:
         table = SpinFiles
-    elif "repoint" in event.get("path", "").lower():
+    elif "repoint" in raw_path:
         table = RepointFiles
     else:
         response = {
@@ -32,7 +33,7 @@ def lambda_handler(event, context):  # noqa: PLR0912
         return response
 
     # add session, pick model like in indexer and add query to filter_as
-    query_params = event["queryStringParameters"]
+    query_params = event.get("queryStringParameters", {})
     with db.Session() as session:
         # select the SPICE files table for the query
         query = select(table)
