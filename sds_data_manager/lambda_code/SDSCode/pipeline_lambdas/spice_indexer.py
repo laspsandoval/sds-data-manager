@@ -171,9 +171,16 @@ def get_coverage_dictionary(spice_file: Path):
 
     # 1) Calculate the time coverage of the file
     if spice_file.suffix == ".bc":
+        # get the objects covered by the CK
+        objs = spiceypy.ckobj(str(spice_file))
+        if len(objs) > 1:
+            raise ValueError(
+                f"Unable to handle ck files with more than one object. "
+                f"Found {len(objs)} objects in {spice_file}"
+            )
         cover = spiceypy.ckcov(
             str(spice_file),
-            idcode=SPACECRAFT_ID * 1000,
+            idcode=objs[0],
             cover=cover,
             needav=COVERAGE_ANGULAR_VELOCITY_ONLY,
             level=COVERAGE_LEVEL,
@@ -336,23 +343,6 @@ def index_spice_file(s3_key: str):
                 spice_metadata["start_date"] = minimum_mission_time
             if spice_metadata["end_date"] is None:
                 spice_metadata["end_date"] = maximum_mission_time
-            file_coverage_datetime = [
-                [spice_metadata["start_date"], spice_metadata["end_date"]]
-            ]
-            file_coverage_j2000 = [
-                [
-                    spiceypy.datetime2et(spice_metadata["start_date"]),
-                    spiceypy.datetime2et(spice_metadata["end_date"]),
-                ]
-            ]
-            file_coverage_sclk = [
-                [
-                    spiceypy.sce2s(SPACECRAFT_ID, file_coverage_j2000[0][0]),
-                    spiceypy.sce2s(SPACECRAFT_ID, file_coverage_j2000[0][1]),
-                ]
-            ]
-        elif spice_metadata["type"] == "pointing_attitude":
-            # Calculate the coverage for pointing attitude files
             file_coverage_datetime = [
                 [spice_metadata["start_date"], spice_metadata["end_date"]]
             ]
