@@ -4,15 +4,16 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import boto3
+import imap_data_access
 import imap_processing.ialirt.constants
-from imap_processing.ialirt.process_ephemeris import generate_text_files
-
-from .ialirt_coverage import (
+from ialirt_coverage import (
     get_latest_spice_kernels,
     setup_spice_file,
 )
+from imap_processing.ialirt.process_ephemeris import generate_text_files
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -61,6 +62,9 @@ def lambda_handler(event, context):
 
     bucket = os.environ.get("S3_BUCKET")
     region = os.environ.get("AWS_REGION")
+    url = os.environ.get("IMAP_DATA_ACCESS_URL")
+
+    imap_data_access.config["DATA_DIR"] = Path("/tmp")  # noqa: S108
 
     # Download latest SPICE kernels
     dependency_inputs = get_latest_spice_kernels(
@@ -71,7 +75,8 @@ def lambda_handler(event, context):
             "ephemeris_predicted",  # e.g., imap_spk_demo.bsp
             "ephemeris_90days",  # e.g., imap_spk_demo.bsp
             "earth_attitude",  # e.g., earth_latest_high_prec.bpc
-        ]
+        ],
+        url,
     )
     logger.info("dependency_inputs: %s", dependency_inputs)
     setup_spice_file(dependency_inputs)
