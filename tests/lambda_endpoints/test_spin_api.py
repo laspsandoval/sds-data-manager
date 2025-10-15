@@ -75,7 +75,7 @@ def test_spin_table_api_date_filters(spin_db):
             "start_date": "20260925",
             "end_date": "20260925",
         },
-        "path": "/spin-table",
+        "rawPath": "/spin-table",
     }
     context = {}
 
@@ -129,7 +129,7 @@ def test_spin_table_api_invalid_parameter(spin_db):
     """Test error handling for invalid query parameters."""
     event = {
         "queryStringParameters": {"invalid_param": "value"},
-        "path": "/spin-table",
+        "rawPath": "/spin-table",
     }
 
     response = spin_repoint_table_api.lambda_handler(event, {})
@@ -143,7 +143,7 @@ def test_spin_table_api_invalid_date_format(spin_db):
     """Test error handling for invalid date formats."""
     event = {
         "queryStringParameters": {"start_date": "2025-09-25"},
-        "path": "/spin-table",
+        "rawPath": "/spin-table",
     }
 
     response = spin_repoint_table_api.lambda_handler(event, {})
@@ -157,7 +157,7 @@ def test_ingestion_date(spin_db):
     """Test that ingestion date query works."""
     event = {
         "queryStringParameters": {"start_ingest_date": "20250710"},
-        "path": "/spin-table",
+        "rawPath": "/spin-table",
     }
 
     response = spin_repoint_table_api.lambda_handler(event, {})
@@ -179,7 +179,7 @@ def test_ingestion_date(spin_db):
     # Try with end date now
     event = {
         "queryStringParameters": {"end_ingest_date": "20250709"},
-        "path": "/spin-table",
+        "rawPath": "/spin-table",
     }
 
     response = spin_repoint_table_api.lambda_handler(event, {})
@@ -201,7 +201,7 @@ def test_repoint_table(repoint_db):
             "start_date": "20260925",
             "end_date": "20260925",
         },
-        "path": "/repoint-table",
+        "rawPath": "/repoint-table",
     }
     context = {}
 
