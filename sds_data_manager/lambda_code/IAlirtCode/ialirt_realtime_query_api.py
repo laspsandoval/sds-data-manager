@@ -37,14 +37,14 @@ def lambda_handler(event, context):
     )
 
     now = datetime.now(timezone.utc)
-    five_minutes_ago = now - timedelta(minutes=5)
+    sixty_minutes_ago = now - timedelta(hours=1)
 
     # Account for any cases in which data spans a threshold since
     # s3 only uses prefixes for queries.
     # Example:
     # now = 2026-01-01T00:02:00Z
-    # five_minutes_ago = 2025-12-31T23:57:00Z
-    first_prefix = five_minutes_ago.strftime("realtime/imap_ialirt_realtime_%Y-%jT%H")
+    # sixty_minutes_ago = 2025-12-31T23:02:00Z
+    first_prefix = sixty_minutes_ago.strftime("realtime/imap_ialirt_realtime_%Y-%jT%H")
     second_prefix = now.strftime("realtime/imap_ialirt_realtime_%Y-%jT%H")
 
     first_response = s3_client.list_objects_v2(Bucket=bucket, Prefix=first_prefix)
@@ -59,9 +59,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 404,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(
-                {"error": "No realtime files found in the last 5 minutes."}
-            ),
+            "body": json.dumps({"error": "No realtime files found in the last hour."}),
         }
 
     # Pick the latest based on LastModified
