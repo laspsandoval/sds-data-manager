@@ -570,9 +570,10 @@ def send_spice_event(spice_obj: SPICEFilePath, s3_key: str):
     }
 
     eventbridge_client = boto3.client("events")
-    if spice_obj.spice_metadata["type"] == "repoint":
-        detail["object"]["instrument"] = "spacecraft"
-        detail["object"]["data_level"] = "l1a"
+    # In order to trigger batch starter, the event must have a key, instrument and
+    # data_level.
+    detail["object"]["instrument"] = "spacecraft"
+    detail["object"]["data_level"] = "l1a"
 
     event = IMAPLambdaPutEvent(
         detail_type="Processed File",
