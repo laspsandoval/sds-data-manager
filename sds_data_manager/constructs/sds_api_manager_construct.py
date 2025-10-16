@@ -280,12 +280,12 @@ class SdsApiManager(Construct):
             api, "/download", "HEAD", download_api_lambda, auth_route_prefixes
         )
 
-        universal_spin_table_handler = lambda_.Function(
+        spin_repoint_query_api_lambda = lambda_.Function(
             self,
-            id="universal-spin-table-api-handler",
-            function_name="universal-spin-table-api-handler",
+            id="spin-repoint-query-api",
+            function_name="spin-repoint-query-api",
             code=code,
-            handler="SDSCode.api_lambdas.spin_table_api.lambda_handler",
+            handler="SDSCode.api_lambdas.spin_repoint_table_api.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,
             timeout=cdk.Duration.minutes(1),
             memory_size=1000,
@@ -358,7 +358,7 @@ class SdsApiManager(Construct):
         rds_secret = secrets.Secret.from_secret_name_v2(
             self, "rds_secret", db_secret_name
         )
-        rds_secret.grant_read(grantee=universal_spin_table_handler)
+        rds_secret.grant_read(grantee=spin_repoint_query_api_lambda)
         rds_secret.grant_read(grantee=query_api_lambda)
         rds_secret.grant_read(grantee=download_api_lambda)
         rds_secret.grant_read(grantee=spice_query_api_lambda)
@@ -367,8 +367,15 @@ class SdsApiManager(Construct):
         rds_secret.grant_read(grantee=batch_job_query_api_lambda)
 
         for prefix in auth_route_prefixes:
+            # Add spin table route
             api.add_route(
                 route=f"{prefix}/spin-table",
                 http_method="GET",
-                lambda_function=universal_spin_table_handler,
+                lambda_function=spin_repoint_query_api_lambda,
+            )
+            # Same handler, but add a route to the repointing table
+            api.add_route(
+                route=f"{prefix}/repoint-table",
+                http_method="GET",
+                lambda_function=spin_repoint_query_api_lambda,
             )
