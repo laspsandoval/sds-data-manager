@@ -735,6 +735,14 @@ def s3_processing_event(session, events):
             else:
                 triggered_from_glows_l3e = True
 
+        # For spice files, the source is a list of kernel types because
+        # metakernel can contain multiple sources.
+        #     eg spacecraft_clock, spacecraft_clock and so on.
+        # But the file in the batch starter event will always only have one
+        # type of kernel, so we take the first element of the list.
+        if input_obj.data_type == "spice":
+            input_obj.source = input_obj.source[0]
+
         potential_jobs = dependency.get_jobs(
             data_source=input_obj.source,
             descriptor=input_obj.descriptor,
