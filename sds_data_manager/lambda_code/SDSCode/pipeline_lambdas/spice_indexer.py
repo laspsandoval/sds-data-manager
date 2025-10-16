@@ -571,7 +571,8 @@ def send_spice_event(spice_obj: SPICEFilePath, s3_key: str):
 
     eventbridge_client = boto3.client("events")
     # In order to trigger batch starter, the event must have a key, instrument and
-    # data_level. Otherwise, it sends event but never makes it because of SQS filter policy
+    # data_level. Otherwise, it sends event but never makes it because of SQS filter
+    # policy
     detail["object"]["instrument"] = "spacecraft"
     detail["object"]["data_level"] = "l1a"
 
