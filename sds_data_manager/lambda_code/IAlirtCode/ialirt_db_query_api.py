@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 from decimal import Decimal
 
 import boto3
@@ -10,6 +11,11 @@ from boto3.dynamodb.conditions import Key
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+table_name = os.environ.get("ALGORITHM_TABLE")
+region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+dynamodb = boto3.resource("dynamodb", region_name=region)
+table = dynamodb.Table(table_name)
 
 
 def process_item_types(item: dict) -> dict:
@@ -67,12 +73,11 @@ def lambda_handler(event, context):  # noqa: PLR0912
         and runtime environment.
 
     """
-    table_name = os.environ.get("ALGORITHM_TABLE")
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-    dynamodb = boto3.resource("dynamodb", region_name=region)
-    table = dynamodb.Table(table_name)
+    t1 = time.perf_counter()
 
     logger.info(f"Received event: {json.dumps(event)}")
+
+    # --- Parse event ---
     params = event.get("queryStringParameters", {})
 
     if not params:
@@ -83,7 +88,9 @@ def lambda_handler(event, context):  # noqa: PLR0912
 
     key_expr = Key("apid").eq(478)
     query_kwargs = {"KeyConditionExpression": key_expr}
+    t2 = time.perf_counter()
 
+    # --- Determine key condition ---
     allowed_params = {
         "met_start",
         "met_end",
@@ -183,10 +190,29 @@ def lambda_handler(event, context):  # noqa: PLR0912
         }
 
     query_kwargs["KeyConditionExpression"] = key_expr
+    t3 = time.perf_counter()
 
+    # --- Query DynamoDB ---
     response = table.query(**query_kwargs)
+    t4 = time.perf_counter()
 
+    # --- Process items ---
     items = response.get("Items", [])
     processed_items = [process_item_types(item) for item in items]
+    t5 = time.perf_counter()
 
-    return {"statusCode": 200, "body": json.dumps(processed_items)}
+    # --- Serialize to JSON ---
+    json_body = json.dumps(processed_items)
+    t6 = time.perf_counter()
+
+    num_items = len(processed_items)
+
+    text = (
+        f"Param parse: {t2 - t1:.3f}s | KeyCondition setup: {t3 - t2:.3f}s | "
+        f"Query: {t4 - t3:.3f}s | Process: {t5 - t4:.3f}s | "
+        f"JSON: {t6 - t5:.3f}s | TOTAL: {t6 - t1:.3f}s | "
+        f"Items: {num_items}"
+    )
+    logger.info(text)
+
+    return {"statusCode": 200, "body": json_body}

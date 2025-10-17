@@ -12,6 +12,11 @@ from boto3.dynamodb.conditions import Key
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+table_name = os.environ.get("ALGORITHM_TABLE")
+region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+dynamodb = boto3.resource("dynamodb", region_name=region)
+table = dynamodb.Table(table_name)
+
 
 def process_item_types(item: dict) -> dict:
     """Convert Decimal values to int/float for known fields.
@@ -75,11 +80,6 @@ def lambda_handler(event, context):  # noqa: PLR0912, PLR0915
     [-2.058, 3.792, -3.989]],
     'time_tag_utc': ['2025-10-02T07:07:13', '2025-10-02T07:07:17'], ...}
     """
-    table_name = os.environ.get("ALGORITHM_TABLE")
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-    dynamodb = boto3.resource("dynamodb", region_name=region)
-    table = dynamodb.Table(table_name)
-
     logger.info(f"Received event: {json.dumps(event)}")
     params = event.get("queryStringParameters", {})
 
