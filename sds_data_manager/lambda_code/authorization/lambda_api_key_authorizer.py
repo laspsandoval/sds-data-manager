@@ -1,26 +1,11 @@
 """Authorization for API Keys within the SDS."""
 
-import logging
-
 import boto3
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
 # Initialize DynamoDB resource
-TABLE_NAME = "imap-sdc-api-keys"
-
-
-def get_api_key_metadata(api_key):
-    """Retrieve API key metadata from DynamoDB."""
-    try:
-        dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.Table(TABLE_NAME)
-        response = table.get_item(Key={"api_key": api_key})
-        return response.get("Item")
-    except Exception as e:
-        logger.error(f"Error retrieving API key metadata: {e}")
-        return None
+# Specifically outside of the handler to be cached in the lambda execution environment
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table("imap-sdc-api-keys")
 
 
 def lambda_handler(event, context):
@@ -31,7 +16,11 @@ def lambda_handler(event, context):
         return {"isAuthorized": False}
 
     # Retrieve metadata from DynamoDB
-    metadata = get_api_key_metadata(api_key)
+    try:
+        metadata = table.get_item(Key={"api_key": api_key}).get("Item")
+    except Exception:
+        # Log? print(f"Error retrieving API key metadata: {e}")
+        return {"isAuthorized": False}
     if not metadata:
         return {"isAuthorized": False}
 
