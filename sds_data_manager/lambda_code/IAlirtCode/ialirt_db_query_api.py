@@ -12,6 +12,11 @@ from boto3.dynamodb.conditions import Key
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+table_name = os.environ.get("ALGORITHM_TABLE")
+region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+dynamodb = boto3.resource("dynamodb", region_name=region)
+table = dynamodb.Table(table_name)
+
 
 def process_item_types(item: dict) -> dict:
     """Convert Decimal values to int/float for known fields.
@@ -51,7 +56,7 @@ def process_item_types(item: dict) -> dict:
     return result
 
 
-def lambda_handler(event, context):  # noqa: PLR0912, PLR0915
+def lambda_handler(event, context):  # noqa: PLR0912
     """Create metadata and add it to the database.
 
     This function is an event handler for s3 ingest bucket.
@@ -68,11 +73,6 @@ def lambda_handler(event, context):  # noqa: PLR0912, PLR0915
         and runtime environment.
 
     """
-    t0 = time.perf_counter()
-    table_name = os.environ.get("ALGORITHM_TABLE")
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-    dynamodb = boto3.resource("dynamodb", region_name=region)
-    table = dynamodb.Table(table_name)
     t1 = time.perf_counter()
 
     logger.info(f"Received event: {json.dumps(event)}")
@@ -208,10 +208,9 @@ def lambda_handler(event, context):  # noqa: PLR0912, PLR0915
     num_items = len(processed_items)
 
     text = (
-        f"[TIMER SUMMARY] DynamoDB init: {t1 - t0:.3f}s | "
         f"Param parse: {t2 - t1:.3f}s | KeyCondition setup: {t3 - t2:.3f}s | "
         f"Query: {t4 - t3:.3f}s | Process: {t5 - t4:.3f}s | "
-        f"JSON: {t6 - t5:.3f}s | TOTAL: {t6 - t0:.3f}s | "
+        f"JSON: {t6 - t5:.3f}s | TOTAL: {t6 - t1:.3f}s | "
         f"Items: {num_items}"
     )
     logger.info(text)
