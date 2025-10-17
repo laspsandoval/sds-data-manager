@@ -223,12 +223,14 @@ class IalirtApiManager(Construct):
             handler="IAlirtCode.ialirt_db_query_api.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,
             timeout=cdk.Duration.minutes(1),
-            memory_size=1000,
+            # Lambda allocates CPU proportionally to memory,
+            # and DynamoDB queries are often CPU-bound due to
+            # JSON parsing and network serialization.
+            memory_size=2048,  # MB
             environment={
                 "ALGORITHM_TABLE": algorithm_table.table_name,
                 "REGION": env.region,
             },
-            layers=layers,
         )
 
         # Grant the lambda function read/write permissions on the DynamoDB table.
@@ -250,12 +252,14 @@ class IalirtApiManager(Construct):
             handler="IAlirtCode.ialirt_db_query_api_formatted.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_12,
             timeout=cdk.Duration.minutes(1),
-            memory_size=1000,
+            # Lambda allocates CPU proportionally to memory,
+            # and DynamoDB queries are often CPU-bound due to
+            # JSON parsing and network serialization.
+            memory_size=2048,
             environment={
                 "ALGORITHM_TABLE": algorithm_table.table_name,
                 "REGION": env.region,
             },
-            layers=layers,
         )
 
         # Grant the lambda function read/write permissions on the DynamoDB table.
