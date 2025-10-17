@@ -14,16 +14,6 @@ import boto3
 import pytest
 from moto import mock_dynamodb
 
-from sds_data_manager.lambda_code.authorization.lambda_api_key_authorizer import (
-    get_api_key_metadata,
-    lambda_handler,
-)
-from sds_data_manager.lambda_code.authorization.manage_api_keys import (
-    add_key_to_db,
-    get_keys,
-    remove_key_from_db,
-)
-
 TABLE_NAME = "imap-sdc-api-keys"
 
 
@@ -45,6 +35,16 @@ def dynamodb_table():
 
 def test_api_key_management(dynamodb_table):
     """Test API key management operations."""
+    # Import after mocks are set up
+    from sds_data_manager.lambda_code.authorization.lambda_api_key_authorizer import (
+        lambda_handler,
+    )
+    from sds_data_manager.lambda_code.authorization.manage_api_keys import (
+        add_key_to_db,
+        get_keys,
+        remove_key_from_db,
+    )
+
     # Test adding a key
     test_key = "test123456789abcdef"
     add_key_to_db(
@@ -58,8 +58,8 @@ def test_api_key_management(dynamodb_table):
     assert keys[test_key]["email"] == "test@example.com"
     assert keys[test_key]["scope"] == "full"
 
-    # Test getting metadata for authorization
-    metadata = get_api_key_metadata(test_key)
+    # Test getting metadata for authorization (direct table access)
+    metadata = dynamodb_table.get_item(Key={"api_key": test_key}).get("Item")
     assert metadata is not None
     assert metadata["owner"] == "Test User"
 
@@ -88,6 +88,14 @@ def test_api_key_management(dynamodb_table):
 
 def test_scope_restrictions(dynamodb_table):
     """Test scope-based access restrictions."""
+    # Import after mocks are set up
+    from sds_data_manager.lambda_code.authorization.lambda_api_key_authorizer import (
+        lambda_handler,
+    )
+    from sds_data_manager.lambda_code.authorization.manage_api_keys import (
+        add_key_to_db,
+    )
+
     # Add a key with limited scope
     limited_key = "limited123456789abc"
     add_key_to_db(

@@ -1,5 +1,4 @@
 """Tests for the I-ALiRT DB Query API Lambda function."""
-# ruff: noqa: PLC0415
 
 import importlib
 import json
