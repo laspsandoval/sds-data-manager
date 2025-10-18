@@ -100,8 +100,8 @@ class PacketDownloaderLambda(Construct):
         rule = aws_events.Rule(
             self,
             "PacketDownloaderScheduleRule",
-            # Every 6 hours at 5 minutes past the hour
+            # Every 6 hours at 20 minutes past the hour
             # 00:00 -> 06:00, 06:00 -> 12:00, 12:00 -> 18:00, 18:00 -> 00:00
-            schedule=cdk.aws_events.Schedule.cron(minute="5", hour="*/6"),
+            schedule=cdk.aws_events.Schedule.cron(minute="20", hour="*/6"),
         )
         rule.add_target(cdk.aws_events_targets.LambdaFunction(packet_lambda))
