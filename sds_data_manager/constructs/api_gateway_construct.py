@@ -105,6 +105,7 @@ class ApiGateway(Construct):
             handler="lambda_api_key_authorizer.lambda_handler",
             code=lambda_.Code.from_asset("sds_data_manager/lambda_code/authorization"),
             timeout=Duration.seconds(10),
+            memory_size=512,  # Increase memory for larger network
         )
 
         # Create or reference the API Keys DynamoDB table
@@ -124,6 +125,9 @@ class ApiGateway(Construct):
             handler=self.api_key_authorizer_lambda,
             response_types=[apigwv2_authorizers.HttpLambdaResponseType.SIMPLE],
             identity_source=["$request.header.x-api-key"],
+            # Cache multiple requests with the same API key so we don't
+            # invoke the lambda repeatedly for the same key
+            results_cache_ttl=Duration.hours(12),
         )
 
         # Add a custom domain to the API if we have one
