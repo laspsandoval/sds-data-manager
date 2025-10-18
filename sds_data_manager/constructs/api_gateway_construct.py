@@ -127,7 +127,7 @@ class ApiGateway(Construct):
             identity_source=["$request.header.x-api-key"],
             # Cache multiple requests with the same API key so we don't
             # invoke the lambda repeatedly for the same key
-            results_cache_ttl=Duration.hours(12),
+            results_cache_ttl=Duration.hours(1),
         )
 
         # Add a custom domain to the API if we have one
