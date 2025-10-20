@@ -221,8 +221,7 @@ def test_get_jobs_repoint(session):
         ]
     )
     session.commit()
-    # Get upstream files for glows l1a all. This should return None because although
-    # the glows l0 raw file exists, the spice files do not exist in the database.
+    # Get upstream files for glows l1a all. This should return both glows l0 raw files
     dependency_response = dependency.get_jobs(
         data_source="glows",
         data_type="l1a",
