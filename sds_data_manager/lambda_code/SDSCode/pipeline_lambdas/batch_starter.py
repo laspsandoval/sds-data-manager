@@ -50,6 +50,8 @@ BATCH_JOB_RETRY_STRATEGY = {
 # Create an sqs client
 SQS_CLIENT = boto3.client("sqs", region_name="us-west-2")
 
+REPOINT_DEPENDENT_INSTRUMENTS = ["glows", "hi", "lo", "ultra"]
+
 
 def cadence_to_datetime_range(
     cadence: str,
@@ -484,7 +486,11 @@ def submit_all_jobs(
         start_date, end_date = determine_date_range(session, science_file)
 
         # Get the repointing number from the science file object
-        job_repointing = science_file.repointing
+        job_repointing = (
+            science_file.repointing
+            if job_node["data_source"] in REPOINT_DEPENDENT_INSTRUMENTS
+            else None
+        )
 
         # If there is only one file to process, then we can use upstream dependencies
         # that have already been queried.
@@ -499,6 +505,7 @@ def submit_all_jobs(
                 relationship="ALL",
                 start_date=start_date,
                 end_date=end_date,
+                repoint=job_repointing,
                 calculate_crids=False,
                 get_spice=True,
             )
@@ -666,12 +673,10 @@ def determine_date_range(session, file_obj):
             end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
     elif isinstance(file_obj, ScienceFilePath):
         # TODO: GLOWS may need other handling using carrington rotation.
-        if file_obj.repointing is not None and file_obj.instrument in [
-            "glows",
-            "hi",
-            "lo",
-            "ultra",
-        ]:
+        if (
+            file_obj.repointing is not None
+            and file_obj.instrument in REPOINT_DEPENDENT_INSTRUMENTS
+        ):
             logger.debug(
                 "Using repointing file to calculate date range for"
                 f" {file_obj.instrument}."
