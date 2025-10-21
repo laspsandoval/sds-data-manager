@@ -189,7 +189,7 @@ def test_missing_required_params():
 
 def test_get_jobs_repoint(session):
     """Test that jobs with the correct repoint are returned as dependencies."""
-    # Add two idenical glows l0 raw files except for repointing number
+    # Add two identical glows l0 raw files except for repointing number
     session.add_all(
         [
             ScienceFiles(

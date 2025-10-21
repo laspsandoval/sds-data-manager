@@ -26,7 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
-from . import VALID_CADENCE_STRS, dependency
+from . import REPOINT_DEPENDENT_INSTRUMENTS, VALID_CADENCE_STRS, dependency
 from .dependency import DependencyConfig
 
 # Logger setup
@@ -49,8 +49,6 @@ BATCH_JOB_RETRY_STRATEGY = {
 }
 # Create an sqs client
 SQS_CLIENT = boto3.client("sqs", region_name="us-west-2")
-
-REPOINT_DEPENDENT_INSTRUMENTS = ["glows", "hi", "lo", "ultra"]
 
 
 def cadence_to_datetime_range(
@@ -486,11 +484,7 @@ def submit_all_jobs(
         start_date, end_date = determine_date_range(session, science_file)
 
         # Get the repointing number from the science file object
-        job_repointing = (
-            science_file.repointing
-            if job_node["data_source"] in REPOINT_DEPENDENT_INSTRUMENTS
-            else None
-        )
+        job_repointing = science_file.repointing
 
         # If there is only one file to process, then we can use upstream dependencies
         # that have already been queried.

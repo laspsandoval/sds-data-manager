@@ -20,7 +20,7 @@ from ..api_lambdas import spice_metakernel_api
 from ..database import database as db
 from ..database import models
 from ..database.models import AncillaryFiles
-from . import VALID_CADENCE_STRS
+from . import REPOINT_DEPENDENT_INSTRUMENTS, VALID_CADENCE_STRS
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -1085,7 +1085,10 @@ def get_files(
             )
         )
         # If repoint is provided, filter by repointing number
-        if repoint is not None:
+        if (
+            repoint is not None
+            and dependency["data_source"] in REPOINT_DEPENDENT_INSTRUMENTS
+        ):
             type_specific_conditions.append(table.repointing == repoint)
 
     filter_conditions = [
