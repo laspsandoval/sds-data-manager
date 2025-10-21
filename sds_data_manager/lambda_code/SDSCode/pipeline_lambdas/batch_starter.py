@@ -26,7 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from ..api_lambdas import upload_api
 from ..database import database as db
 from ..database import models
-from . import VALID_CADENCE_STRS, dependency
+from . import REPOINT_DEPENDENT_INSTRUMENTS, VALID_CADENCE_STRS, dependency
 from .dependency import DependencyConfig
 
 # Logger setup
@@ -499,6 +499,7 @@ def submit_all_jobs(
                 relationship="ALL",
                 start_date=start_date,
                 end_date=end_date,
+                repoint=job_repointing,
                 calculate_crids=False,
                 get_spice=True,
             )
@@ -666,12 +667,10 @@ def determine_date_range(session, file_obj):
             end_date = file_obj.spice_metadata["end_date"].strftime("%Y%m%d")
     elif isinstance(file_obj, ScienceFilePath):
         # TODO: GLOWS may need other handling using carrington rotation.
-        if file_obj.repointing is not None and file_obj.instrument in [
-            "glows",
-            "hi",
-            "lo",
-            "ultra",
-        ]:
+        if (
+            file_obj.repointing is not None
+            and file_obj.instrument in REPOINT_DEPENDENT_INSTRUMENTS
+        ):
             logger.debug(
                 "Using repointing file to calculate date range for"
                 f" {file_obj.instrument}."
