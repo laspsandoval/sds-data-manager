@@ -386,6 +386,7 @@ def build_sds(
     ialirt_alarm_construct.IalirtAlarmConstruct(
         scope=ialirt_stack,
         construct_id="IalirtAlarm",
+        code=lambda_.Code.from_asset(str(Path(__file__).parent.parent / "lambda_code")),
         ialirt_bucket=ialirt_bucket.ialirt_bucket,
     )
 
