@@ -267,7 +267,7 @@ def parse_packets(filenames: list, bucket: str, download_dir: Path, apid=478):
     return combined
 
 
-def process_algorithms(combined: xr.Dataset, algorithm_table):
+def process_algorithms(combined: xr.Dataset, algorithm_table, table_name):
     """Process the algorithms and insert data, as needed.
 
     Parameters
@@ -276,6 +276,8 @@ def process_algorithms(combined: xr.Dataset, algorithm_table):
         L0 parsed data.
     algorithm_table : dynamodb.Table
         The DynamoDB table to insert or update the data.
+    table_name : str
+        Name of the DynamoDB table
     """
     processors = [
         ("mag", process_packet),
@@ -326,7 +328,10 @@ def process_algorithms(combined: xr.Dataset, algorithm_table):
         logger.info("%s result: %s", instrument, result)
 
         if any(result) and all(result):
-            insert_data(result, algorithm_table, instrument)
+            if table_name == "ialirt-algorithm-table":
+                insert_data(result, algorithm_table, instrument)
+            else:
+                insert_formatted_data(result, algorithm_table, instrument)
 
 
 def insert_data(data: list[dict], algorithm_table, instrument: str):
@@ -394,6 +399,7 @@ def insert_data(data: list[dict], algorithm_table, instrument: str):
                     "sc_velocity_GSM",
                     "sc_position_GSE",
                     "sc_velocity_GSE",
+                    "instrument",
                 }
             )
 
@@ -410,6 +416,7 @@ def insert_data(data: list[dict], algorithm_table, instrument: str):
                     "sc_velocity_GSM",
                     "sc_position_GSE",
                     "sc_velocity_GSE",
+                    "instrument",
                 }
             }
 
@@ -421,6 +428,99 @@ def insert_data(data: list[dict], algorithm_table, instrument: str):
         else:
             algorithm_table.put_item(Item=raw)
         logger.info(f"Inserted {instrument.upper()}.")
+
+
+def reformat_data(data):
+    """Reformat science and housekeeping data.
+
+    Parameters
+    ----------
+    data : list[dict]
+        Data product.
+
+    Returns
+    -------
+    science_data : list[dict]
+        Reformatted science data.
+    hk_data : list[dict]
+        Reformatted housekeeping data.
+    """
+    # Reformat data (remove all keep/exclude keys except hk
+    # once imap_processing is updated)
+    exclude_keys = {"apid", "met", "mag_hk_status"}
+    rename_map = {"met_in_utc": "time_utc"}
+    science_data = [
+        {rename_map.get(k, k): v for k, v in item.items() if k not in exclude_keys}
+        for item in data
+    ]
+    keep_keys = {"met_in_utc", "instrument", "mag_hk_status"}
+    hk_data = [
+        {
+            rename_map.get(k, k): ("mag_hk" if k == "instrument" and v == "mag" else v)
+            for k, v in item.items()
+            if k in keep_keys
+        }
+        for item in data
+        if item.get("instrument") == "mag"
+    ]
+
+    return science_data, hk_data
+
+
+def insert_formatted_data(
+    data: list[dict],
+    data_table,
+    instrument: str,
+):
+    """Insert database rows.
+
+    Parameters
+    ----------
+    data : list[dict]
+        Data product produced from processing respectively instrument.
+    data_table : dynamodb.Table
+        The DynamoDB table to insert or update the data.
+    instrument : str
+        The prefix for the product name.
+    """
+    # Get time range.
+    times = [item["met_in_utc"] for item in data]
+    min_time = min(times)
+    max_time = max(times)
+    logger.info(f"Processing {min_time} to {max_time}.")
+
+    science_data, hk_data = reformat_data(data)
+
+    # Insert science data
+    for record in science_data:
+        data_table.put_item(Item=record)
+    logger.info(f"Inserted {instrument.upper()}.")
+
+    # Insert hk data
+    if hk_data:
+        for record in hk_data:
+            data_table.put_item(Item=record)
+    logger.info(f"Inserted Housekeeping for {instrument.upper()}.")
+
+    # Calculate the spacecraft position and velocity in GSE/GSM coordinates.
+    et = str_to_et(min_time)
+    gsm_state = imap_state(
+        [et], ref_frame=SpiceFrame.IMAP_GSM, observer=SpiceBody.EARTH
+    )
+    gse_state = imap_state(
+        [et], ref_frame=SpiceFrame.IMAP_GSE, observer=SpiceBody.EARTH
+    )
+    spacecraft = {
+        "instrument": "spacecraft",
+        "time_utc": min_time,
+        "sc_position_GSM": [Decimal(str(val)) for val in gsm_state[0, :3]],
+        "sc_velocity_GSM": [Decimal(str(val)) for val in gsm_state[0, 3:]],
+        "sc_position_GSE": [Decimal(str(val)) for val in gse_state[0, :3]],
+        "sc_velocity_GSE": [Decimal(str(val)) for val in gse_state[0, 3:]],
+    }
+
+    # Insert geolocation data
+    data_table.put_item(Item=spacecraft)
 
 
 def insert_kernels(dependency_inputs, algorithm_table):
@@ -445,6 +545,7 @@ def insert_kernels(dependency_inputs, algorithm_table):
         "met": int(met),
         "met_in_utc": met_to_utc(met).split(".")[0],
         "ttj2000ns": int(met_to_ttj2000ns(met)),
+        "instrument": "spice",
         "last_modified": last_modified_utc,
         "spice_kernels": spice_kernels,
     }
@@ -477,8 +578,10 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
 
     algorithm_table_name = os.environ.get("ALGORITHM_TABLE")
+    data_table_name = os.environ.get("DATA_TABLE")
     dynamodb = boto3.resource("dynamodb")
     algorithm_table = dynamodb.Table(algorithm_table_name)
+    data_table = dynamodb.Table(data_table_name)
     url = os.environ.get("IMAP_DATA_ACCESS_URL")
 
     bucket = event["detail"]["bucket"]["name"]
@@ -488,7 +591,6 @@ def lambda_handler(event, context):
     filename = os.path.basename(s3_filepath)
     logger.info("Retrieved filename: %s", filename)
     dependency_inputs = get_latest_spice_kernels(url)
-
     logger.info("dependency_inputs: %s", dependency_inputs)
     download_spice_file(dependency_inputs)
 
@@ -508,9 +610,12 @@ def lambda_handler(event, context):
         combined = parse_packets(filenames, bucket, Path("/tmp"))  # noqa: S108
         logger.info("Packets parsed. Processing algorithms.")
         # Process algorithms and insert new data.
-        process_algorithms(combined, algorithm_table)
+        process_algorithms(combined, algorithm_table, algorithm_table_name)
         # Insert kernel metadata every minute.
         insert_kernels(dependency_inputs, algorithm_table)
+
+        process_algorithms(combined, data_table, data_table_name)
+        insert_kernels(dependency_inputs, data_table)
 
         logger.info("Successfully wrote all new items to DynamoDB")
     else:

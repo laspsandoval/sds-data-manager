@@ -1,5 +1,6 @@
 """Test the I-Alirt ingest lambda function."""
 
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -21,11 +22,13 @@ from sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest import (
     get_ancillary,
     get_latest_spice_kernels,
     insert_data,
+    insert_formatted_data,
     insert_kernels,
     lambda_handler,
     parse_packets,
     process_algorithms,
     query_filenames,
+    reformat_data,
 )
 
 
@@ -50,6 +53,7 @@ def test_lambda_handler(mock_get, mock_download, mock_furnsh, setup_dynamodb):
     """Test the lambda_handler function."""
     # Mock event data
     algorithm_table = setup_dynamodb["algorithm_table"]
+    os.environ["DATA_TABLE"] = algorithm_table.name
 
     mock_response = MagicMock()
     mock_response.json.return_value = [
@@ -203,7 +207,7 @@ def test_insert_data(
         {
             "apid": 478,
             "met": 123456,
-            "utc": "2025-05-21T14:00:00",
+            "met_in_utc": "2025-05-21T14:00:00",
             "ttj2000ns": 759175836184000000,
             "hit_e_a_side_med_en": Decimal("2.0"),
         },
@@ -211,7 +215,7 @@ def test_insert_data(
         {
             "apid": 478,
             "met": 123457,
-            "utc": "2025-05-21T14:00:01",
+            "met_in_utc": "2025-05-21T14:00:01",
             "ttj2000ns": 759175836184000001,
             "hit_e_a_side_low_en": Decimal("3.0"),
         },
@@ -219,7 +223,7 @@ def test_insert_data(
         {
             "apid": 478,
             "met": 123458,
-            "utc": "2025-05-21T14:00:02",
+            "met_in_utc": "2025-05-21T14:00:02",
             "ttj2000ns": 759175836184000002,
             "hit_e_a_side_low_en": Decimal("5.0"),
         },
@@ -240,6 +244,182 @@ def test_insert_data(
 
     # New item should be inserted
     assert item3["hit_e_a_side_low_en"] == Decimal("5.0")
+
+
+def test_reformat_data():
+    """Test reformat_data function."""
+    test_data = [
+        {
+            "apid": 478,
+            "met": 374,
+            "instrument": "mag",
+            "met_in_utc": "2021-01-01T00:00:00",
+            "ttj2000ns": 759175836184000000,
+            "mag_data": Decimal("1.0"),
+            "mag_hk_status": {"hk1v5_warn": False, "hk1v5_danger": True},
+        },
+        {
+            "apid": 478,
+            "met": 375,
+            "instrument": "mag",
+            "met_in_utc": "2021-01-01T00:00:01",
+            "ttj2000ns": 759175836184000001,
+            "mag_data": Decimal("2.0"),
+            "mag_hk_status": {"hk1v5_warn": True, "hk1v5_danger": False},
+        },
+    ]
+
+    science_data, hk_data = reformat_data(test_data)
+
+    assert all("apid" not in d for d in science_data)
+    assert all("met" not in d for d in science_data)
+    assert all("mag_hk_status" not in d for d in science_data)
+    assert science_data[0]["time_utc"] == "2021-01-01T00:00:00"
+
+    assert hk_data[0]["instrument"] == "mag_hk"
+    assert hk_data[0]["time_utc"] == "2021-01-01T00:00:00"
+    assert hk_data[0]["mag_hk_status"]["hk1v5_danger"] is True
+
+
+def test_reformat_data_no_hk():
+    """Test reformat_data function with no HK data."""
+    test_data = [
+        {
+            "apid": 478,
+            "met": 374,
+            "instrument": "hit",
+            "met_in_utc": "2021-01-01T00:00:00",
+            "ttj2000ns": 759175836184000000,
+            "hit_data": Decimal("1.0"),
+        },
+        {
+            "apid": 478,
+            "met": 375,
+            "instrument": "hit",
+            "met_in_utc": "2021-01-01T00:00:01",
+            "ttj2000ns": 759175836184000001,
+            "hit_data": Decimal("2.0"),
+        },
+    ]
+
+    science_data, hk_data = reformat_data(test_data)
+
+    expected_science_data = [
+        {
+            "instrument": "hit",
+            "time_utc": "2021-01-01T00:00:00",
+            "ttj2000ns": 759175836184000000,
+            "hit_data": Decimal("1.0"),
+        },
+        {
+            "instrument": "hit",
+            "time_utc": "2021-01-01T00:00:01",
+            "ttj2000ns": 759175836184000001,
+            "hit_data": Decimal("2.0"),
+        },
+    ]
+
+    assert science_data == expected_science_data
+    assert hk_data == []
+
+
+@patch(
+    "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.imap_state",
+    return_value=np.array([[1, 2, 3, 4, 5, 6]]),
+)
+@patch(
+    "sds_data_manager.lambda_code.IAlirtCode.ialirt_ingest.str_to_et",
+    return_value=12345.0,
+)
+def test_insert_formatted_data(
+    mock_str_to_et,
+    mock_imap_state,
+    setup_data_table,
+):
+    """Test insert_formatted_data function."""
+    data_table = setup_data_table["data_table"]
+
+    # Existing item.
+    data_table.put_item(
+        Item={
+            "instrument": "mag",
+            "time_utc": "2021-01-01T00:00:00",
+            "mag_data": Decimal("0.0"),
+        }
+    )
+
+    # Existing item.
+    data_table.put_item(
+        Item={
+            "instrument": "mag",
+            "time_utc": "2021-02-01T00:00:00",
+            "mag_data": Decimal("0.0"),
+        }
+    )
+
+    # Existing item.
+    data_table.put_item(
+        Item={
+            "instrument": "mag_hk",
+            "time_utc": "2021-02-01T00:00:00",
+            "mag_hk_status": {"hk1v5_warn": False, "hk1v5_danger": True},
+        }
+    )
+
+    # Create data for all three cases
+    test_data = [
+        # Will insert.
+        {
+            "instrument": "mag",
+            "met_in_utc": "2021-01-01T00:00:00",
+            "ttj2000ns": 759175836184000000,
+            "mag_data": Decimal("2.0"),
+            "mag_hk_status": {"hk1v5_warn": False, "hk1v5_danger": True},
+        },
+        # Will insert.
+        {
+            "instrument": "mag",
+            "met_in_utc": "2021-02-01T00:00:00",
+            "ttj2000ns": 759175836184000001,
+            "mag_data": Decimal("3.0"),
+            "mag_hk_status": {"hk1v5_warn": False, "hk1v5_danger": True},
+        },
+        # Will insert.
+        {
+            "instrument": "mag",
+            "met_in_utc": "2021-03-01T00:00:00",
+            "ttj2000ns": 759175836184000002,
+            "mag_data": Decimal("5.0"),
+            "mag_hk_status": {"hk1v5_warn": False, "hk1v5_danger": True},
+        },
+    ]
+
+    insert_formatted_data(test_data, data_table, "mag")
+
+    item1 = data_table.get_item(
+        Key={"instrument": "mag", "time_utc": "2021-01-01T00:00:00"}
+    )["Item"]
+    item2 = data_table.get_item(
+        Key={"instrument": "mag", "time_utc": "2021-02-01T00:00:00"}
+    )["Item"]
+    item3 = data_table.get_item(
+        Key={"instrument": "mag", "time_utc": "2021-03-01T00:00:00"}
+    )["Item"]
+    item4 = data_table.get_item(
+        Key={"instrument": "mag_hk", "time_utc": "2021-02-01T00:00:00"}
+    )["Item"]
+    item5 = data_table.get_item(
+        Key={"instrument": "spacecraft", "time_utc": "2021-01-01T00:00:00"}
+    )["Item"]
+
+    # Existing
+    assert item1["mag_data"] == Decimal("2.0")
+    assert item2["mag_data"] == Decimal("3.0")
+
+    # New item should be inserted
+    assert item3["mag_data"] == Decimal("5.0")
+    assert item4["mag_hk_status"]["hk1v5_danger"] is True
+    assert item5["sc_position_GSM"] == [Decimal("1"), Decimal("2"), Decimal("3")]
 
 
 @patch(
@@ -347,7 +527,11 @@ def test_process_algorithms(
         "/mock/imap_mag_l1b-calibration_20250101_v002.cdf"
     )
 
-    process_algorithms(combined=None, algorithm_table=algorithm_table)
+    process_algorithms(
+        combined=None,
+        algorithm_table=algorithm_table,
+        table_name="ialirt-algorithm-table",
+    )
 
     response = algorithm_table.query(KeyConditionExpression=Key("apid").eq(478))[
         "Items"

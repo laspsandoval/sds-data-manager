@@ -30,6 +30,49 @@ def populate_algorithm_table(setup_dynamodb):
     return items
 
 
+@pytest.fixture
+def populate_data_table(setup_data_table):
+    """Populate DynamoDB table."""
+    data_table = setup_data_table["data_table"]
+    items = [
+        {
+            "instrument": "mag",
+            "time_utc": "2021-01-01T00:00:00",
+            "data_product_1": str(1234.56),
+        },
+        {
+            "instrument": "mag",
+            "time_utc": "2021-02-01T00:00:00",
+            "data_product_2": str(101.3),
+        },
+    ]
+    for item in items:
+        data_table.put_item(Item=item)
+
+    return items
+
+
+def test_data_query_by_utc(setup_data_table, populate_data_table):
+    """Test to query by met_in_utc."""
+    data_table = setup_data_table["data_table"]
+    expected_items = populate_data_table
+
+    response = data_table.query(KeyConditionExpression=Key("instrument").eq("mag"))
+
+    items = response["Items"]
+
+    for item in range(len(items)):
+        assert items[item] == expected_items[item]
+
+    response = data_table.query(
+        KeyConditionExpression=Key("instrument").eq("mag")
+        & Key("time_utc").between("2021-00-00T00:00:00", "2021-01-02T00:00:00")
+    )
+    items = response["Items"]
+    assert len(items) == 1
+    assert items[0]["time_utc"] == expected_items[0]["time_utc"]
+
+
 def test_algorithm_query_by_met(setup_dynamodb, populate_algorithm_table):
     """Test to query by met."""
     algorithm_table = setup_dynamodb["algorithm_table"]
