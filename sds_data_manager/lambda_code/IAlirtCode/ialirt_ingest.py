@@ -267,7 +267,7 @@ def parse_packets(filenames: list, bucket: str, download_dir: Path, apid=478):
     return combined
 
 
-def process_algorithms(combined: xr.Dataset, algorithm_table, table_name):  # noqa: PLR0915
+def process_algorithms(combined: xr.Dataset, algorithm_table, table_name):
     """Process the algorithms and insert data, as needed.
 
     Parameters
@@ -348,15 +348,6 @@ def process_algorithms(combined: xr.Dataset, algorithm_table, table_name):  # no
             logger.error(error_msg, exc_info=True)
             processing_errors.append((instrument, e))
             # Continue to next instrument
-
-    # If there were any processing errors, raise them at the end
-    if processing_errors:
-        error_summary = "; ".join(
-            [f"{instr}: {err!s}" for instr, err in processing_errors]
-        )
-        raise RuntimeError(
-            f"Failed to process {len(processing_errors)} instrument(s): {error_summary}"
-        )
 
 
 def insert_data(data: list[dict], algorithm_table, instrument: str):
@@ -512,7 +503,7 @@ def insert_formatted_data(
     times = [item["met_in_utc"] for item in data]
     min_time = min(times)
     max_time = max(times)
-    logger.info(f"Processing {min_time} to {max_time}.")
+    logger.info(f"Processing {min_time} to {max_time} for {instrument}.")
 
     science_data, hk_data = reformat_data(data)
 
