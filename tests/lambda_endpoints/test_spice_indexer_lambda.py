@@ -21,6 +21,7 @@ from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas import spice_indexer
 from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer import (
     MAXIMUM_J2000_INTERVAL,
     MAXIMUM_SCLK_INTERVAL,
+    clear_ephemeral_storage,
     get_coverage_dictionary,
     index_pointing_data,
     index_small_forces_file,
@@ -157,10 +158,16 @@ def test_get_coverage_dictionary_left_out_of_range(
         assert results_sclk[0][0] == MAXIMUM_SCLK_INTERVAL[0][0]
 
 
+# NOTE: We patch clear_ephemeral_storage to prevent it from deleting test files
+# that are checked into git and needed for other unit tests. In production,
+# Lambda ephemeral storage (/tmp) is automatically cleaned up after execution.
+@patch(
+    "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer.clear_ephemeral_storage"
+)
 @patch(
     "sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.spice_indexer.download_from_s3"
 )
-def test_s3_spice_files(mock_download, session, events_client, s3_client):
+def test_s3_spice_files(mock_download, mock_clear, session, events_client, s3_client):
     """Test s3 event.
 
     The following test mimics a leapsecond kernel being placed on the SDS,
@@ -683,3 +690,27 @@ def test_index_small_forces_file_multiple_versions(mock_get_ingestion_date, sess
     # Verify both versions exist in the database
     all_small_forces_files = session.query(models.SmallForcesFile).all()
     assert len(all_small_forces_files) == 2
+
+
+def test_clear_ephemeral_storage(tmp_path):
+    """Test that clear_ephemeral_storage deletes temporary files."""
+    # Create a temporary file
+    test_file = tmp_path / "test_file.txt"
+    test_file.write_text("test content")
+    assert test_file.exists()
+
+    # Clear the file
+    clear_ephemeral_storage(test_file)
+
+    # Verify file was deleted
+    assert not test_file.exists()
+
+
+def test_clear_ephemeral_storage_nonexistent_file(tmp_path):
+    """Test that clear_ephemeral_storage handles nonexistent files gracefully."""
+    # Try to clear a file that doesn't exist
+    nonexistent_file = tmp_path / "nonexistent.txt"
+    assert not nonexistent_file.exists()
+
+    # Should not raise an exception
+    clear_ephemeral_storage(nonexistent_file)

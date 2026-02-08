@@ -185,6 +185,7 @@ class SdpDatabase(Construct):
             runtime=lambda_.Runtime.PYTHON_3_12,
             timeout=cdk.Duration.seconds(180),
             memory_size=2048,
+            ephemeral_storage_size=cdk.Size.gibibytes(3),
             allow_public_subnet=True,
             vpc=vpc,
             vpc_subnets=self.rds_subnet_selection,
@@ -196,9 +197,11 @@ class SdpDatabase(Construct):
             layers=layers,
         )
 
+        # Grant read permissions for SPICE kernel files since the synchronizer
+        # lambda downloads kernels to extract metadata for database updates.
         s3_list_policy = iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
-            actions=["s3:ListBucket"],
+            actions=["s3:ListBucket", "s3:GetObject"],
             resources=[f"{data_bucket.bucket_arn}/*", f"{data_bucket.bucket_arn}"],
         )
 
