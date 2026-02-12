@@ -115,30 +115,38 @@ class CadenceDays(float, Enum):
         return VALID_CADENCE_STRS
 
     @classmethod
-    def str_lookup(cls, cadence_str: str):
+    def str_lookup(cls, cadence_str: Optional[str] = None):
         """Get a CadenceDays value from a string.
 
         Parameters
         ----------
-        cadence_str : str
-            The cadence string (e.g. "1mo", "3mo", "6mo", "1yr").
+        cadence_str : str, optional
+            The cadence string (e.g. "1mo", "3mo", "6mo", "1yr"). If not provided,
+            the function will return the list of valid cadence strings.
 
         Returns
         -------
-        CadenceDays
-            The corresponding CadenceDays enum value.
+        CadenceDays, dict[str, CadenceDays]
+            The corresponding CadenceDays enum value. If cadence_str is None,
+            then a dictionary of valid cadence strings and their corresponding
+            CadenceDays enum values is returned.
+
         """
-        if cadence_str not in cls.valid_cadence_str():
-            raise ValueError(
-                f"Invalid cadence: {cadence_str}. Valid cadences are:"
-                f" {cls.valid_cadence_str}"
-            )
-        return {
+        lookup = {
             "1mo": cls.ONE_MONTH,
             "3mo": cls.THREE_MONTHS,
             "6mo": cls.SIX_MONTHS,
             "1yr": cls.ONE_YEAR,
-        }[cadence_str]
+        }
+        if not cadence_str:
+            return lookup
+
+        if cadence_str not in cls.valid_cadence_str():
+            raise ValueError(
+                f"Invalid cadence: {cadence_str}. Valid cadences are:"
+                f" {cls.valid_cadence_str()}"
+            )
+        return lookup[cadence_str]
 
 
 def determine_job_version(
