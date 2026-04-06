@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
@@ -83,10 +84,11 @@ def lambda_handler(event, context):
     key_secret_name = os.environ.get("KEY_SECRET_NAME")
     region = os.environ.get("AWS_REGION")
 
-    if not url or not cert_secret_name or not key_secret_name:
+    bucket = os.environ.get("S3_BUCKET")
+    if not url or not cert_secret_name or not key_secret_name or not bucket:
         logger.info(
-            "SCHEDULE_ENDPOINT_URL, CERT_SECRET_NAME, "
-            "and KEY_SECRET_NAME are required. "
+            "SCHEDULE_ENDPOINT_URL, CERT_SECRET_NAME, KEY_SECRET_NAME, "
+            "and S3_BUCKET are required. "
             "Skipping schedule fetch."
         )
         return
@@ -95,4 +97,13 @@ def lambda_handler(event, context):
     key_path = write_temp_file(get_secret(key_secret_name, region), "client.key")
 
     xml_content = fetch_schedule_xml(url, cert_path, key_path)
-    logger.info(f"XML content:\n{xml_content}")
+
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    s3_key = f"ground_station_schedules/uksa/imap_ialirt_uksa-schedule_{date_str}.xml"
+    boto3.client("s3", region_name=region).put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=xml_content.encode("utf-8"),
+        ContentType="application/xml",
+    )
+    logger.info(f"Saved schedule to s3://{bucket}/{s3_key}")
