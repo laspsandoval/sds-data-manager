@@ -44,6 +44,12 @@ if account_name == "backup":
     build_backup(app, env=env, source_account=source_account)
 else:
     # Deploy SDS resources. This is the default with no CLI context variables set.
-    build_sds(app, env=env, account_config=account_config)
+    smce_account_id = app.node.get_context("smce")["account"]
+    build_sds(
+        app,
+        env=env,
+        account_config=account_config,
+        smce_account_id=smce_account_id,
+    )
 
 app.synth()

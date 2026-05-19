@@ -16,6 +16,8 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
+SMCE_VPC_CIDR = "10.0.0.0/8"
+
 
 class IalirtProcessing(Construct):
     """A processing system for I-ALiRT."""
@@ -94,6 +96,7 @@ class IalirtProcessing(Construct):
             ],  # LASP (used for testing only)
             "198.118.1.14/32": [7526],  # BlueNet (tlm relay)
             "193.174.22.3/32": [7564],  # Kiel
+            SMCE_VPC_CIDR: [7565],  # SMCE VPC — NOAA telemetry via VPC peering
             "185.83.168.248/32": [7566, 7567],  # UKSA
             "41.74.156.19/32": [7568],  # SANSA
             "41.74.156.20/32": [7568],  # SANSA

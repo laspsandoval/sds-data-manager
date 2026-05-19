@@ -20,6 +20,10 @@
       "account": "012345678901",
       "source_account": "dev"
     },
+    "smce": {
+      "account": "301233867300",
+      "region": "us-west-2"
+    },
     "dev": {
       "account": "449431850278",
       "domain_name": "dev.imap-mission.com",

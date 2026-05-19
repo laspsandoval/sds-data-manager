@@ -6,6 +6,7 @@ import imap_data_access
 from aws_cdk import App, Environment, Stack
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_rds as rds
 
@@ -46,6 +47,7 @@ def build_sds(
     scope: App,
     env: Environment,
     account_config: dict,
+    smce_account_id: str,
 ):
     """Build the entire SDS.
 
@@ -57,6 +59,8 @@ def build_sds(
         Account and region
     account_config : dict
         Account configuration (domain_name and other account specific configurations)
+    smce_account_id : str
+        AWS account ID of the SMCE account, read from cdk.json smce context.
 
     """
     networking_stack = Stack(scope, "NetworkingStack", env=env)
@@ -329,6 +333,19 @@ def build_sds(
 
     # I-ALiRT Stack
     ialirt_stack = Stack(scope, "IalirtStack", cross_region_references=True, env=env)
+
+    accepter_role = iam.Role(
+        ialirt_stack,
+        "SmcePeeringAccepterRole",
+        role_name="SmcePeeringAccepterRole",
+        assumed_by=iam.AccountPrincipal(smce_account_id),
+    )
+    accepter_role.add_to_policy(
+        iam.PolicyStatement(
+            actions=["ec2:AcceptVpcPeeringConnection"],
+            resources=["*"],
+        )
+    )
 
     ialirt_spice_lambda_layer = lambda_layer_construct.IMAPLambdaLayer(
         scope=ialirt_stack,
