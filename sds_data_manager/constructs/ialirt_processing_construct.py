@@ -16,7 +16,7 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
-SMCE_VPC_CIDR = "10.0.0.0/8"
+SMCE_VPC_CIDR = "10.1.0.0/16"
 
 
 class IalirtProcessing(Construct):
