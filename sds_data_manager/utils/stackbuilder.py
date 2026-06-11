@@ -513,8 +513,8 @@ def build_smce_relay(
 ) -> None:
     """Build the I-ALiRT SMCE relay account infrastructure.
 
-    Provisions a VPN tunnel to NOAA N-Wave and VPC peering to the SDS
-    account so NOAA telemetry flows directly over the AWS backbone.
+    Provisions a VPN tunnel to NOAA N-Wave and routes the decrypted
+    traffic through a NAT Gateway to the SDS account's Elastic IP.
 
     Parameters
     ----------
@@ -579,7 +579,7 @@ def build_smce_relay(
             networking_stack, "NoaaVpnPsk", "/ialirt/noaa/noaa-vpn-psk"
         )
         .secret_value_from_json("psk")
-        .unsafe_unwrap()
+        .to_string()
     )
 
     # Retrieve NOAA border router IPs from SSM. These are the public IPs
