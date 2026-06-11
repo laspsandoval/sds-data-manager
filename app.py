@@ -7,11 +7,16 @@ The app defaults to a dev deployment via a default `account_name` value in
 To deploy to prod, specify `--context account_name=prod`.
 To deploy to the backup account (only deploys required backup stacks),
 specify `--context account_name=backup`.
+To deploy the SMCE relay, specify `--context account_name=smce`.
 """
 
 from aws_cdk import App, Environment
 
-from sds_data_manager.utils.stackbuilder import build_backup, build_sds
+from sds_data_manager.utils.stackbuilder import (
+    build_backup,
+    build_sds,
+    build_smce_relay,
+)
 
 app = App()
 
@@ -42,8 +47,15 @@ if account_name == "backup":
     source_account_config = app.node.get_context(source_account_name)
     source_account = source_account_config["account"]
     build_backup(app, env=env, source_account=source_account)
+# TODO: update cdk.json once we have account info.
+elif account_name == "smce":
+    build_smce_relay(app, env=env)
 else:
     # Deploy SDS resources. This is the default with no CLI context variables set.
-    build_sds(app, env=env, account_config=account_config)
+    build_sds(
+        app,
+        env=env,
+        account_config=account_config,
+    )
 
 app.synth()

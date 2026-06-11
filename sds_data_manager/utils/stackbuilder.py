@@ -8,6 +8,9 @@ from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_rds as rds
+from aws_cdk import aws_secretsmanager as secretsmanager
+from aws_cdk import aws_ssm as ssm
+from aws_cdk import custom_resources as cr
 
 from sds_data_manager.constructs import (
     api_gateway_construct,
@@ -26,6 +29,7 @@ from sds_data_manager.constructs import (
     ialirt_processing_construct,
     ialirt_realtime_construct,
     ialirt_schedule_fetch_construct,
+    ialirt_vpn_construct,
     indexer_lambda_construct,
     instrument_lambdas,
     lambda_layer_construct,
@@ -501,6 +505,191 @@ def build_sds(
         db_secret=dagster_database_construct.db_secret,
     )
     dagster_ecs_stack.node.add_dependency(dagster_image_construct)
+
+
+def build_smce_relay(
+    scope: App,
+    env: Environment,
+) -> None:
+    """Build the I-ALiRT SMCE relay account infrastructure.
+
+    Provisions a VPN tunnel to NOAA N-Wave and VPC peering to the SDS
+    account so NOAA telemetry flows directly over the AWS backbone.
+
+    Parameters
+    ----------
+    scope : App
+        CDK app.
+    env : Environment
+        SMCE account and region.
+
+    Notes
+    -----
+    Pre-deploy SSM parameters (in SMCE account):
+        /ialirt/noaa-vpn/wash-ip
+        /ialirt/noaa-vpn/denv-ip
+
+    Pre-deploy Secrets Manager secret (in SMCE account):
+        /ialirt/noaa/noaa-vpn-psk
+
+    Post-deploy (store in SDS account SSM so IalirtStack can read it):
+        /ialirt/smce/nat-gw-eip  — EIP of the SMCE NAT Gateway, available
+                                   from VPC -> NAT Gateways in the console
+                                   after deploying this stack.
+    """
+    networking_stack = Stack(scope, "SmceNetworkingStack", env=env)
+    networking = networking_construct.NetworkingConstruct(
+        networking_stack, "Networking"
+    )
+
+    # Create a Transit Gateway (TGW) to terminate the IPSec tunnel from NOAA.
+    #
+    # A TGW VPC attachment's traffic can be routed to a NAT
+    # Gateway, which I-ALiRT requires to forward NOAA telemetry to the
+    # destination EC2 instance's Elastic IP in the imap-dev account.
+    transit_gateway = ec2.CfnTransitGateway(
+        networking_stack,
+        "TransitGateway",
+        # ASN is BGP's identifier for a
+        # distinct network/routing domain —
+        # how two BGP peers identify themselves and each other.
+        # Default ASN, but stated explicitly here.
+        amazon_side_asn=64512,
+        # Use our own route table below instead of TGW's hidden default one.
+        default_route_table_association="disable",
+        default_route_table_propagation="disable",
+        description="I-ALiRT relay TGW for NOAA VPN",
+    )
+
+    # Attach the SMCE VPC to the TGW via the private subnets, whose route
+    # tables already have 0.0.0.0/0 -> NAT Gateway — so traffic arriving
+    # via the TGW attachment gets forwarded there automatically.
+    vpc_attachment = ec2.CfnTransitGatewayVpcAttachment(
+        networking_stack,
+        "TransitGatewayVpcAttachment",
+        transit_gateway_id=transit_gateway.attr_id,
+        vpc_id=networking.vpc.vpc_id,
+        subnet_ids=[subnet.subnet_id for subnet in networking.vpc.private_subnets],
+    )
+
+    # Retrieve the IKE pre-shared key from Secrets Manager. Resolved by
+    # CloudFormation at deploy time so it never appears in the template.
+    noaa_vpn_psk = (
+        secretsmanager.Secret.from_secret_name_v2(
+            networking_stack, "NoaaVpnPsk", "/ialirt/noaa/noaa-vpn-psk"
+        )
+        .secret_value_from_json("psk")
+        .unsafe_unwrap()
+    )
+
+    # Retrieve NOAA border router IPs from SSM. These are the public IPs
+    # of NOAA's N-Wave routers at WASH (McLean, VA) and DENV (Denver, CO).
+    noaa_wash_ip = ssm.StringParameter.value_for_string_parameter(
+        networking_stack, "/ialirt/noaa-vpn/wash-ip"
+    )
+    noaa_denv_ip = ssm.StringParameter.value_for_string_parameter(
+        networking_stack, "/ialirt/noaa-vpn/denv-ip"
+    )
+
+    # Create the IPSec VPN tunnel to NOAA N-Wave. Provisions two VPN
+    # connections (WASH + DENV) with BGP routing for automatic failover.
+    ialirt_vpn = ialirt_vpn_construct.IalirtVpnConstruct(
+        scope=networking_stack,
+        construct_id="IalirtVpn",
+        transit_gateway_id=transit_gateway.attr_id,
+        psk=noaa_vpn_psk,
+        wash_ip=noaa_wash_ip,
+        denv_ip=noaa_denv_ip,
+    )
+
+    # Create a TGW route table.
+    tgw_route_table = ec2.CfnTransitGatewayRouteTable(
+        networking_stack,
+        "TransitGatewayRouteTable",
+        transit_gateway_id=transit_gateway.attr_id,
+    )
+
+    # VPC's connection to the Transit Gateway will use our route table
+    # to look up where to send traffic.
+    ec2.CfnTransitGatewayRouteTableAssociation(
+        networking_stack,
+        "TgwRouteTableAssociationVpc",
+        transit_gateway_attachment_id=vpc_attachment.attr_id,
+        transit_gateway_route_table_id=tgw_route_table.attr_transit_gateway_route_table_id,
+    )
+
+    # Add the SMCE VPC's address range (10.0.0.0/16) to our route table, so
+    # any other attachment using this table (e.g. the NOAA VPN connections)
+    # can route traffic destined for the VPC here.
+    ec2.CfnTransitGatewayRouteTablePropagation(
+        networking_stack,
+        "TgwRouteTablePropagationVpc",
+        transit_gateway_attachment_id=vpc_attachment.attr_id,
+        transit_gateway_route_table_id=tgw_route_table.attr_transit_gateway_route_table_id,
+    )
+
+    # AWS::EC2::VPNConnection does not expose its Transit Gateway attachment
+    # ID as a CloudFormation attribute, so look it up via a custom resource
+    # that calls ec2:DescribeTransitGatewayAttachments, filtered to the VPN
+    # connection's resource ID.
+    for site, vpn_connection in ialirt_vpn.vpn_connections.items():
+        describe_vpn_attachment = cr.AwsSdkCall(
+            service="EC2",
+            action="describeTransitGatewayAttachments",
+            parameters={
+                "Filters": [
+                    {
+                        "Name": "resource-id",
+                        "Values": [vpn_connection.attr_vpn_connection_id],
+                    },
+                    {"Name": "resource-type", "Values": ["vpn"]},
+                ]
+            },
+            physical_resource_id=cr.PhysicalResourceId.of(
+                f"VpnTgwAttachmentLookup{site}"
+            ),
+        )
+        vpn_attachment_lookup = cr.AwsCustomResource(
+            networking_stack,
+            f"VpnTgwAttachmentLookup{site}",
+            on_create=describe_vpn_attachment,
+            on_update=describe_vpn_attachment,
+            policy=cr.AwsCustomResourcePolicy.from_sdk_calls(
+                resources=cr.AwsCustomResourcePolicy.ANY_RESOURCE
+            ),
+        )
+        vpn_attachment_id = vpn_attachment_lookup.get_response_field(
+            "TransitGatewayAttachments.0.TransitGatewayAttachmentId"
+        )
+
+        # Add the transit gateway attachments to the route table.
+
+        # Use this table to decide where to forward the traffic you receive.
+        ec2.CfnTransitGatewayRouteTableAssociation(
+            networking_stack,
+            f"TgwRouteTableAssociationVpn{site}",
+            transit_gateway_attachment_id=vpn_attachment_id,
+            transit_gateway_route_table_id=tgw_route_table.attr_transit_gateway_route_table_id,
+        )
+        # Installs NOAA's routes into the table so the VPC attachment
+        # can find its way back to NOAA on the return path.
+        ec2.CfnTransitGatewayRouteTablePropagation(
+            networking_stack,
+            f"TgwRouteTablePropagationVpn{site}",
+            transit_gateway_attachment_id=vpn_attachment_id,
+            transit_gateway_route_table_id=tgw_route_table.attr_transit_gateway_route_table_id,
+        )
+
+    # Static route: send traffic for I-ALiRT EC2's Elastic IP
+    # into the SMCE VPC attachment, where the NAT Gateway forwards it to the
+    # public internet.
+    ec2.CfnTransitGatewayRoute(
+        networking_stack,
+        "TgwDefaultRouteToVpc",
+        destination_cidr_block="0.0.0.0/0",
+        transit_gateway_route_table_id=tgw_route_table.attr_transit_gateway_route_table_id,
+        transit_gateway_attachment_id=vpc_attachment.attr_id,
+    )
 
 
 def build_backup(scope: App, env: Environment, source_account: str):
