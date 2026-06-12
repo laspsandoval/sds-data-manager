@@ -1,0 +1,55 @@
+# Configure centralized persistence using your RDS PostgreSQL connection
+storage:
+  postgres:
+    postgres_db:
+      username: dagster
+      password:
+        env: DAGSTER_PG_PASSWORD
+      hostname:
+        env: DAGSTER_PG_HOST # NOTE: You will need to extract the DB endpoint URL post-deployment or pass via secret.
+      db_name: dagster
+      port: 5432
+
+run_launcher:
+  module: dagster_aws.ecs
+  class: EcsRunLauncher
+  config:
+    secrets:
+      - name: DAGSTER_PG_PASSWORD
+        valueFrom:
+          env: DAGSTER_PG_PASSWORD
+    env_vars:
+      - DAGSTER_PG_HOST
+      - S3_BUCKET
+      - ACCOUNT
+      - REGION
+      - SSM_API_KEY_PARAMETER
+      - DAGSTER_COMPUTE_LOG_BUCKET
+      - REPROCESSING_SQS_URL
+      - IMAP_DATA_ACCESS_URL
+      - REPROCESSING_SQS_URL
+    task_definition:
+      env: DAGSTER_RUN_BASE_TASK_DEF_ARN
+    container_name: "dagster-run"
+    use_current_ecs_task_config: true
+
+compute_logs:
+  module: dagster_aws.s3.compute_log_manager
+  class: S3ComputeLogManager
+  config:
+    bucket:
+      env: DAGSTER_COMPUTE_LOG_BUCKET
+    region:
+      env: REGION
+    prefix: "run-logs/"
+
+# Ensures asset state metadata points correctly to distributed instances
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 200
+
+sensors:
+  use_threads: true
+  num_workers: 8

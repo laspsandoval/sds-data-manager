@@ -2,47 +2,30 @@
 
 import datetime
 
-from aws_cdk import Duration, Environment
+from aws_cdk import Duration
 from aws_cdk import aws_ec2 as ec2
-from aws_cdk import (
-    aws_iam as iam,
-)
 from aws_cdk import aws_lambda as lambda_
-from aws_cdk import aws_s3 as s3
-from aws_cdk import (
-    aws_scheduler as scheduler,
-)
-from aws_cdk import aws_secretsmanager as secrets
 from aws_cdk import aws_sqs as sqs
-from aws_cdk.aws_lambda_event_sources import SqsEventSource
 from constructs import Construct
 
 from sds_data_manager.constructs.api_gateway_construct import ApiGateway
-from sds_data_manager.constructs.database_construct import SdpDatabase
-from sds_data_manager.lambda_code.SDSCode.pipeline_lambdas.batch_starter import (
-    CadenceDays,
-)
 
 
-class BatchStarterLambda(Construct):
+class ReprocessingTools(Construct):
     """Generic Construct with customizable runtime code."""
 
     def __init__(
         self,
         scope: Construct,
         construct_id: str,
-        env: Environment,
         api: ApiGateway,
-        data_bucket: s3.Bucket,
         code: lambda_.Code,
-        rds_construct: SdpDatabase,
         rds_security_group: ec2.SecurityGroup,
         vpc: ec2.Vpc,
-        sqs_queues: list[sqs.Queue],
         layers: list,
         **kwargs,
     ):
-        """BatchStarterLambda Constructor.
+        """ReprocessingTools Constructor.
 
         Parameters
         ----------
@@ -74,55 +57,8 @@ class BatchStarterLambda(Construct):
         """
         super().__init__(scope, construct_id, **kwargs)
 
-        # Define Lambda Environment Variables
-        lambda_environment = {
-            "S3_BUCKET": f"{data_bucket.bucket_name}",
-            "SECRET_NAME": rds_construct.rds_creds.secret_name,
-            "ACCOUNT": f"{env.account}",
-            "REGION": f"{env.region}",
-        }
         # Lambda should use private subnet
         subnet = ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
-
-        self.instrument_lambda = lambda_.Function(
-            self,
-            "BatchStarterLambda",
-            function_name="BatchStarterLambda",
-            code=code,
-            handler="SDSCode.pipeline_lambdas.batch_starter.lambda_handler",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            environment=lambda_environment,
-            memory_size=512,
-            # Set max to 15 mins temporarily for the 3 month map cadence job.
-            # TODO determine if we need 15 mins or if we can reduce this.
-            timeout=Duration.minutes(15),
-            vpc=vpc,
-            vpc_subnets=subnet,
-            security_groups=[rds_security_group],
-            allow_public_subnet=True,
-            layers=layers,
-        )
-
-        # Permissions to send event to EventBridge
-        # and submit batch job
-        lambda_policy = iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=[
-                "events:PutEvents",
-                "batch:SubmitJob",
-                "batch:DescribeJobDefinitions",
-                "ecr:DescribeImages",
-            ],
-            resources=[
-                "*",
-            ],
-        )
-        self.instrument_lambda.add_to_role_policy(lambda_policy)
-        data_bucket.grant_read_write(self.instrument_lambda)
-        rds_secret = secrets.Secret.from_secret_name_v2(
-            self, "rds_secret", rds_construct.secret_name
-        )
-        rds_secret.grant_read(grantee=self.instrument_lambda)
 
         # This sets up the lambda to be triggered by the SQS queues. Since they are FIFO
         # queues, each instrument will have messages processed in order. However,
@@ -131,38 +67,78 @@ class BatchStarterLambda(Construct):
         # The nominal case is for there to be a file arrived queue and a delayed
         # file arrived queue. On the batch starter side, all events will look the
         # same from the two queues.
-        for q in sqs_queues:
-            self.instrument_lambda.add_event_source(SqsEventSource(q))
 
+        # Send reprocessing events to a sqs that dagster can poll from.
+        # Create a dead letter queue to save messages that could not be processed.
+        # This DLQ just saves the messages and doesn't do anything with them.
+        self.dead_letter_queue = sqs.Queue(
+            self,
+            "ReprocessingDeadLetterQueue",
+            queue_name="reprocessDQL.fifo",
+            encryption=sqs.QueueEncryption.UNENCRYPTED,
+            fifo=True,
+        )
+
+        self.reprocessing_queue = sqs.Queue(
+            self,
+            "ReprocessingQueue",
+            queue_name="ReprocessQueue.fifo",
+            # This timeout determines how long the queue waits for processing.
+            visibility_timeout=Duration.seconds(300),
+            fifo=True,
+            # Removes messages with identical content.
+            content_based_deduplication=True,
+            # The dead letter queue will take messages that failed retry.
+            dead_letter_queue=sqs.DeadLetterQueue(
+                max_receive_count=1, queue=self.dead_letter_queue
+            ),
+        )
+        self.reprocessing_sqs_url = self.reprocessing_queue.queue_url
+        # Create a lambda that the API can trigger to send messages to the reprocessing
+        # queue. This is necessary because HTTP API Gateway v2's parameter mapping
+        # expression language is too limited to forward query string parameters as an
+        # SQS message body. This lambda acts as a proxy that converts the
+        # query string parameters to a JSON message and sends it to the queue.
+        self.reprocessing_proxy_lambda = lambda_.Function(
+            self,
+            "ReprocessingProxyLambda",
+            function_name="reprocessing-handler",
+            code=code,
+            handler="SDSCode.pipeline_lambdas.reprocessing_proxy.lambda_handler",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            environment={
+                "QUEUE_URL": self.reprocessing_queue.queue_url,
+            },
+            memory_size=128,
+            timeout=Duration.seconds(30),
+            vpc=vpc,
+            vpc_subnets=subnet,
+            security_groups=[rds_security_group],
+            allow_public_subnet=True,
+            layers=layers,
+        )
+
+        # Permission for the lambda to send messages to the reprocessing queue
+        self.reprocessing_queue.grant_send_messages(self.reprocessing_proxy_lambda)
         # Add api routes for triggering batch starter with a bulk reprocessing request
         # Only allow authenticated routes for reprocessing
         api.add_route(
             route="/authorized/reprocess",
             http_method="POST",
-            lambda_function=self.instrument_lambda,
+            lambda_function=self.reprocessing_proxy_lambda,
         )
         api.add_route(
             route="/api-key/reprocess",
             http_method="POST",
-            lambda_function=self.instrument_lambda,
+            lambda_function=self.reprocessing_proxy_lambda,
         )
-
-        # Set up eventBridge rules to trigger batch starter lambda.
-        # create a permission for Scheduled rules
-        self.instrument_lambda.add_permission(
-            "AllowEventBridgeInvokeScheduled",
-            principal=iam.ServicePrincipal("events.amazonaws.com"),
-            action="lambda:InvokeFunction",
-            source_arn=f"arn:aws:events:{env.region}:{env.account}:rule/ProcessingScheduledJob*",
-        )
+        """
         # Create IAM role for EventBridge Scheduler
         scheduler_role = iam.Role(
             scope=scope,
             id="SchedulerExecutionRole",
             assumed_by=iam.ServicePrincipal("scheduler.amazonaws.com"),
         )
-
-        self.instrument_lambda.grant_invoke(scheduler_role)
 
         # Many l2 jobs create maps and need 3-12 months worth of data to run.
         # Create eventBridge rules to trigger:
@@ -222,6 +198,7 @@ class BatchStarterLambda(Construct):
                 ),
                 state="ENABLED",
             )
+        """
 
 
 def calculate_next_run(first_job, today, interval_minutes):

@@ -12,6 +12,7 @@ from aws_cdk import aws_rds as rds
 from sds_data_manager.constructs import (
     api_gateway_construct,
     backup_bucket_construct,
+    dagster_construct,
     data_bucket_construct,
     database_construct,
     ialirt_alarm_construct,
@@ -34,10 +35,8 @@ from sds_data_manager.constructs import (
     packet_downloader_lambda_construct,
     processing_construct,
     route53_hosted_zone,
-    scheduled_job_lambda,
     sds_api_manager_construct,
     spice_monitoring_construct,
-    sqs_construct,
     website_hosting,
 )
 
@@ -288,42 +287,6 @@ def build_sds(
                 f"{instrument.lower()}{step}", data_access_url=api_key_data_access_url
             )
 
-    # Create SQS pipeline for each instrument and add it to instrument_sqs
-    file_arrive_sqs_construct = sqs_construct.SqsConstruct(
-        scope=sdc_stack,
-        construct_id="SqsConstruct",
-        instrument_names=imap_data_access.VALID_INSTRUMENTS,
-    )
-    instrument_sqs = file_arrive_sqs_construct.instrument_queue
-
-    instrument_delay_sqs = file_arrive_sqs_construct.delay_queue
-
-    instrument_lambdas.BatchStarterLambda(
-        scope=sdc_stack,
-        construct_id="BatchStarterLambda",
-        env=env,
-        api=api,
-        data_bucket=data_bucket.data_bucket,
-        code=lambda_code,
-        rds_construct=rds_construct,
-        rds_security_group=rds_construct.rds_security_group,
-        vpc=networking.vpc,
-        sqs_queues=[instrument_sqs, instrument_delay_sqs],
-        layers=[db_lambda_layer, spice_lambda_layer],
-    )
-
-    scheduled_job_lambda.ScheduledJobLambda(
-        scope=sdc_stack,
-        construct_id="ScheduledJobLambda",
-        env=env,
-        data_bucket=data_bucket.data_bucket,
-        code=lambda_code,
-        rds_construct=rds_construct,
-        rds_security_group=rds_construct.rds_security_group,
-        vpc=networking.vpc,
-        layers=[db_lambda_layer, spice_lambda_layer],
-    )
-
     # Create lambda that mounts EFS and writes SPICE files to the EFS and the database
     indexer_lambda_construct.SPICEIndexerLambda(
         scope=sdc_stack,
@@ -470,6 +433,74 @@ def build_sds(
         secret_name=ialirt_secret_name,
         account_name=account_name,
     )
+
+    reprocessing_tools_construct = instrument_lambdas.ReprocessingTools(
+        scope=sdc_stack,
+        construct_id="ReprocessingTools",
+        api=api,
+        code=lambda_code,
+        rds_security_group=rds_construct.rds_security_group,
+        vpc=networking.vpc,
+        layers=[db_lambda_layer, spice_lambda_layer],
+    )
+
+    # Dagster Stack
+    dagster_stack = Stack(scope, "DagsterStack", cross_region_references=True, env=env)
+
+    dagster_repo_construct = dagster_construct.EcrConstruct(
+        scope=dagster_stack,
+        construct_id="DagsterImageECR",
+        repo_name="dagsterimage",
+    )
+
+    # Repo root is three levels up from this
+    # file (sds_data_manager/utils/stackbuilder.py)
+    repo_root = str(Path(__file__).parent.parent.parent)
+    dagster_image_construct = dagster_construct.DagsterDockerImageConstruct(
+        scope=dagster_stack,
+        construct_id="DagsterImageConstruct",
+        image_name="DagsterImage",
+        directory=repo_root,
+        file="Dockerfile",
+        ecr=dagster_repo_construct.container_repo.repository_uri,
+    )
+
+    dagster_database_construct = dagster_construct.DagsterDatabaseConstruct(
+        scope=dagster_stack,
+        construct_id="DagsterDatabase",
+        vpc=networking.vpc,
+        sg=rds_construct.rds_security_group,
+    )
+
+    logs_bucket = dagster_construct.DagsterS3LoggingBucket(
+        scope=dagster_stack,
+        construct_id="DagsterLogBucket",
+    )
+
+    dg_host_name = dagster_database_construct.db_instance.db_instance_endpoint_address
+    dagster_env_vars = {
+        "S3_BUCKET": f"sds-data-{env.account}",
+        "SECRET_NAME": db_secret_name,
+        "ACCOUNT": env.account,
+        "REGION": env.region,
+        "IMAP_DATA_ACCESS_URL": account_config.get(
+            "imap_data_access_url", "https://api.dev.imap-mission.com"
+        ),
+        "SSM_API_KEY_PARAMETER": "/imap-sdc/batch-jobs/api-key",
+        "REPROCESSING_SQS_URL": reprocessing_tools_construct.reprocessing_sqs_url,
+        "DAGSTER_PG_HOST": dg_host_name,
+        "DAGSTER_COMPUTE_LOG_BUCKET": logs_bucket.logs_bucket.bucket_name,
+    }
+
+    dagster_ecs_stack = dagster_construct.DagsterEcsConstruct(
+        scope=dagster_stack,
+        construct_id="DagsterEcsStack",
+        vpc=networking.vpc,
+        sg=rds_construct.rds_security_group,
+        dagster_env_vars=dagster_env_vars,
+        db_secret=dagster_database_construct.db_secret,
+    )
+    dagster_ecs_stack.node.add_dependency(dagster_image_construct)
 
 
 def build_backup(scope: App, env: Environment, source_account: str):
