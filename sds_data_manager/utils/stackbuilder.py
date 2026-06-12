@@ -591,6 +591,12 @@ def build_smce_relay(
         networking_stack, "/ialirt/noaa-vpn/denv-ip"
     )
 
+    # Retrieve NOAA's BGP ASN from SSM. Per the N-Wave ICD (NOAA0550),
+    # this is the same for both WASH and DENV.
+    noaa_bgp_asn = ssm.StringParameter.value_for_string_parameter(
+        networking_stack, "/ialirt/noaa-vpn/bgp-asn"
+    )
+
     # Create the IPSec VPN tunnel to NOAA N-Wave. Provisions two VPN
     # connections (WASH + DENV) with BGP routing for automatic failover.
     ialirt_vpn = ialirt_vpn_construct.IalirtVpnConstruct(
@@ -600,6 +606,7 @@ def build_smce_relay(
         psk=noaa_vpn_psk,
         wash_ip=noaa_wash_ip,
         denv_ip=noaa_denv_ip,
+        noaa_asn=noaa_bgp_asn,
     )
 
     # Create a TGW route table.

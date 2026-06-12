@@ -1,5 +1,6 @@
 """Configure the I-ALiRT VPN connections to NOAA N-Wave."""
 
+import aws_cdk as cdk
 from aws_cdk import aws_ec2 as ec2
 from constructs import Construct
 
@@ -15,6 +16,7 @@ class IalirtVpnConstruct(Construct):
         psk: str,
         wash_ip: str,
         denv_ip: str,
+        noaa_asn: str,
         **kwargs,
     ) -> None:
         """Create NOAA N-Wave customer gateways and VPN connections.
@@ -35,6 +37,8 @@ class IalirtVpnConstruct(Construct):
             NOAA border router public IP at McLean, VA (WASH), retrieved from SSM.
         denv_ip : str
             NOAA border router public IP at Denver, CO (DENV), retrieved from SSM.
+        noaa_asn : str
+            NOAA's BGP ASN per the N-Wave ICD (NOAA0550), retrieved from SSM.
         kwargs : dict
             Keyword arguments.
         """
@@ -108,11 +112,10 @@ class IalirtVpnConstruct(Construct):
         self.vpn_connections: dict[str, ec2.CfnVPNConnection] = {}
         for site, ip in {"WASH": wash_ip, "DENV": denv_ip}.items():
             # AWS needs to know the router's public IP and ASN to establish the tunnel.
-            # bgp_asn=64583 is NOAA's ASN per the ICD.
             cgw = ec2.CfnCustomerGateway(
                 self,
                 f"NoaaCustomerGateway{site}",
-                bgp_asn=64583,
+                bgp_asn=cdk.Token.as_number(noaa_asn),
                 ip_address=ip,
                 type="ipsec.1",
             )
