@@ -648,6 +648,25 @@ class IMAPJobHandler:
                     datetime.datetime.fromisoformat(config.MISSION_END_TIME),
                 )
                 partitions_to_run.extend(partitions)
+            elif dependency.source in spice.GROWING_KERNEL_TYPES:
+                # Attitude history and pointing attitude kernels grow over time
+                # (new segments are appended to the same file series). Using
+                # each new file's full min/max coverage here would re-trigger
+                # reprocessing of the entire kernel span on every delivery.
+                # Instead, narrow the range down to only the coverage that is
+                # actually new. See spice.get_growing_kernel_trigger_ranges for
+                # the full rules.
+                trigger_ranges = spice.get_growing_kernel_trigger_ranges(
+                    session, dependency.source, new_files
+                )
+                partition_set = set()
+                for min_dt, max_dt in trigger_ranges:
+                    partition_set.update(
+                        dagster_utilities.get_affected_partitions(
+                            context, self.partitions_def, min_dt, max_dt
+                        )
+                    )
+                partitions_to_run.extend(list(partition_set))
             else:
                 for file in new_files:
                     min_dt = getattr(file, datetime_start_column)
