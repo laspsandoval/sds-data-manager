@@ -29,7 +29,6 @@ spice_common: &spice_common
   - source: attitude_history
     data_type: spice
     descriptor: historical
-    trigger_job: false
   - source: ephemeris_reconstructed
     data_type: spice
     descriptor: historical
@@ -50,7 +49,6 @@ spice_l1b: &spice_l1b
   - source: spin
     data_type: spin
     descriptor: historical
-    trigger_job: false
 
 spice_l1c: &spice_l1c
   - *spice_common
@@ -68,7 +66,6 @@ spice_l1c: &spice_l1c
   - source: spin
     data_type: spin
     descriptor: historical
-    trigger_job: false
 
 
 spice_l2: &spice_l2
