@@ -15,7 +15,6 @@ import imap_data_access
 import pytest
 from dagster import (
     AssetObservation,
-    Failure,
     build_asset_context,
     build_sensor_context,
 )
@@ -139,6 +138,7 @@ def test_spacecraft_l1a_no_spice(mock_db_session, ephemeral_instance):
 
     # Verify that we have only returned an asset observation
     yielded_files = list(spacecraft_l1a_job.run_job(context, 1, 1))
+    assert len(mock_db_session.query(models.ProcessingJob).all()) == 0
     assert isinstance(yielded_files[0], AssetObservation)
 
 
@@ -178,7 +178,8 @@ def test_spacecraft_l1a_submits(
     _insert_spice_file(mock_db_session, "imap_120.tf", [[1, 10000000000000]])
     _insert_spice_file(mock_db_session, "imap_science_120.tf", [[1, 10000000000000]])
 
-    # Run the asset and verify an error is thrown because there is a timeout
-    # The fact that it gets to timeout means that the job has submitted!
-    with pytest.raises(Failure, match="Timeout"):
-        list(spacecraft_l1a_job.run_job(context, 1, 1))
+    # Run the asset and verify we get to the end, showing a batch job was submitted
+    list(spacecraft_l1a_job.run_job(context, 1, 1))
+
+    # Show that a Batch job was submitted
+    assert len(mock_db_session.query(models.ProcessingJob).all()) == 1
