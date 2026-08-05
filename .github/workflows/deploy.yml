@@ -125,7 +125,7 @@ jobs:
       # Force ECS redeploy of Dagster daemon + webserver (prod only)
       # ----------------------------------------------------
       - name: Force new ECS deployment for Dagster
-        if: env.should_tag == 'true'
+        if: env.is_prod == 'true'
         run: |
           CLUSTER=$(aws ecs list-clusters --region us-west-2 \
             --query "clusterArns[?contains(@, 'DagsterCluster')]" --output text)
