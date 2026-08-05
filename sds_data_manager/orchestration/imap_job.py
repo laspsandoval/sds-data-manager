@@ -57,9 +57,10 @@ BATCH_JOB_RETRY_STRATEGY = {
     "attempts": 10,
     "evaluateOnExit": [
         {
-            "onStatusReason": "Your Spot Task was interrupted.",
+            "onExitCode": "75",
             "action": "RETRY",
-        },
+        },  # retry jobs that failed with the rerunnable exit code.
+        {"onStatusReason": "CannotPullContainerError*", "action": "RETRY"},
         {"onReason": "*", "action": "EXIT"},
     ],
 }
