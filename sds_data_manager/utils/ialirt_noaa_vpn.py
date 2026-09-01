@@ -1,7 +1,8 @@
 """Helpers for building I-ALiRT's NOAA Site-to-Site VPN path."""
 
-from aws_cdk import Stack
+from aws_cdk import RemovalPolicy, Stack
 from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_logs as logs
 from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import custom_resources as cr
@@ -80,6 +81,29 @@ def build_noaa_vpn_tgw(
         transit_gateway_id=ialirt_transit_gateway.attr_id,
         vpc_id=networking.vpc.vpc_id,
         subnet_ids=[subnet.subnet_id for subnet in networking.vpc.private_subnets],
+    )
+
+    # Log only traffic crossing the TGW VPC attachment itself, i.e. NOAA's
+    # VPN traffic in/out of the VPC, rather than everything else the shared
+    # private subnet carries (NAT Gateway egress, other resources' ENIs).
+    # Satisfies the LASP monitoring responsibility (VPC Flow Logs, ACCEPT
+    # and REJECT) documented for the I-ALiRT/NOAA interconnection.
+    noaa_vpn_flow_log_group = logs.LogGroup(
+        ialirt_stack,
+        "IalirtVpnFlowLogs",
+        retention=logs.RetentionDays.ONE_YEAR,
+        removal_policy=RemovalPolicy.RETAIN,
+    )
+    # Note: traffic_type is not a supported parameter for Transit Gateway /
+    # Transit Gateway Attachment flow logs (AWS always captures both ACCEPT
+    # and REJECT records for this resource type).
+    ec2.FlowLog(
+        ialirt_stack,
+        "IalirtVpnTgwAttachmentFlowLog",
+        resource_type=ec2.FlowLogResourceType.from_transit_gateway_attachment_id(
+            ialirt_vpc_attachment.attr_id
+        ),
+        destination=ec2.FlowLogDestination.to_cloud_watch_logs(noaa_vpn_flow_log_group),
     )
 
     ialirt_vpn = ialirt_vpn_construct.IalirtVpnConstruct(
