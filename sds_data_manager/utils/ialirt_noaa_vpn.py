@@ -1,6 +1,7 @@
 """Helpers for building I-ALiRT's NOAA Site-to-Site VPN path."""
 
 from aws_cdk import RemovalPolicy, Stack
+from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_secretsmanager as secretsmanager
@@ -183,6 +184,40 @@ def build_noaa_vpn_tgw(
             transit_gateway_attachment_id=vpn_attachment_id,
             transit_gateway_route_table_id=tgw_route_table_id,
         )
+
+    # AWS already publishes each tunnel's up/down state to CloudWatch
+    # (namespace AWS/VPN, metric TunnelState) with no configuration needed
+    # on our end. This dashboard just gives a single place to look at it,
+    # via a search expression so it doesn't need to know the tunnels'
+    # outside IPs (which aren't available as CloudFormation attributes).
+    cloudwatch.Dashboard(
+        ialirt_stack,
+        "IalirtNoaaVpnDashboard",
+        dashboard_name="IalirtNoaaVpnTunnelState",
+        widgets=[
+            [
+                cloudwatch.GraphWidget(
+                    title="NOAA VPN Tunnel State (1 = up, 0 = down)",
+                    left=[
+                        cloudwatch.MathExpression(
+                            # Confirmed via `aws cloudwatch list-metrics
+                            # --namespace AWS/VPN --metric-name TunnelState`:
+                            # AWS only publishes this metric as single-
+                            # dimension rollups (TunnelIpAddress alone, VpnId
+                            # alone, or no dimension) -- there is no combined
+                            # {TunnelIpAddress, VpnId} metric to search on.
+                            expression=(
+                                "SEARCH('{AWS/VPN,TunnelIpAddress} "
+                                "MetricName=\"TunnelState\"', 'Average', 300)"
+                            ),
+                            label="",
+                        )
+                    ],
+                    width=24,
+                )
+            ]
+        ],
+    )
 
     # Static route: send traffic for I-ALiRT EC2's Elastic IP into the VPC
     # attachment, where the NAT Gateway forwards it to the public internet.
