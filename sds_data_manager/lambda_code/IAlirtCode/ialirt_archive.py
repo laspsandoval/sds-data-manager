@@ -89,13 +89,13 @@ def lambda_handler(event, context):
     bucket = os.environ.get("S3_BUCKET")
     region = os.environ.get("AWS_REGION")
 
-    # Query 1 day's worth of data from two days ago.
+    # Query 1 day's worth of data from the previous day.
     now_override = event.get("now_utc")
     if now_override:
         now = datetime.fromisoformat(now_override).astimezone(timezone.utc)
     else:
         now = datetime.now(timezone.utc)
-    target_date = (now - timedelta(days=2)).date()
+    target_date = (now - timedelta(days=1)).date()
 
     # This is in case the solid state recorder is setup to save
     # I-ALiRT data onboard in which case DSN will deliver the data in batches
